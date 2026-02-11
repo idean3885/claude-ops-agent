@@ -5,6 +5,7 @@
 #   신규 설치:  curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash
 #   버전 확인:  curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --check
 #   업데이트:   curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --update
+#   구독:      curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --subscribe
 
 set -e
 
@@ -183,6 +184,35 @@ cmd_install() {
   echo "업데이트:    curl -sL .../setup.sh | bash -s -- --update"
 }
 
+# --subscribe: 자동 업데이트 워크플로우 설치
+cmd_subscribe() {
+  echo "=== claude-devex 자동 업데이트 구독 ==="
+  echo ""
+
+  mkdir -p ".github/workflows"
+
+  if [ -f ".github/workflows/claude-devex-update.yml" ]; then
+    echo "[덮어쓰기] .github/workflows/claude-devex-update.yml"
+  else
+    echo "[설치] .github/workflows/claude-devex-update.yml"
+  fi
+
+  if ! curl -sfL "${BASE_URL}/.github/workflows/claude-devex-update.yml" \
+    -o ".github/workflows/claude-devex-update.yml"; then
+    echo "[오류] 워크플로우 파일을 다운로드할 수 없습니다." >&2
+    exit 1
+  fi
+
+  echo ""
+  echo "=== 구독 설정 완료 ==="
+  echo ""
+  echo "자동 업데이트:"
+  echo "  스케줄: 매일 09:00 KST 자동 확인"
+  echo "  수동:   GitHub Actions 탭 → claude-devex 자동 업데이트 확인 → Run workflow"
+  echo ""
+  echo "업데이트 감지 시 PR이 자동 생성됩니다."
+}
+
 # 메인: 인수에 따라 분기
 case "${1:-}" in
   --check)
@@ -190,6 +220,9 @@ case "${1:-}" in
     ;;
   --update)
     cmd_update
+    ;;
+  --subscribe)
+    cmd_subscribe
     ;;
   *)
     cmd_install
