@@ -78,6 +78,8 @@ graph LR
 ├── README.md               # 이 파일 (워크플로우 가이드)
 ├── settings.json            # 공통 설정 [Git 추적]
 ├── settings.local.json      # 로컬 설정 [Git 무시]
+├── project-profile.md       # 프로젝트 프로필 [Git 추적]
+├── .devex-version           # 설치된 devex 버전 [다운스트림만]
 └── skills/                  # 워크플로우 스킬 [Git 추적]
     ├── github-issue/SKILL.md  # /github-issue
     ├── spec/SKILL.md          # /spec
@@ -86,15 +88,60 @@ graph LR
     └── github-pr/SKILL.md     # /github-pr
 ```
 
+## 프로젝트 프로필
+
+프로젝트별 특수성을 `.claude/project-profile.md`로 정의하면, `/spec`과 `/implement` 스킬이 해당 프로필에 맞춰 동작합니다.
+
+### 동작 원리
+
+1. `/spec` 또는 `/implement` 호출 시
+2. `.claude/project-profile.md` 존재 여부 확인
+3. 존재하면: 프로필의 해당 컨텍스트 섹션을 읽고 따름
+4. 없으면: 기본값 (코드 아키텍처 설계/구현)으로 동작
+
+### 프로필 구성 항목
+
+| 섹션 | 설명 |
+|------|------|
+| 산출물 유형 | 주요 산출물, 빌드 도구, 테스트 방법 |
+| `/spec 컨텍스트` | 설계 대상, 명세 항목, 다이어그램 방식 |
+| `/implement 컨텍스트` | 구현 대상, 구현 순서, 검증 기준 |
+| 제약사항 | 프로젝트 고유 제약 |
+
+> 프로필은 프로젝트마다 직접 작성합니다. `setup.sh` 업데이트 시에도 보존됩니다.
+
 ## 다른 프로젝트에 적용
 
-이 `.claude/` 디렉토리를 그대로 복사하면 동일한 워크플로우를 사용할 수 있습니다.
+### setup.sh 사용 (권장)
+
+```bash
+# 신규 설치
+curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash
+
+# 버전 확인
+curl -sL .../setup.sh | bash -s -- --check
+
+# 업데이트
+curl -sL .../setup.sh | bash -s -- --update
+```
+
+### 수동 복사
 
 ```bash
 cp -r .claude/ /path/to/other-project/.claude/
 ```
 
-프로젝트별 커스텀이 필요하면:
+### 업데이트 안전 영역
+
+| 영역 | 업데이트 대상 | 관리 주체 |
+|------|:---:|------|
+| `.claude/skills/` | O | devex |
+| `.claude/README.md` | O | devex |
+| `.claude/project-profile.md` | X | 프로젝트 |
+| `.claude/settings.json` | X | 프로젝트 |
+| `CLAUDE.md` | X | 프로젝트 |
+
+프로젝트별 커스텀:
+- `.claude/project-profile.md` 작성 (스킬 동작 조정)
 - `CLAUDE.md`에 프로젝트 고유 규칙 추가
 - `settings.local.json`에 로컬 설정 추가
-- 스킬 내용은 범용이므로 수정 불필요

@@ -1,9 +1,13 @@
 # Claude Code 로컬 설정
 .claude/settings.local.json
+.claude/.gh-token
 
 # OS
 .DS_Store
 Thumbs.db
+
+# OMC 상태
+.omc/
 
 # IDE
 .idea/
