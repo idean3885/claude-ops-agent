@@ -63,10 +63,41 @@ feature/12   fix/15   docs/8   refactor/20   chore/25
 ### 방법 2: setup.sh (기존 프로젝트)
 
 ```bash
+# 신규 설치
 curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash
+
+# 버전 확인
+curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --check
+
+# 업데이트 (스킬만 갱신, 프로젝트 파일 보존)
+curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --update
 ```
 
-기존 파일을 덮어쓰지 않으며, `.claude/skills/`만 설치(업데이트)합니다.
+업데이트 시 보존/갱신 대상:
+
+| 영역 | 업데이트 대상 | 관리 주체 |
+|------|:---:|------|
+| `.claude/skills/` | O | devex |
+| `.claude/README.md` | O | devex |
+| `.claude/project-profile.md` | X | 프로젝트 |
+| `.claude/settings.json` | X | 프로젝트 |
+| `CLAUDE.md` | X | 프로젝트 |
+
+## 프로젝트 프로필
+
+스킬은 범용(Core)으로 유지하고, 프로젝트별 특수성은 `.claude/project-profile.md`로 주입합니다.
+
+```
+Core Skills (범용)              Project Profile (프로젝트별)
+───────────────────            ─────────────────────────
+/spec    → "명세를 작성한다"  ← profile이 "무엇을" 정의
+/implement → "산출물을 구현"  ← profile이 "어떻게" 정의
+/commit  → 범용 (변경 없음)
+```
+
+프로필이 없으면 기본 동작(코드 아키텍처 설계/구현)을 수행합니다.
+
+작성법: `.claude/project-profile.md` 파일에 산출물 유형, `/spec 컨텍스트`, `/implement 컨텍스트`, 검증 방법을 정의합니다.
 
 ## 스킬 동작 방식
 
@@ -116,11 +147,14 @@ skills/SKILL.md → /명령어 호출 시만 로딩 (온디맨드)
 claude-devex/
 ├── README.md                      # 이 파일
 ├── CLAUDE.md                      # 공통 AI 협업 규칙 (템플릿)
+├── VERSION                        # 현재 버전 (semver)
+├── CHANGELOG.md                   # 변경 이력
 ├── .gitignore                     # 공통 무시 패턴
-├── setup.sh                       # 기존 프로젝트 설치 스크립트
+├── setup.sh                       # 설치/업데이트 스크립트
 └── .claude/
     ├── README.md                  # 이슈 사이클 상세 가이드
     ├── settings.json              # 기본 권한 설정
+    ├── project-profile.md         # 프로젝트 프로필 (AOP)
     └── skills/
         ├── github-issue/SKILL.md  # /github-issue
         ├── spec/SKILL.md          # /spec
