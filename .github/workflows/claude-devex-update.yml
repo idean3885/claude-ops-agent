@@ -1,0 +1,54 @@
+name: claude-devex 자동 업데이트 확인
+
+on:
+  schedule:
+    - cron: '0 0 * * *'    # 매일 09:00 KST (UTC 00:00)
+  workflow_dispatch:         # 수동 트리거 가능
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 버전 비교
+        id: version
+        run: |
+          REMOTE=$(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/VERSION || echo "")
+          LOCAL=$(cat .claude/.devex-version 2>/dev/null || echo "unknown")
+          echo "remote=$REMOTE" >> "$GITHUB_OUTPUT"
+          echo "local=$LOCAL" >> "$GITHUB_OUTPUT"
+          if [ -z "$REMOTE" ]; then
+            echo "원격 버전 조회 실패"
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          elif [ "$REMOTE" != "$LOCAL" ]; then
+            echo "업데이트 감지: $LOCAL → $REMOTE"
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "최신 버전: $LOCAL"
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 업데이트 실행
+        if: steps.version.outputs.updated == 'true'
+        run: |
+          curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --update
+
+      - name: PR 생성
+        if: steps.version.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/devex-update-${{ steps.version.outputs.remote }}
+          title: "chore: claude-devex ${{ steps.version.outputs.local }} → ${{ steps.version.outputs.remote }}"
+          body: |
+            claude-devex 자동 업데이트
+
+            - **이전**: ${{ steps.version.outputs.local }}
+            - **최신**: ${{ steps.version.outputs.remote }}
+            - **변경 내역**: https://github.com/dykim-base-project/claude-devex/blob/main/CHANGELOG.md
+          commit-message: "chore: claude-devex ${{ steps.version.outputs.remote }} 업데이트"
+          labels: chore

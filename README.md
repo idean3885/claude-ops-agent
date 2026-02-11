@@ -71,6 +71,9 @@ curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/
 
 # 업데이트 (스킬만 갱신, 프로젝트 파일 보존)
 curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --update
+
+# 자동 업데이트 구독
+curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --subscribe
 ```
 
 업데이트 시 보존/갱신 대상:
@@ -82,6 +85,23 @@ curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/
 | `.claude/project-profile.md` | X | 프로젝트 |
 | `.claude/settings.json` | X | 프로젝트 |
 | `CLAUDE.md` | X | 프로젝트 |
+
+## 자동 업데이트 구독
+
+`--subscribe` 옵션으로 GitHub Actions 워크플로우를 설치하면, claude-devex 업데이트를 자동으로 감지하고 PR을 생성합니다.
+
+```bash
+curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --subscribe
+```
+
+| 항목 | 내용 |
+|------|------|
+| 스케줄 | 매일 09:00 KST 자동 확인 |
+| 수동 트리거 | GitHub Actions 탭 → `claude-devex 자동 업데이트 확인` → Run workflow |
+| 업데이트 감지 시 | PR 자동 생성 (변경 내역 포함) |
+| 설치 파일 | `.github/workflows/claude-devex-update.yml` |
+
+기존 수동 `--update` 방식도 병행 사용할 수 있습니다.
 
 ## 프로젝트 프로필
 
@@ -151,6 +171,9 @@ claude-devex/
 ├── CHANGELOG.md                   # 변경 이력
 ├── .gitignore                     # 공통 무시 패턴
 ├── setup.sh                       # 설치/업데이트 스크립트
+├── .github/
+│   └── workflows/
+│       └── claude-devex-update.yml  # 자동 업데이트 워크플로우 템플릿
 └── .claude/
     ├── README.md                  # 이슈 사이클 상세 가이드
     ├── settings.json              # 기본 권한 설정
