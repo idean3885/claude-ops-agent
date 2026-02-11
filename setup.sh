@@ -197,10 +197,8 @@ cmd_subscribe() {
     echo "[설치] .github/workflows/claude-devex-update.yml"
   fi
 
-  curl -sfL "${BASE_URL}/.github/workflows/claude-devex-update.yml" \
-    -o ".github/workflows/claude-devex-update.yml"
-
-  if [ $? -ne 0 ]; then
+  if ! curl -sfL "${BASE_URL}/.github/workflows/claude-devex-update.yml" \
+    -o ".github/workflows/claude-devex-update.yml"; then
     echo "[오류] 워크플로우 파일을 다운로드할 수 없습니다." >&2
     exit 1
   fi
