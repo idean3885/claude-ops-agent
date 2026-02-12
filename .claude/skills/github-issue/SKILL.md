@@ -17,7 +17,18 @@ GitHub 이슈 생성 및 브랜치 세팅 워크플로우
    | 문서, docs | `docs` | `docs/` |
    | 리팩토링 | `refactor` | `refactor/` |
    | 기타 | `chore` | `chore/` |
-3. 이슈 본문 작성:
+3. **라벨 존재 여부 확인 및 자동 생성**:
+   ```bash
+   gh label list --json name --jq '.[].name' | grep -q "^${라벨}$" || gh label create "${라벨}" --color "${색상}"
+   ```
+   | 라벨 | 색상 |
+   |------|------|
+   | `feat` | `0E8A16` |
+   | `fix` | `d73a4a` |
+   | `docs` | `0075ca` |
+   | `refactor` | `e4e669` |
+   | `chore` | `ededed` |
+4. 이슈 본문 작성:
    ```
    ## 작업 내용
    {요약}
@@ -26,8 +37,8 @@ GitHub 이슈 생성 및 브랜치 세팅 워크플로우
    - [ ] 항목 1
    - [ ] 항목 2
    ```
-4. `gh issue create` 실행
-5. 이슈 번호로 브랜치 자동 생성 및 체크아웃:
+5. `gh issue create` 실행
+6. 이슈 번호로 브랜치 자동 생성 및 체크아웃:
    ```bash
    git checkout -b feature/{번호}
    ```
