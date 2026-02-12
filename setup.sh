@@ -59,7 +59,7 @@ install_updatable() {
   local version="$1"
 
   # skills/ (항상 최신으로 업데이트)
-  SKILLS="github-issue spec implement commit github-pr"
+  SKILLS="github-issue spec implement commit github-pr cycle"
   for skill in $SKILLS; do
     mkdir -p ".claude/skills/${skill}"
     fetch_raw ".claude/skills/${skill}/SKILL.md" ".claude/skills/${skill}/SKILL.md"
@@ -191,6 +191,7 @@ cmd_install() {
   echo "  /implement     - 코드 구현"
   echo "  /commit        - 변경사항 리뷰 및 커밋"
   echo "  /github-pr     - PR 생성"
+  echo "  /cycle         - 전체 이슈 사이클"
   echo ""
   echo "상세 가이드: .claude/README.md"
   echo "버전 확인:   curl -sL .../setup.sh | bash -s -- --check"

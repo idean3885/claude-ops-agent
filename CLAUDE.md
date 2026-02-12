@@ -66,6 +66,15 @@ Issue → Spec → Implement → Commit → PR
 
 > 스킬 상세: [.claude/README.md](./.claude/README.md)
 
+### 자연어 요청 시 워크플로우
+
+수정 요청을 자연어로 받은 경우, `/cycle` 스킬로 전체 사이클을 안내한다.
+
+| 모드 | 사용법 | 설명 |
+|------|--------|------|
+| 개별 실행 | `/github-issue`, `/spec` 등 | 단계별 수동 실행 |
+| 전체 사이클 | `/cycle` | 이슈 탐색 → 플랜 → 구현 → 리뷰 → PR → 검증 → 완료 |
+
 ## 핵심 규칙
 
 1. **명세 우선**: 코드 작성 전 명세 문서 먼저
@@ -136,6 +145,18 @@ docs: AI 협업 가이드 Git Flow 추가
 
 이슈 사이클 워크플로우를 제공하는 DevEx 템플릿 레포입니다.
 
+### 버전 관리
+
+[Semantic Versioning](https://semver.org/) 기준:
+
+| 버전 | 증가 조건 | 예시 |
+|------|-----------|------|
+| MAJOR (x.0.0) | 하위 호환 깨지는 변경 | 스킬 삭제, setup.sh 인터페이스 변경 |
+| MINOR (0.x.0) | 하위 호환 새 기능 추가 | 새 스킬 추가, 기존 스킬 기능 확장 |
+| PATCH (0.0.x) | 하위 호환 버그 수정 | 오타 수정, 동작 변경 없는 문서 정리 |
+
+변경 시 `VERSION`, `CHANGELOG.md`를 함께 업데이트한다.
+
 ### 산출물 특성
 
 | 구분 | 내용 |
@@ -158,7 +179,7 @@ main ────────────────●─────
 
 ### 변경 시 검증 체크리스트
 
-- [ ] 스킬 파일 5개 존재 확인 (github-issue, spec, implement, commit, github-pr)
+- [ ] 스킬 파일 6개 존재 확인 (github-issue, spec, implement, commit, github-pr, cycle)
 - [ ] `setup.sh`를 빈 디렉토리에서 실행하여 정상 설치 확인
 - [ ] README.md Mermaid 다이어그램 렌더링 확인
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
