@@ -31,7 +31,7 @@
   2. setup.sh 반영 (필요 시)
   3. README.md / .claude/README.md 동기화
 - **검증 기준**:
-  - 스킬 파일 5개 존재 확인 (github-issue, spec, implement, commit, github-pr)
+  - 스킬 파일 6개 존재 확인 (github-issue, spec, implement, commit, github-pr, cycle)
   - `setup.sh`를 빈 디렉토리에서 실행하여 정상 설치 확인
   - README.md Mermaid 다이어그램 렌더링 확인
   - 범용성 유지: 특정 프로젝트에 종속되는 내용 없음
