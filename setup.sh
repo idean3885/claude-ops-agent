@@ -2,23 +2,36 @@
 # claude-devex: 이슈 사이클 스킬 설치 및 업데이트
 #
 # 사용법:
-#   신규 설치:  curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash
-#   버전 확인:  curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --check
-#   업데이트:   curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --update
-#   구독:      curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --subscribe
+#   신규 설치:  bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh)
+#   버전 확인:  bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh) --check
+#   업데이트:   bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh) --update
+#   구독:      bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh) --subscribe
+#
+# 파일 다운로드는 GitHub API를 사용합니다 (CDN 캐싱 없음)
 
 set -e
 
 REPO="dykim-base-project/claude-devex"
 BRANCH="main"
-BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
+API_BASE="https://api.github.com/repos/${REPO}/contents"
+
+# GitHub API를 통해 파일 다운로드 (CDN 캐싱 없음)
+fetch_raw() {
+  local path="$1"
+  local output="$2"
+  if [ -n "$output" ]; then
+    curl -sfL -H "Accept: application/vnd.github.raw" "${API_BASE}/${path}?ref=${BRANCH}" -o "$output"
+  else
+    curl -sfL -H "Accept: application/vnd.github.raw" "${API_BASE}/${path}?ref=${BRANCH}"
+  fi
+}
 
 # 원격 최신 버전 조회
 get_remote_version() {
   local version
-  version=$(curl -sfL "${BASE_URL}/VERSION")
+  version=$(fetch_raw "VERSION")
   if [ $? -ne 0 ] || [ -z "$version" ]; then
-    echo "[오류] 원격 버전을 조회할 수 없습니다 (${BASE_URL}/VERSION)" >&2
+    echo "[오류] 원격 버전을 조회할 수 없습니다 (${API_BASE}/VERSION?ref=${BRANCH})" >&2
     echo "       네트워크 연결 또는 저장소 URL을 확인하세요." >&2
     exit 1
   fi
@@ -49,12 +62,12 @@ install_updatable() {
   SKILLS="github-issue spec implement commit github-pr"
   for skill in $SKILLS; do
     mkdir -p ".claude/skills/${skill}"
-    curl -sL "${BASE_URL}/.claude/skills/${skill}/SKILL.md" -o ".claude/skills/${skill}/SKILL.md"
+    fetch_raw ".claude/skills/${skill}/SKILL.md" ".claude/skills/${skill}/SKILL.md"
     echo "[설치] .claude/skills/${skill}/SKILL.md"
   done
 
   # .claude/README.md (업데이트 대상)
-  curl -sL "${BASE_URL}/.claude/README.md" -o ".claude/README.md"
+  fetch_raw ".claude/README.md" ".claude/README.md"
   echo "[설치] .claude/README.md"
 
   # 버전 기록
@@ -66,7 +79,7 @@ install_updatable() {
 install_preserved() {
   # .claude/settings.json (없으면 생성)
   if [ ! -f ".claude/settings.json" ]; then
-    curl -sL "${BASE_URL}/.claude/settings.json" -o ".claude/settings.json"
+    fetch_raw ".claude/settings.json" ".claude/settings.json"
     echo "[생성] .claude/settings.json"
   else
     echo "[보존] .claude/settings.json"
@@ -82,7 +95,7 @@ install_preserved() {
 
   # CLAUDE.md (없으면 템플릿 복사)
   if [ ! -f "CLAUDE.md" ]; then
-    curl -sL "${BASE_URL}/CLAUDE.md" -o "CLAUDE.md"
+    fetch_raw "CLAUDE.md" "CLAUDE.md"
     echo "[생성] CLAUDE.md"
   else
     echo "[보존] CLAUDE.md"
@@ -197,8 +210,7 @@ cmd_subscribe() {
     echo "[설치] .github/workflows/claude-devex-update.yml"
   fi
 
-  if ! curl -sfL "${BASE_URL}/.github/workflows/claude-devex-update.yml" \
-    -o ".github/workflows/claude-devex-update.yml"; then
+  if ! fetch_raw ".github/workflows/claude-devex-update.yml" ".github/workflows/claude-devex-update.yml"; then
     echo "[오류] 워크플로우 파일을 다운로드할 수 없습니다." >&2
     exit 1
   fi
