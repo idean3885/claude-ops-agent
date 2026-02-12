@@ -23,6 +23,12 @@ GitHub Pull Request 생성 워크플로우
    gh pr create --title "타입: 제목" --body "..." --base {사용자 확인한 브랜치}
    ```
 6. PR URL 사용자에게 전달
+7. **PR 머지 후 브랜치 정리** (사용자가 머지를 요청한 경우):
+   - PR 머지 실행
+   - 타겟 브랜치로 이동 및 최신화:
+     ```bash
+     git checkout {타겟브랜치} && git pull
+     ```
 
 ## PR 본문 템플릿
 
