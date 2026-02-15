@@ -2,16 +2,16 @@
 # claude-devex: 이슈 사이클 스킬 설치 및 업데이트
 #
 # 사용법:
-#   신규 설치:  bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh)
-#   버전 확인:  bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh) --check
-#   업데이트:   bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh) --update
-#   구독:      bash <(curl -sfL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh) --subscribe
+#   신규 설치:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh)
+#   버전 확인:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh) --check
+#   업데이트:   bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh) --update
+#   구독:      bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh) --subscribe
 #
 # 파일 다운로드는 GitHub API를 사용합니다 (CDN 캐싱 없음)
 
 set -e
 
-REPO="dykim-base-project/claude-devex"
+REPO="idean3885/claude-devex"
 BRANCH="main"
 API_BASE="https://api.github.com/repos/${REPO}/contents"
 
