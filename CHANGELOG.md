@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [1.2.2] - 2026-02-15
+
+### Added
+- README에 GitHub 인증 설정 가이드 추가 (제로 트러스트 / 클래식 토큰)
+
 ## [1.2.1] - 2026-02-15
 
 ### Changed
