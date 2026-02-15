@@ -8,6 +8,52 @@ Claude Code 기반 Spec-Driven 개발 워크플로우
 - GitHub CLI (`gh`) 설치
 - 추가 플러그인 불필요
 
+## GitHub 인증 설정
+
+devex 스킬(`/github-issue`, `/github-pr` 등)은 `gh` CLI를 사용합니다. 보안 수준에 따라 두 가지 방식을 지원합니다.
+
+### A. 제로 트러스트 (기본)
+
+매 GitHub 작업마다 사용자 승인을 요구합니다. 별도 설정 없이 기본 동작합니다.
+
+```bash
+# GitHub CLI 인증 (최초 1회)
+gh auth login
+```
+
+`settings.json`에 `Bash` 권한이 없으므로 `gh` 명령 실행 시 매번 승인 프롬프트가 표시됩니다.
+
+### B. 클래식 토큰 (편의 모드)
+
+GitHub 작업을 자동 승인하여 사이클 워크플로우를 간소화합니다.
+
+1. GitHub CLI 인증:
+   ```bash
+   gh auth login
+   ```
+2. `settings.local.json`에 `gh` 명령 허용 추가:
+   ```json
+   {
+     "permissions": {
+       "allow": [
+         "Bash(gh:issue:*)",
+         "Bash(gh:pr:*)",
+         "Bash(gh:label:*)",
+         "Bash(gh:api:*)"
+       ]
+     }
+   }
+   ```
+
+> `settings.local.json`은 `.gitignore`에 포함되어 Git에 추적되지 않습니다.
+
+| 항목 | 제로 트러스트 | 클래식 토큰 |
+|------|:---:|:---:|
+| GitHub 인증 | `gh auth login` | `gh auth login` |
+| 매 작업 승인 | 필요 | 불필요 |
+| 보안 수준 | 높음 | 보통 |
+| 편의성 | 보통 | 높음 |
+
 ## 개발 사이클
 
 ```
