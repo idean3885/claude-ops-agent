@@ -60,16 +60,16 @@ feature/12   fix/15   docs/8   refactor/20   chore/25
 
 ```bash
 # 신규 설치
-curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash
+curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash
 
 # 버전 확인
-curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --check
+curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --check
 
 # 업데이트 (스킬만 갱신, 프로젝트 파일 보존)
-curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --update
+curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --update
 
 # 자동 업데이트 구독
-curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --subscribe
+curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --subscribe
 ```
 
 업데이트 시 보존/갱신 대상:
@@ -87,7 +87,7 @@ curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/
 `--subscribe` 옵션으로 GitHub Actions 워크플로우를 설치하면, claude-devex 업데이트를 자동으로 감지하고 PR을 생성합니다.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash -s -- --subscribe
+curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --subscribe
 ```
 
 | 항목 | 내용 |
@@ -136,7 +136,7 @@ skills/SKILL.md → /명령어 호출 시만 로딩 (온디맨드)
 
 | 프로젝트 | 설명 |
 |----------|------|
-| [keycloak-practice](https://github.com/dykim-base-project/keycloak-practice) | Keycloak SSO 연동 실습 (이 워크플로우로 개발) |
+| [keycloak-practice](https://github.com/idean3885/keycloak-practice) | Keycloak SSO 연동 실습 (이 워크플로우로 개발) |
 
 ## 확장: 프로젝트 특화 스킬 추가
 
