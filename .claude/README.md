@@ -179,7 +179,7 @@ graph LR
 
 ```bash
 # 신규 설치
-curl -sL https://raw.githubusercontent.com/dykim-base-project/claude-devex/main/setup.sh | bash
+curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash
 
 # 버전 확인
 curl -sL .../setup.sh | bash -s -- --check
