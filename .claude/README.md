@@ -1,6 +1,6 @@
 # AI-Native Development Guide
 
-Claude Code 기반 Spec-Driven 개발 워크플로우
+Claude Code 기반 개발 워크플로우 (이슈 사이클 + 사고 도구)
 
 ## 요구사항
 
@@ -68,6 +68,21 @@ Issue → Spec → Implement → Commit → PR
 | 커밋 | `/commit` | diff 리뷰, 커밋 메시지 제안, 커밋 |
 | PR | `/github-pr` | PR 생성, 이슈 연결 |
 | 전체 사이클 | `/cycle` | 이슈 → 플랜 → 구현 → 리뷰 → PR → 검증 → 완료 |
+
+### Thinking 스킬
+
+의사결정과 검증을 구조화하는 사고 도구. 이슈 사이클과 독립적으로 사용하거나 연계할 수 있습니다.
+
+| 스킬 | 설명 | 자연어 예시 |
+|------|------|------------|
+| `/decision-record` | 아키텍처 의사결정 기록 (MADR 기반, 파기 조건 포함) | "이 결정 기록해줘" |
+| `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) + Devil's Advocate | "이 설계 검증해줘" |
+| `/dependency-map` | 의존성 맵 생성, 변경 영향도 분석 (Mermaid) | "의존성 분석해줘" |
+
+**사이클 연계:**
+- `/decision-record` → `/spec`: 명세 작성 시 관련 ADR 참조
+- `/verify` → `/github-pr`: PR 본문에 검증 결과 첨부
+- `/dependency-map` → `/spec`: 변경 영향도 사전 분석
 
 ### 사이클 흐름
 
@@ -148,7 +163,11 @@ graph LR
     ├── implement/SKILL.md     # /implement
     ├── commit/SKILL.md        # /commit
     ├── github-pr/SKILL.md     # /github-pr
-    └── cycle/SKILL.md         # /cycle
+    ├── cycle/SKILL.md         # /cycle
+    └── thinking/                     # 사고 도구
+        ├── decision-record/SKILL.md  # /decision-record
+        ├── verify/SKILL.md           # /verify
+        └── dependency-map/SKILL.md   # /dependency-map
 ```
 
 ## 프로젝트 프로필
