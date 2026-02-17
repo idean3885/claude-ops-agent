@@ -34,6 +34,16 @@ Issue → Spec → Implement → Commit → PR
 
 수정 요청을 자연어로 받은 경우, `/cycle` 스킬로 전체 사이클을 안내한다.
 
+### Thinking 스킬
+
+의사결정과 검증을 구조화하는 도구. 이슈 사이클과 독립적으로 사용하거나 연계할 수 있다.
+
+| 스킬 | 역할 | 자연어 트리거 예시 |
+|------|------|-------------------|
+| `/decision-record` | 아키텍처 의사결정 기록 (MADR 기반) | "이 결정 기록해줘", "ADR 작성" |
+| `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘", "정합성 확인" |
+| `/dependency-map` | 의존성 맵 생성 및 변경 영향도 분석 | "의존성 분석해줘", "영향도 파악" |
+
 ## 핵심 규칙
 
 1. **명세 우선**: 코드 작성 전 명세 문서 먼저
@@ -123,7 +133,7 @@ main ────────────────●─────
 
 ### 변경 시 검증 체크리스트
 
-- [ ] 스킬 파일 6개 존재 확인 (github-issue, spec, implement, commit, github-pr, cycle)
+- [ ] 스킬 파일 9개 존재 확인 (cycle 6종 + thinking 3종)
 - [ ] `setup.sh`를 빈 디렉토리에서 실행하여 정상 설치 확인
 - [ ] README.md Mermaid 다이어그램 렌더링 확인
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지

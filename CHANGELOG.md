@@ -4,6 +4,17 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [1.3.0] - 2026-02-18
+
+### Added
+- Thinking 스킬 3종: `/decision-record`, `/verify`, `/dependency-map`
+  - `/decision-record`: MADR 기반 아키텍처 의사결정 기록 (파기 조건 포함)
+  - `/verify`: 3-Layer(Philosophy → Strategy → Tactics) 정합성 검증 + Devil's Advocate
+  - `/dependency-map`: Mermaid 의존성 맵 생성 및 변경 영향도 분석
+- 프로젝트 설명 업데이트: 자연어 호출 중심, 기본 가이드라인 + 오버라이드 자유도 사상 반영
+- `skills/thinking/` 디렉토리로 기존 이슈 사이클과 물리적 분리
+- setup.sh에 thinking 스킬 설치 포함
+
 ## [1.2.2] - 2026-02-15
 
 ### Added
@@ -38,7 +49,7 @@
 
 ### Added
 - 이슈 사이클 스킬 5종: github-issue, spec, implement, commit, github-pr
-- AOP 기반 프로젝트 프로필 (`project-profile.md`) 지원
+- 프로젝트 프로필 (`project-profile.md`) 지원: 스킬 동작을 프로젝트에 맞게 오버라이드
   - `/spec`, `/implement` 스킬이 프로필에 따라 동작 조정
 - 버전 관리 체계 도입
   - `VERSION` 파일 (semver)
