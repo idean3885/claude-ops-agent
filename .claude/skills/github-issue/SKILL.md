@@ -38,10 +38,9 @@ GitHub 이슈 생성 및 브랜치 세팅 워크플로우
    - [ ] 항목 2
    ```
 5. `gh issue create` 실행
-6. 이슈 번호로 브랜치 자동 생성 및 체크아웃:
-   ```bash
-   git checkout -b feature/{번호}
-   ```
+6. 브랜치 생성 (사용자에게 방식 제안):
+   - **워크트리 (권장)**: `git worktree add ../{프로젝트}-{타입}-{번호} -b {타입}/{번호}`
+   - **직접 체크아웃**: uncommitted changes 확인 → `git checkout main && git pull` → `git checkout -b {타입}/{번호}`
 
 ## 브랜치 명명 규칙
 
