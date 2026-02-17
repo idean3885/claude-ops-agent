@@ -187,6 +187,14 @@ claude-devex/
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 - [GitHub CLI](https://cli.github.com/) (`gh`)
 
+## 관련 포스팅
+
+이 프로젝트의 배경과 사상을 다룬 블로그 포스팅입니다. 프로젝트의 핵심 요소(커맨드명, 설치 방법, 워크플로우)가 변경될 경우 포스팅 업데이트가 필요할 수 있습니다.
+
+| 포스팅 | 레포 |
+|--------|------|
+| [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) | [idean3885.github.io](https://github.com/idean3885/idean3885.github.io) |
+
 ## 라이선스
 
 MIT
