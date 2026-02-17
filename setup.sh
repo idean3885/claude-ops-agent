@@ -1,5 +1,5 @@
 #!/bin/bash
-# claude-devex: 이슈 사이클 스킬 설치 및 업데이트
+# claude-devex: 개발 워크플로우 스킬 설치 및 업데이트
 #
 # 사용법:
 #   신규 설치:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh)
@@ -64,6 +64,13 @@ install_updatable() {
     mkdir -p ".claude/skills/${skill}"
     fetch_raw ".claude/skills/${skill}/SKILL.md" ".claude/skills/${skill}/SKILL.md"
     echo "[설치] .claude/skills/${skill}/SKILL.md"
+  done
+
+  THINKING_SKILLS="decision-record verify dependency-map"
+  for skill in $THINKING_SKILLS; do
+    mkdir -p ".claude/skills/thinking/${skill}"
+    fetch_raw ".claude/skills/thinking/${skill}/SKILL.md" ".claude/skills/thinking/${skill}/SKILL.md"
+    echo "[설치] .claude/skills/thinking/${skill}/SKILL.md"
   done
 
   # .claude/README.md (업데이트 대상)
@@ -176,7 +183,7 @@ cmd_install() {
   local remote_ver
   remote_ver=$(get_remote_version)
 
-  echo "=== claude-devex 이슈 사이클 설치 (v${remote_ver}) ==="
+  echo "=== claude-devex 개발 워크플로우 설치 (v${remote_ver}) ==="
   echo ""
 
   install_updatable "$remote_ver"
@@ -192,6 +199,10 @@ cmd_install() {
   echo "  /commit        - 변경사항 리뷰 및 커밋"
   echo "  /github-pr     - PR 생성"
   echo "  /cycle         - 전체 이슈 사이클"
+  echo ""
+  echo "  /decision-record  - 아키텍처 의사결정 기록"
+  echo "  /verify           - 3-Layer 정합성 검증"
+  echo "  /dependency-map   - 의존성 맵 생성"
   echo ""
   echo "상세 가이드: .claude/README.md"
   echo "버전 확인:   curl -sL .../setup.sh | bash -s -- --check"

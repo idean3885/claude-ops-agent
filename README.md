@@ -1,8 +1,17 @@
 # claude-devex
 
-Claude Code 슬래시 커맨드로 이슈-to-PR 개발 사이클을 표준화하는 도구 세트
+Claude Code 기반 개발 워크플로우 도구 세트
 
-> 이슈 → 명세 → 구현 → 커밋 → PR, 각 단계를 `/슬래시 커맨드` 하나로 실행합니다.
+> 기본 가이드라인을 따르되, 프로젝트 프로필로 필요한 부분을 오버라이드할 수 있습니다.
+> 자연어로 요청하면 도구가 워크플로우를 안내합니다.
+
+### 배경
+
+AI에게 코드를 맡기면서 개발자의 역할이 "코드 작성"에서 "의사결정과 검증"으로 옮겨갔습니다.
+이 프로젝트는 그 변화를 워크플로우로 정착시키기 위해 시작되었습니다.
+
+- [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) — 이슈 사이클의 배경
+- [코드에서 사고로](https://idean3885.github.io/posts/from-coding-to-thinking/) — thinking 스킬의 배경
 
 ## 이슈 사이클
 
@@ -26,7 +35,26 @@ graph LR
 
 각 스킬은 독립적으로도 사용할 수 있고, 사이클 순서대로 사용하면 이슈 하나가 PR 하나로 완결됩니다.
 
-### 브랜치 명명 규칙
+## Thinking 스킬
+
+의사결정과 검증을 구조화하는 사고 도구. 이슈 사이클과 독립적으로 사용하거나 연계할 수 있습니다.
+
+| 스킬 | 하는 일 | 자연어 예시 |
+|------|---------|------------|
+| `/decision-record` | 아키텍처 의사결정 기록 (MADR 기반, 파기 조건 포함) | "이 결정 기록해줘" |
+| `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘" |
+| `/dependency-map` | 의존성 맵 생성, 변경 영향도 분석 (Mermaid) | "의존성 분석해줘" |
+
+```mermaid
+graph LR
+    A["/decision-record"] -.->|참조| B["/spec"]
+    C["/verify"] -.->|첨부| D["/github-pr"]
+    E["/dependency-map"] -.->|분석| B
+    A -.->|파기 조건 점검| C
+    A -.->|관계 시각화| E
+```
+
+## 브랜치 명명 규칙
 
 `{타입}/{이슈번호}` — 설명은 붙이지 않습니다.
 
@@ -130,7 +158,7 @@ CLAUDE.md     → 매 턴 자동 로딩 (항상 토큰 소비)
 skills/SKILL.md → /명령어 호출 시만 로딩 (온디맨드)
 ```
 
-이 설계 덕분에 5개 스킬을 추가해도 평상시 토큰 소비는 0입니다.
+이 설계 덕분에 스킬을 추가해도 평상시 토큰 소비는 0입니다.
 
 ## 적용 사례
 
@@ -171,15 +199,20 @@ claude-devex/
 │   └── workflows/
 │       └── claude-devex-update.yml  # 자동 업데이트 워크플로우 템플릿
 └── .claude/
-    ├── README.md                  # 이슈 사이클 상세 가이드
+    ├── README.md                  # 워크플로우 상세 가이드
     ├── settings.json              # 기본 권한 설정
-    ├── project-profile.md         # 프로젝트 프로필 (AOP)
+    ├── project-profile.md         # 프로젝트 프로필 (스킬 동작 오버라이드)
     └── skills/
         ├── github-issue/SKILL.md  # /github-issue
         ├── spec/SKILL.md          # /spec
         ├── implement/SKILL.md     # /implement
         ├── commit/SKILL.md        # /commit
-        └── github-pr/SKILL.md    # /github-pr
+        ├── github-pr/SKILL.md     # /github-pr
+        ├── cycle/SKILL.md         # /cycle
+        └── thinking/
+            ├── decision-record/SKILL.md  # /decision-record
+            ├── verify/SKILL.md           # /verify
+            └── dependency-map/SKILL.md   # /dependency-map
 ```
 
 ## 요구사항
@@ -189,11 +222,14 @@ claude-devex/
 
 ## 관련 포스팅
 
-이 프로젝트의 배경과 사상을 다룬 블로그 포스팅입니다. 프로젝트의 핵심 요소(커맨드명, 설치 방법, 워크플로우)가 변경될 경우 포스팅 업데이트가 필요할 수 있습니다.
+이 프로젝트의 배경과 사상을 다룬 블로그 포스팅입니다.
+
+프로젝트의 핵심 요소(커맨드명, 설치 방법, 워크플로우)가 변경될 경우 포스팅 업데이트가 필요할 수 있습니다.
 
 | 포스팅 | 레포 |
 |--------|------|
 | [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) | [idean3885.github.io](https://github.com/idean3885/idean3885.github.io) |
+| [코드에서 사고로](https://idean3885.github.io/posts/from-coding-to-thinking/) | [idean3885.github.io](https://github.com/idean3885/idean3885.github.io) |
 
 ## 라이선스
 
