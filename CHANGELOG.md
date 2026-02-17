@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [1.3.1] - 2026-02-18
+
+### Changed
+- README 가독성 개선: 독립 문장 개행 분리, blockquote 한 줄 통합 (업계 관례 기반)
+
 ## [1.3.0] - 2026-02-18
 
 ### Added
