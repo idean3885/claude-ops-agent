@@ -46,7 +46,15 @@ Phase 7: PR 머지 + 브랜치 정리
    - 라벨 자동 매핑 (feat, fix, docs, refactor, chore)
    - 라벨 미존재 시 자동 생성
    - 브랜치명: `{타입}/{이슈번호}`
-5. 브랜치 생성 및 체크아웃
+5. 브랜치 생성 (사용자에게 방식 제안):
+   - **워크트리 (권장)**: 로컬 상태 보존, 별도 디렉토리에서 작업
+     ```bash
+     git worktree add ../{프로젝트}-{타입}-{이슈번호} -b {타입}/{이슈번호}
+     ```
+   - **직접 체크아웃**: 현재 디렉토리에서 작업
+     1. uncommitted changes 확인 → stash/commit 안내
+     2. `git checkout main && git pull`
+     3. `git checkout -b {타입}/{이슈번호}`
 
 ### Phase 2: 플랜 작성
 
@@ -119,10 +127,9 @@ Phase 7: PR 머지 + 브랜치 정리
    ```bash
    gh pr merge {PR번호} --merge
    ```
-2. 타겟 브랜치로 이동 및 최신화:
-   ```bash
-   git checkout {타겟브랜치} && git pull
-   ```
+2. 작업 환경 정리:
+   - **워크트리 사용 시**: `git worktree remove ../{워크트리 경로}`
+   - **직접 체크아웃 시**: `git checkout {타겟브랜치} && git pull`
 3. 사이클 완료 보고
 
 ## 규칙
