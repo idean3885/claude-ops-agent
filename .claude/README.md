@@ -68,7 +68,6 @@ Issue → Spec → Implement → Commit → PR
 | 커밋 | `/commit` | diff 리뷰, 커밋 메시지 제안, 커밋 |
 | PR | `/github-pr` | PR 생성, 이슈 연결 |
 | 전체 사이클 | `/cycle` | 이슈 → 플랜 → 구현 → 리뷰 → PR → 검증 → 완료 |
-| 포스팅 | `/post` | 블로그 포스팅 작성, 참조 프로젝트 관리 |
 
 ### Thinking 스킬
 
@@ -103,7 +102,7 @@ graph LR
 graph LR
     A["이슈 탐색/생성"] --> B["플랜 작성"]
     B --> G1{"🚧 GATE 1"}
-    G1 -->|승인| C["명세 + 구현"]
+    G1 -->|승인| C["구현"]
     C --> D["커밋 리뷰"]
     D --> G2{"🚧 GATE 2"}
     G2 -->|승인| E["커밋 + PR"]
@@ -165,7 +164,6 @@ graph LR
     ├── commit/SKILL.md        # /commit
     ├── github-pr/SKILL.md     # /github-pr
     ├── cycle/SKILL.md         # /cycle
-    ├── post/SKILL.md          # /post
     └── thinking/                     # 사고 도구
         ├── decision-record/SKILL.md  # /decision-record
         ├── verify/SKILL.md           # /verify
