@@ -4,6 +4,21 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [2.0.0] - 2026-03-08
+
+### Breaking Changes
+- `/post` 스킬을 배포 범위에서 제거 (신규 설치 시 미포함)
+  - post는 블로그 레포 전용 보조 도구로, 범용 DevEx 플러그인의 core 범위 밖
+  - 기존 설치 레포는 `--update` 시 삭제되지 않음 (수동 삭제 필요)
+  - core 스킬 9종 확정: 이슈 사이클 6종 + thinking 3종
+
+### Changed
+- cycle 스킬에서 spec/implement 의존성 제거 (플랜 기반 구현으로 단순화)
+- cycle 스킬 인라인 중복 제거: 명시적 파일 경로 위임으로 전환
+  - github-issue, commit, github-pr 규칙을 인라인 재작성 → Read 위임
+  - 단일 진실 원천(single source of truth) 확보
+- README cycle 다이어그램 "명세 + 구현" → "구현" 동기화
+
 ## [1.5.0] - 2026-02-19
 
 ### Added
