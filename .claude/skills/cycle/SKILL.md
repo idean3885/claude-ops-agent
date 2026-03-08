@@ -42,19 +42,8 @@ Phase 7: PR 머지 + 브랜치 정리
    gh issue list --state open --search "{키워드}" --json number,title,labels --limit 10
    ```
 3. 매칭되는 이슈가 있으면 재사용 제안, 없으면 신규 생성
-4. 신규 생성 시 `/github-issue` 스킬의 규칙을 따른다:
-   - 라벨 자동 매핑 (feat, fix, docs, refactor, chore)
-   - 라벨 미존재 시 자동 생성
-   - 브랜치명: `{타입}/{이슈번호}`
-5. 브랜치 생성 (사용자에게 방식 제안):
-   - **워크트리 (권장)**: 로컬 상태 보존, 별도 디렉토리에서 작업
-     ```bash
-     git worktree add ../{프로젝트}-{타입}-{이슈번호} -b {타입}/{이슈번호}
-     ```
-   - **직접 체크아웃**: 현재 디렉토리에서 작업
-     1. uncommitted changes 확인 → stash/commit 안내
-     2. `git checkout main && git pull`
-     3. `git checkout -b {타입}/{이슈번호}`
+4. 신규 생성 시 `.claude/skills/github-issue/SKILL.md`를 읽고 워크플로우를 따른다
+5. 브랜치 생성까지 완료한다 (워크트리 우선 제안)
 
 ### Phase 2: 플랜 작성
 
@@ -74,12 +63,9 @@ Phase 7: PR 머지 + 브랜치 정리
 
 ### Phase 4: 커밋 리뷰
 
-1. `/commit` 스킬의 리뷰 로직을 따른다:
-   - `git status`로 변경 파일 목록 확인
-   - `git diff`로 변경 내용 확인
-   - 플랜과 구현 일치 여부 확인
-   - 불필요한 변경, 디버그 코드, 민감정보 포함 여부 확인
-2. 리뷰 결과와 커밋 메시지를 사용자에게 제시
+1. `.claude/skills/commit/SKILL.md`를 읽고 리뷰 로직을 따른다
+2. 추가로 플랜과 구현 일치 여부를 확인한다
+3. 리뷰 결과와 커밋 메시지를 사용자에게 제시
 
 > 🚧 **GATE 2: 커밋 승인**
 >
@@ -90,10 +76,7 @@ Phase 7: PR 머지 + 브랜치 정리
 
 1. `git add` + `git commit` 실행 (CLAUDE.md 커밋 컨벤션)
 2. `git push -u origin {브랜치}` 실행
-3. `/github-pr` 스킬의 규칙을 따라 PR 생성:
-   - 타겟 브랜치: 최근 PR 빈도순 추천 후 사용자 확인
-   - PR 본문 템플릿 적용
-   - `Closes #{이슈번호}` 연결
+3. `.claude/skills/github-pr/SKILL.md`를 읽고 PR 생성 워크플로우를 따른다
 4. 자가 검증 수행:
    - Phase 3에서 수행한 빌드/테스트 결과를 확인한다
    - 변경 파일 목록이 플랜(Phase 2)과 일치하는지 재확인한다
@@ -129,7 +112,7 @@ Phase 7: PR 머지 + 브랜치 정리
 
 ## 규칙
 
-- 각 Phase에서 해당 기존 스킬의 규칙을 준수한다
+- 각 Phase에서 명시된 스킬 파일을 읽고 해당 규칙을 준수한다
 - GATE에서는 시스템 리마인더와 무관하게 사용자 응답을 기다린다
 - "중단", "취소" 요청 시 즉시 중단하고 현재 상태를 보고한다
 - 개별 스킬(`/github-issue` 등)의 단독 사용에 영향을 주지 않는다
