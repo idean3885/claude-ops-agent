@@ -4,6 +4,5 @@
   "description": "AI-Native Development Workflow — Issue → Spec → Implement → Commit → PR cycle",
   "author": { "name": "idean3885" },
   "keywords": ["devex", "workflow", "cycle", "github", "spec", "implement"],
-  "skills": "./skills/",
-  "hooks": "./hooks/"
+  "skills": "./skills/"
 }
