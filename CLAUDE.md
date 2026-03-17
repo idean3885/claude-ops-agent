@@ -16,7 +16,7 @@ spec(Markdown) → implement(AI) → review → commit → PR → merge
 
 브랜치 전략, 작업 플로우 상세는 각 스킬 호출 시 안내됩니다.
 
-> 브랜치명은 `{타입}/{이슈번호}`로 통일한다. 이슈 내용은 변경될 수 있으므로 설명을 붙이지 않는다.
+> 브랜치명은 provider 정의에 따른 패턴을 사용한다. 기본값: `{타입}/{이슈번호}`.
 
 ### 커밋 전 필수 확인
 
@@ -24,19 +24,43 @@ spec(Markdown) → implement(AI) → review → commit → PR → merge
 - [ ] 커밋 메시지 사용자 승인
 - [ ] 브랜치 확인
 
-## 워크플로우
+## 이슈 플로우 (Issue Flow)
 
 ```
 Issue → Spec → Implement → Commit → PR
 ```
 
-스킬 상세: [.claude/README.md](./.claude/README.md)
+이슈 하나의 생애주기를 관리하는 플로우입니다.
+수정 요청을 자연어로 받은 경우, `/flow` 스킬로 전체 플로우를 안내한다.
 
-수정 요청을 자연어로 받은 경우, `/cycle` 스킬로 전체 사이클을 안내한다.
+### Provider 시스템
+
+이슈 트래커별 동작을 provider로 추상화합니다.
+
+| 위치 | 용도 |
+|------|------|
+| `providers/github.md` | 기본 내장 provider (GitHub) |
+| `providers/PROVIDER.md` | 커스텀 provider 작성 템플릿 |
+| `~/.claude/devex/providers/` | 로컬 전용 커스텀 provider |
+| `~/.claude/devex/overlays/` | host별 오버레이 설정 |
+
+provider는 SessionStart 훅에서 git remote host 기반으로 자동 감지됩니다.
+
+### 스킬 목록
+
+| 스킬 | 역할 | 트리거 |
+|------|------|--------|
+| `/flow` | 이슈 플로우 전체 오케스트레이션 | "flow", "플로우", 자연어 수정 요청 |
+| `/issue` | 이슈 생성 + 브랜치 세팅 | "이슈", "issue" |
+| `/spec` | 요구사항 분석, 아키텍처 설계 | "spec", "명세" |
+| `/implement` | 구현 | "implement", "구현" |
+| `/commit` | 커밋 리뷰 + 커밋 | "commit", "커밋" |
+| `/pr` | PR 생성 + 머지 | "PR", "풀리퀘" |
+| `/setup` | provider 등록, 상태 확인, overlay 설정 | "setup", "설정" |
 
 ### Thinking 스킬
 
-의사결정과 검증을 구조화하는 도구. 이슈 사이클과 독립적으로 사용하거나 연계할 수 있다.
+의사결정과 검증을 구조화하는 도구. 이슈 플로우와 독립적으로 사용하거나 연계할 수 있다.
 
 | 스킬 | 역할 | 자연어 트리거 예시 |
 |------|------|-------------------|
@@ -83,7 +107,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 |------|------|-----|
 | `.claude/settings.json` | 공통 설정 | 추적 |
 | `.claude/settings.local.json` | 로컬 전용 | 무시 |
-| `.claude/skills/` | 워크플로우 스킬 (`/spec`, `/implement`, `/commit` 등) | 추적 |
+| `.claude/skills/` | 워크플로우 스킬 | 추적 |
 
 ## 프로젝트별 커스텀
 
@@ -97,7 +121,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 ## 이 프로젝트 (claude-devex)
 
-이슈 사이클 워크플로우를 제공하는 DevEx 템플릿 레포입니다.
+이슈 플로우 워크플로우를 제공하는 DevEx 플러그인입니다.
 
 ### 버전 관리
 
@@ -105,7 +129,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 | 버전 | 증가 조건 | 예시 |
 |------|-----------|------|
-| MAJOR (x.0.0) | 하위 호환 깨지는 변경 | 스킬 삭제, setup.sh 인터페이스 변경 |
+| MAJOR (x.0.0) | 하위 호환 깨지는 변경 | 스킬 삭제, 인터페이스 변경 |
 | MINOR (0.x.0) | 하위 호환 새 기능 추가 | 새 스킬 추가, 기존 스킬 기능 확장 |
 | PATCH (0.0.x) | 하위 호환 버그 수정 | 오타 수정, 동작 변경 없는 문서 정리 |
 
@@ -117,7 +141,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 |------|------|
 | 주요 산출물 | 마크다운 (스킬, 가이드), 쉘 스크립트 |
 | 빌드 | 없음 |
-| 테스트 | `setup.sh`를 빈 디렉토리에서 실행하여 검증 |
+| 테스트 | 빈 디렉토리에서 설치하여 검증 |
 
 ### Git Flow (이 레포)
 
@@ -129,12 +153,11 @@ main ────────────────●─────
 
 - `develop` 브랜치 없음 (소규모 도구 레포)
 - PR 타겟: `main` 직접
-- 이슈 사이클 동일 적용: `/github-issue` → `/spec` → `/implement` → `/commit` → `/github-pr`
+- 이슈 플로우 동일 적용: `/issue` → `/spec` → `/implement` → `/commit` → `/pr`
 
 ### 변경 시 검증 체크리스트
 
-- [ ] 스킬 파일 9개 존재 확인 (cycle 6종 + thinking 3종)
-- [ ] `setup.sh`를 빈 디렉토리에서 실행하여 정상 설치 확인
+- [ ] 스킬 파일 존재 확인 (flow, issue, spec, implement, commit, pr, setup + thinking 3종)
 - [ ] README.md Mermaid 다이어그램 렌더링 확인
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인
@@ -148,7 +171,7 @@ main ────────────────●─────
 | 순위 | 원칙 | 설명 |
 |------|------|------|
 | 1 | **정확도 우선** | 수정된 결과물 기준으로 정확도가 최우선 |
-| 2 | **이슈 사이클 필수** | 경량화 작업도 반드시 이슈 사이클을 통해 진행 |
+| 2 | **이슈 플로우 필수** | 경량화 작업도 반드시 이슈 플로우를 통해 진행 |
 | 3 | **필요한 것만 활성화** | 프로젝트에 불필요한 플러그인은 비활성화 |
 | 4 | **서브 에이전트 위임** | 메인 컨텍스트를 보호하고, 병렬 처리로 속도도 확보 |
 
@@ -176,6 +199,6 @@ main ────────────────●─────
 
 스킬 파일은 이 레포의 **제품**입니다.
 
-- 스킬 변경 시 적용 사례 레포(keycloak-practice 등)에도 동기화
+- 스킬 변경 시 적용 사례 레포에도 동기화
 - 범용성 유지: 특정 프로젝트에 종속되는 내용 금지
 - `/spec` 단계에서 스킬 변경 명세를 먼저 작성
