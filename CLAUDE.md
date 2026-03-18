@@ -51,9 +51,8 @@ provider는 SessionStart 훅에서 git remote host 기반으로 자동 감지됩
 | 스킬 | 역할 | 트리거 |
 |------|------|--------|
 | `/flow` | 이슈 플로우 전체 오케스트레이션 | "flow", "플로우", 자연어 수정 요청 |
-| `/issue` | 이슈 생성 + 브랜치 세팅 | "이슈", "issue" |
+| `/issue` | 이슈 생애주기 (create/start/complete) | "이슈", "issue" |
 | `/spec` | 요구사항 분석, 아키텍처 설계 | "spec", "명세" |
-| `/implement` | 구현 | "implement", "구현" |
 | `/commit` | 커밋 리뷰 + 커밋 | "commit", "커밋" |
 | `/pr` | PR 생성 + 머지 | "PR", "풀리퀘" |
 | `/setup` | provider 등록, 상태 확인, overlay 설정 | "setup", "설정" |
