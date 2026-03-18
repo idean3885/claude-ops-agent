@@ -4,6 +4,21 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.1.0] - 2026-03-18
+
+### Added
+- `/issue` 서브커맨드 확장 — create/start/complete 이슈 생애주기 전체 관리
+- 코드 없는 이슈 지원 — start 시 브랜치 생성 선택 (조사/문서 이슈 대응)
+- github provider에 이슈 start/complete 생애주기 추가
+- SessionStart 훅에서 plugin git 자동 복원 (marketplace update 후 수동 절차 불필요)
+- marketplace.json에 repository.url 추가
+
+### Removed
+- `/implement` 스킬 제거 — 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
+
+### Changed
+- 플러그인명 `devex`로 통일 (plugin.json + marketplace.json)
+
 ## [3.0.0] - 2026-03-18
 
 ### Breaking Changes
