@@ -4,6 +4,12 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.2.1] - 2026-03-18
+
+### Added
+- SessionStart 훅에서 이전 버전 캐시 디렉토리 자동 정리
+  - marketplace update 후 잔여 버전 디렉토리 누적 방지
+
 ## [3.2.0] - 2026-03-18
 
 ### Added

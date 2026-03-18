@@ -90,8 +90,24 @@ function loadOverlay(host) {
   return null;
 }
 
+// --- Cleanup stale version directories ---
+function cleanupStaleVersions() {
+  try {
+    const cacheParent = resolve(pluginRoot, '..');
+    const currentDir = pluginRoot.split('/').pop();
+    const siblings = readdirSync(cacheParent);
+    for (const dir of siblings) {
+      if (dir !== currentDir && /^\d+\.\d+\.\d+$/.test(dir)) {
+        const target = join(cacheParent, dir);
+        execSync(`rm -rf "${target}"`, { timeout: 5000, stdio: 'ignore' });
+      }
+    }
+  } catch { /* non-critical */ }
+}
+
 // --- Execute ---
 ensurePluginGit();
+cleanupStaleVersions();
 
 const host = detectProvider();
 const provider = findProvider(host);
