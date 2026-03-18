@@ -46,14 +46,27 @@ gh issue list --state open --search "{키워드}" --json number,title,labels --l
 
 ### start
 
-**브랜치 패턴**: `{타입}/{이슈번호}`
-> 이슈 내용은 변경될 수 있으므로 설명은 붙이지 않는다.
+**상태**: GitHub Issues는 별도 상태 전환 API 없음 (open 상태 유지)
 
-**브랜치 생성 방식**:
+**담당자 설정**:
+```bash
+gh issue edit {이슈번호} --add-assignee @me
+```
+
+**시작 기록**: 이슈 코멘트로 시작 일시 기록
+```bash
+gh issue comment {이슈번호} --body "작업 시작: {시작일시}"
+```
+
+**브랜치 생성** (코드 작업 이슈만):
+- 브랜치 패턴: `{타입}/{이슈번호}`
+- 이슈 내용은 변경될 수 있으므로 설명은 붙이지 않는다
 - **워크트리 (권장)**: `git worktree add ../{프로젝트}-{타입}-{번호} -b {타입}/{번호}`
 - **직접 체크아웃**: `git checkout main && git pull && git checkout -b {타입}/{번호}`
 
 ### complete
+
+#### 코드 작업 이슈 (브랜치 있음)
 
 **PR 생성**: `gh pr create`
 
@@ -108,6 +121,20 @@ gh pr merge {PR번호} --merge
 git checkout {타겟브랜치} && git pull
 ```
 워크트리 사용 시: `git worktree remove ../{워크트리 경로}`
+
+#### 코드 없는 이슈 (브랜치 없음)
+
+**이슈 닫기**:
+```bash
+gh issue close {이슈번호} --comment "## 작업 결과\n{결과 요약}\n\n소요 시간: {시간}"
+```
+
+#### 공통
+
+**소요 시간 기록**:
+- 시작 일시 ~ 현재 기준으로 실 작업 시간 계산
+- 점심(1h), 주말/공휴일 제외
+- 정수 올림, 일별 분배 형식 (예: `소요 시간: 8h (03/17 4h + 03/18 4h)`)
 
 ## Extensions
 
