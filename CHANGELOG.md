@@ -4,6 +4,18 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.2.0] - 2026-03-18
+
+### Added
+- 릴리스 자동화 워크플로우 (`release.yml`) — main 브랜치 VERSION 변경 시 태그 + GitHub Release 자동 생성
+- CHANGELOG에서 해당 버전 섹션을 자동 추출하여 릴리스 노트 생성
+
+### Fixed
+- master/main 브랜치 분리로 인한 v3.0.0~v3.1.1 미배포 해소
+- 자기 참조 auto-update PR 정리 (#35, #38, #46)
+- 스테일 브랜치 정리 (master, chore/devex-update-*)
+- 커밋 히스토리 author 정보 정규화
+
 ## [3.1.1] - 2026-03-18
 
 ### Fixed
