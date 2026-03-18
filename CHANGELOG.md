@@ -4,6 +4,14 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.1.1] - 2026-03-18
+
+### Fixed
+- issue 스킬에 provider 참조 필수 규칙 강제 — API 추측 호출 방지
+- provider 파일 미참조 시 API 호출 금지 명시
+- 본문 업데이트 시 기존 cc·태그 보존 필수 규칙 추가
+- workflow.json currentIssue 제거 단계 추가
+
 ## [3.1.0] - 2026-03-18
 
 ### Added
