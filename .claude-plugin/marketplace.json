@@ -3,6 +3,7 @@
   "name": "devex",
   "description": "AI-Native Development Experience for Claude Code",
   "owner": { "name": "idean3885" },
+  "repository": { "url": "https://github.com/idean3885/claude-devex.git" },
   "plugins": [
     {
       "name": "devex",
