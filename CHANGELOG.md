@@ -4,6 +4,50 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.1.1] - 2026-03-18
+
+### Fixed
+- issue 스킬에 provider 참조 필수 규칙 강제 — API 추측 호출 방지
+- provider 파일 미참조 시 API 호출 금지 명시
+- 본문 업데이트 시 기존 cc·태그 보존 필수 규칙 추가
+- workflow.json currentIssue 제거 단계 추가
+
+## [3.1.0] - 2026-03-18
+
+### Added
+- `/issue` 서브커맨드 확장 — create/start/complete 이슈 생애주기 전체 관리
+- 코드 없는 이슈 지원 — start 시 브랜치 생성 선택 (조사/문서 이슈 대응)
+- github provider에 이슈 start/complete 생애주기 추가
+- SessionStart 훅에서 plugin git 자동 복원 (marketplace update 후 수동 절차 불필요)
+- marketplace.json에 repository.url 추가
+
+### Removed
+- `/implement` 스킬 제거 — 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
+
+### Changed
+- 플러그인명 `devex`로 통일 (plugin.json + marketplace.json)
+
+## [3.0.0] - 2026-03-18
+
+### Breaking Changes
+- 이슈 사이클 → 이슈 플로우(issue flow) 용어 전환
+- `/cycle` → `/flow`, `/github-issue` → `/issue`, `/github-pr` → `/pr` 스킬 리네이밍
+- `/implement` 스킬 제거 — 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
+- Provider 추상화 도입 — 플랫폼별 이슈 동작을 provider로 분리
+
+### Added
+- `providers/` 디렉토리 — PROVIDER.md 템플릿 + github.md 기본 내장
+- `/setup` 스킬 — provider 등록, 상태 확인, overlay 설정
+- `/issue` 서브커맨드 확장 — create/start/complete 이슈 생애주기 전체 관리
+- 코드 없는 이슈 지원 — start 시 브랜치 생성 선택, 조사/문서 이슈 대응
+- SessionStart 훅에서 git remote host 기반 provider 자동 감지
+- 로컬 provider 시스템 (`~/.claude/devex/providers/`, `~/.claude/devex/overlays/`)
+
+### Changed
+- github provider에 이슈 start/complete 생애주기 추가
+- plugin.json + marketplace.json 플러그인명 `devex`로 통일
+- CLAUDE.md 전면 갱신 (이슈 플로우 용어, provider 시스템 설명)
+
 ## [2.0.0] - 2026-03-08
 
 ### Breaking Changes

@@ -1,13 +1,13 @@
 {
-  "name": "claude-devex",
-  "description": "AI-Native Development Workflow — Issue → Spec → Implement → Commit → PR cycle",
+  "name": "devex",
+  "description": "AI-Native Development Workflow — Issue Flow with pluggable providers",
   "author": {
     "name": "idean3885"
   },
   "keywords": [
     "devex",
-    "workflow",
-    "cycle",
+    "issue-flow",
+    "provider",
     "github",
     "spec",
     "implement"
