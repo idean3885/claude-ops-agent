@@ -4,6 +4,17 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.5.0] - 2026-03-20
+
+### Changed
+- README.md 전면 재작성 — v3.x 플러그인 구조 반영
+  - 이슈 사이클 → 이슈 플로우 용어 통일
+  - 구버전 스킬명(/github-issue, /github-pr, /implement) 제거
+  - setup.sh/템플릿 설치 방식 → 플러그인 마켓플레이스 설치로 전환
+  - project-profile 설명 제거 (v3.0.0에서 삭제됨)
+  - Provider 시스템, Git Identity, 플러그인 자체 관리 기능 문서화
+  - Mermaid 다이어그램 현행화
+
 ## [3.4.2] - 2026-03-20
 
 ### Fixed

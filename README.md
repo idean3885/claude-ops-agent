@@ -1,237 +1,152 @@
 # claude-devex
 
-Claude Code 기반 개발 워크플로우 도구 세트
+Claude Code 플러그인 — AI-Native Development Workflow
 
-> 기본 가이드라인을 따르되, 프로젝트 프로필로 필요한 부분을 오버라이드할 수 있습니다. 자연어로 요청하면 도구가 워크플로우를 안내합니다.
+> 자연어로 요청하면 이슈 생성부터 PR 머지까지 전체 플로우를 안내합니다.
+> Provider 시스템으로 GitHub, Dooray 등 다양한 이슈 트래커에 대응합니다.
 
-### 배경
+## 배경
 
 AI에게 코드를 맡기면서 개발자의 역할이 "코드 작성"에서 "의사결정과 검증"으로 옮겨갔습니다.
+이 플러그인은 그 변화를 워크플로우로 정착시키기 위해 시작되었습니다.
 
-이 프로젝트는 그 변화를 워크플로우로 정착시키기 위해 시작되었습니다.
-
-- [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) — 이슈 사이클의 배경
+- [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) — 이슈 플로우의 배경
 - [코드에서 사고로](https://idean3885.github.io/posts/from-coding-to-thinking/) — thinking 스킬의 배경
 
-## 이슈 사이클
+## 이슈 플로우
 
 ```mermaid
 graph LR
-    A["/github-issue"] --> B["/spec"]
-    B --> C["/implement"]
+    A["/issue"] --> B["/spec"]
+    B --> C["구현"]
     C --> D["/commit"]
     D --> E{추가 구현?}
     E -->|Yes| C
-    E -->|No| F["/github-pr"]
+    E -->|No| F["/pr"]
 ```
 
-| 단계 | 스킬 | 하는 일 |
-|------|------|---------|
-| 이슈 | `/github-issue` | GitHub 이슈 생성, 라벨 매핑, 브랜치 자동 생성 |
-| 명세 | `/spec` | 요구사항 분석, 아키텍처 설계, 다이어그램 |
-| 구현 | `/implement` | 설계 문서 기반 코드 구현 |
-| 커밋 | `/commit` | diff 리뷰, 커밋 메시지 제안, 커밋 |
-| PR | `/github-pr` | PR 생성, 이슈 연결 |
+`/flow` 스킬로 전체 플로우를 오케스트레이션할 수 있습니다.
+3개의 확인 게이트(플랜 승인, 커밋 승인, 머지 승인)에서 사용자 승인을 받은 후 진행합니다.
 
-각 스킬은 독립적으로도 사용할 수 있고, 사이클 순서대로 사용하면 이슈 하나가 PR 하나로 완결됩니다.
+| 스킬 | 역할 | 트리거 |
+|------|------|--------|
+| `/flow` | 이슈 플로우 전체 오케스트레이션 | "flow", "플로우", 자연어 수정 요청 |
+| `/issue` | 이슈 생애주기 (create/start/complete) | "이슈", "issue" |
+| `/spec` | 요구사항 분석, 아키텍처 설계 | "spec", "명세" |
+| `/commit` | 커밋 리뷰 + Git Identity 검증 + 커밋 | "commit", "커밋" |
+| `/pr` | PR 생성 + 머지 | "PR", "풀리퀘" |
+| `/setup` | provider 등록, 상태 확인 | "setup", "설정" |
+
+## Provider 시스템
+
+이슈 트래커별 동작을 provider로 추상화합니다.
+SessionStart 훅에서 git remote host 기반으로 자동 감지됩니다.
+
+```mermaid
+graph TD
+    A["SessionStart 훅"] --> B{"git remote host?"}
+    B -->|github.com| C["github provider (내장)"]
+    B -->|github.nhnent.com| D["로컬 provider"]
+    B -->|기타| E["커스텀 provider"]
+    C --> F["스킬 트리거 + Git Identity 주입"]
+    D --> F
+    E --> F
+```
+
+| 위치 | 용도 |
+|------|------|
+| `providers/github.md` | 기본 내장 provider (GitHub) |
+| `providers/PROVIDER.md` | 커스텀 provider 작성 템플릿 |
+| `~/.claude/devex/providers/` | 로컬 전용 커스텀 provider |
+| `~/.claude/devex/overlays/` | host별 오버레이 설정 |
+
+## Git Identity
+
+Provider별 Git Identity(user.name, user.email)를 정의하여,
+커밋/푸시 시 올바른 계정으로 자동 설정합니다.
+
+- SessionStart 훅에서 `gh auth status` 크리덴셜과 provider identity를 매칭
+- 커밋 전 `git config user.name/email`을 provider 기준으로 자동 검증 및 수정
+- 글로벌 git config에 의존하지 않아 계정 오류를 원천 차단
 
 ## Thinking 스킬
 
 의사결정과 검증을 구조화하는 사고 도구입니다.
+이슈 플로우와 독립적으로 사용하거나 연계할 수 있습니다.
 
-이슈 사이클과 독립적으로 사용하거나 연계할 수 있습니다.
-
-| 스킬 | 하는 일 | 자연어 예시 |
-|------|---------|------------|
+| 스킬 | 역할 | 자연어 예시 |
+|------|------|------------|
 | `/decision-record` | 아키텍처 의사결정 기록 (MADR 기반, 파기 조건 포함) | "이 결정 기록해줘" |
 | `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘" |
 | `/dependency-map` | 의존성 맵 생성, 변경 영향도 분석 (Mermaid) | "의존성 분석해줘" |
 
-```mermaid
-graph LR
-    A["/decision-record"] -.->|참조| B["/spec"]
-    C["/verify"] -.->|첨부| D["/github-pr"]
-    E["/dependency-map"] -.->|분석| B
-    A -.->|파기 조건 점검| C
-    A -.->|관계 시각화| E
-```
+## 설치
 
-## 브랜치 명명 규칙
-
-`{타입}/{이슈번호}` — 설명은 붙이지 않습니다.
-
-```
-feature/12   fix/15   docs/8   refactor/20   chore/25
-```
-
-> 이슈 내용은 진행 중 변경될 수 있으므로, 브랜치명에 설명을 포함하지 않습니다.
-
-## 이슈 사이징 기준
-
-1개 이슈 = 1개 개발 사이클
-
-| 항목 | 기준 |
-|------|------|
-| 작업 시간 | 1일 8시간 이내 완료 가능 |
-| 변경 파일 수 | 15개 미만 |
-| PR 단위 | 이슈 1개 = PR 1개 |
-
-이슈가 너무 크면 하위 이슈로 분할하여 각각 독립적으로 PR 가능한 단위로 분리합니다.
-
-## 사용법
-
-### 방법 1: GitHub Template (신규 프로젝트)
-
-1. 이 레포를 템플릿으로 새 레포를 생성합니다.
-2. `CLAUDE.md` 하단에 프로젝트 고유 규칙을 추가합니다.
-3. `README.md`를 프로젝트에 맞게 수정합니다.
-
-### 방법 2: setup.sh (기존 프로젝트)
+Claude Code 플러그인 마켓플레이스에서 설치합니다.
 
 ```bash
-# 신규 설치
-curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash
-
-# 버전 확인
-curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --check
-
-# 업데이트 (스킬만 갱신, 프로젝트 파일 보존)
-curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --update
-
-# 자동 업데이트 구독
-curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --subscribe
+claude plugins add devex@claude-devex --marketplace claude-devex
 ```
 
-업데이트 시 보존/갱신 대상:
+> 마켓플레이스 등록이 필요한 경우:
+> ```bash
+> claude plugins marketplace add claude-devex --source git --url https://github.com/idean3885/claude-devex.git
+> ```
 
-| 영역 | 업데이트 대상 | 관리 주체 |
-|------|:---:|------|
-| `.claude/skills/` | O | devex |
-| `.claude/README.md` | O | devex |
-| `.claude/project-profile.md` | X | 프로젝트 |
-| `.claude/settings.json` | X | 프로젝트 |
-| `CLAUDE.md` | X | 프로젝트 |
+### 플러그인 자체 관리
 
-## 자동 업데이트 구독
+| 기능 | 동작 |
+|------|------|
+| git 자동 복원 | SessionStart 훅에서 `.git` 없으면 자동 init + fetch |
+| 버전 자동 동기화 | VERSION 파일 ↔ 캐시 디렉토리명 불일치 시 자동 리네임 + installed_plugins.json 갱신 |
+| git identity 자동 설정 | 플러그인 리모트 호스트의 provider identity로 자동 설정 |
+| 구버전 정리 | 캐시 내 이전 버전 디렉토리 자동 삭제 |
 
-`--subscribe` 옵션으로 GitHub Actions 워크플로우를 설치하면, claude-devex 업데이트를 자동으로 감지하고 PR을 생성합니다.
+### 로컬 개발
+
+캐시 디렉토리에서 직접 수정 → 커밋 → 푸시.
+다음 세션 시작 시 버전 동기화가 자동 수행됩니다.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --subscribe
+cd ~/.claude/plugins/cache/claude-devex/devex/{version}/
+# 수정 → git add → git commit → git push origin master:main
 ```
-
-| 항목 | 내용 |
-|------|------|
-| 스케줄 | 매일 09:00 KST 자동 확인 |
-| 수동 트리거 | GitHub Actions 탭 → `claude-devex 자동 업데이트 확인` → Run workflow |
-| 업데이트 감지 시 | PR 자동 생성 (변경 내역 포함) |
-| 설치 파일 | `.github/workflows/claude-devex-update.yml` |
-
-기존 수동 `--update` 방식도 병행 사용할 수 있습니다.
-
-## 프로젝트 프로필
-
-스킬은 범용(Core)으로 유지하고, 프로젝트별 특수성은 `.claude/project-profile.md`로 주입합니다.
-
-```
-Core Skills (범용)              Project Profile (프로젝트별)
-───────────────────            ─────────────────────────
-/spec    → "명세를 작성한다"  ← profile이 "무엇을" 정의
-/implement → "산출물을 구현"  ← profile이 "어떻게" 정의
-/commit  → 범용 (변경 없음)
-```
-
-프로필이 없으면 기본 동작(코드 아키텍처 설계/구현)을 수행합니다.
-
-작성법: `.claude/project-profile.md` 파일에 산출물 유형, `/spec 컨텍스트`, `/implement 컨텍스트`, 검증 방법을 정의합니다.
-
-## 스킬 동작 방식
-
-스킬은 `.claude/skills/*/SKILL.md` 파일로 정의됩니다.
-
-| 특성 | 설명 |
-|------|------|
-| 로딩 시점 | `/스킬명` 슬래시 커맨드 입력 시에만 로딩 |
-| 토큰 소비 | 호출 전까지 컨텍스트에 포함되지 않음 |
-| 의존성 | Claude Code CLI + GitHub CLI만 필요 |
-
-```
-CLAUDE.md     → 매 턴 자동 로딩 (항상 토큰 소비)
-skills/SKILL.md → /명령어 호출 시만 로딩 (온디맨드)
-```
-
-이 설계 덕분에 스킬을 추가해도 평상시 토큰 소비는 0입니다.
-
-## 적용 사례
-
-| 프로젝트 | 설명 |
-|----------|------|
-| [keycloak-practice](https://github.com/idean3885/keycloak-practice) | Keycloak SSO 연동 실습 (이 워크플로우로 개발) |
-
-## 확장: 프로젝트 특화 스킬 추가
-
-프로젝트 고유 워크플로우가 필요하면 스킬을 추가할 수 있습니다.
-
-```
-.claude/skills/
-├── github-issue/SKILL.md   # 공통 (claude-devex)
-├── spec/SKILL.md            # 공통
-├── implement/SKILL.md       # 공통
-├── commit/SKILL.md          # 공통
-├── github-pr/SKILL.md       # 공통
-└── deploy/SKILL.md          # 프로젝트 특화 (직접 추가)
-```
-
-스킬 작성법:
-1. `.claude/skills/{스킬명}/SKILL.md` 파일 생성
-2. 역할, 워크플로우, 규칙을 마크다운으로 정의
-3. Claude Code에서 `/{스킬명}`으로 호출
 
 ## 파일 구조
 
 ```
 claude-devex/
-├── README.md                      # 이 파일
-├── CLAUDE.md                      # 공통 AI 협업 규칙 (템플릿)
-├── VERSION                        # 현재 버전 (semver)
-├── CHANGELOG.md                   # 변경 이력
-├── .gitignore                     # 공통 무시 패턴
-├── setup.sh                       # 설치/업데이트 스크립트
-├── .github/
-│   └── workflows/
-│       └── claude-devex-update.yml  # 자동 업데이트 워크플로우 템플릿
-└── .claude/
-    ├── README.md                  # 워크플로우 상세 가이드
-    ├── settings.json              # 기본 권한 설정
-    ├── project-profile.md         # 프로젝트 프로필 (스킬 동작 오버라이드)
-    └── skills/
-        ├── github-issue/SKILL.md  # /github-issue
-        ├── spec/SKILL.md          # /spec
-        ├── implement/SKILL.md     # /implement
-        ├── commit/SKILL.md        # /commit
-        ├── github-pr/SKILL.md     # /github-pr
-        ├── cycle/SKILL.md         # /cycle
-        └── thinking/
-            ├── decision-record/SKILL.md  # /decision-record
-            ├── verify/SKILL.md           # /verify
-            └── dependency-map/SKILL.md   # /dependency-map
+├── README.md                        # 이 파일
+├── CLAUDE.md                        # AI 협업 가이드 (범용 템플릿)
+├── VERSION                          # 현재 버전 (semver)
+├── CHANGELOG.md                     # 변경 이력
+├── .claude-plugin/
+│   ├── plugin.json                  # 플러그인 메타데이터
+│   └── marketplace.json             # 마켓플레이스 등록 정보
+├── hooks/
+│   └── hooks.json                   # SessionStart 훅 등록
+├── scripts/
+│   └── session-start.mjs            # provider 감지, Git Identity, 버전 동기화
+├── providers/
+│   ├── PROVIDER.md                  # 커스텀 provider 템플릿
+│   └── github.md                    # GitHub 기본 내장 provider
+└── skills/
+    ├── issue/SKILL.md               # /issue
+    ├── spec/SKILL.md                # /spec
+    ├── commit/SKILL.md              # /commit
+    ├── pr/SKILL.md                  # /pr
+    ├── flow/SKILL.md                # /flow
+    ├── setup/SKILL.md               # /setup
+    └── thinking/
+        ├── decision-record/SKILL.md # /decision-record
+        ├── verify/SKILL.md          # /verify
+        └── dependency-map/SKILL.md  # /dependency-map
 ```
 
 ## 요구사항
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 - [GitHub CLI](https://cli.github.com/) (`gh`)
-
-## 관련 포스팅
-
-이 프로젝트의 배경과 사상을 다룬 블로그 포스팅입니다.
-
-프로젝트의 핵심 요소(커맨드명, 설치 방법, 워크플로우)가 변경될 경우 포스팅 업데이트가 필요할 수 있습니다.
-
-| 포스팅 | 레포 |
-|--------|------|
-| [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) | [idean3885.github.io](https://github.com/idean3885/idean3885.github.io) |
-| [코드에서 사고로](https://idean3885.github.io/posts/from-coding-to-thinking/) | [idean3885.github.io](https://github.com/idean3885/idean3885.github.io) |
 
 ## 라이선스
 
