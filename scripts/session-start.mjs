@@ -55,7 +55,7 @@ function findProvider(host) {
     for (const file of readdirSync(localProviders).filter(f => f.endsWith('.md'))) {
       try {
         const content = readFileSync(join(localProviders, file), 'utf8');
-        const hostMatch = content.match(/hostPattern[:\s]+[`"]?([^`"\n]+)/i);
+        const hostMatch = content.match(/hostPattern\s*\|?\s*[`"]([^`"]+)[`"]/i);
         if (hostMatch && host.includes(hostMatch[1].trim())) {
           return { name: file.replace('.md', ''), source: 'local', host: hostMatch[1].trim() };
         }
@@ -69,7 +69,7 @@ function findProvider(host) {
     for (const file of readdirSync(builtinProviders).filter(f => f.endsWith('.md') && f !== 'PROVIDER.md')) {
       try {
         const content = readFileSync(join(builtinProviders, file), 'utf8');
-        const hostMatch = content.match(/hostPattern[:\s]+[`"]?([^`"\n]+)/i);
+        const hostMatch = content.match(/hostPattern\s*\|?\s*[`"]([^`"]+)[`"]/i);
         if (hostMatch && host.includes(hostMatch[1].trim())) {
           return { name: file.replace('.md', ''), source: 'builtin', host: hostMatch[1].trim() };
         }
@@ -88,6 +88,38 @@ function loadOverlay(host) {
     catch { /* skip */ }
   }
   return null;
+}
+
+// --- Build skill trigger context for additionalContext injection ---
+function buildSkillContext(provider) {
+  const skillsDir = join(pluginRoot, 'skills');
+  if (!existsSync(skillsDir)) return '';
+
+  let providerPath = join(pluginRoot, 'providers', 'github.md');
+  if (provider.source === 'local') {
+    const localPath = join(devexGlobal, 'providers', `${provider.name}.md`);
+    if (existsSync(localPath)) providerPath = localPath;
+  } else if (provider.source === 'builtin') {
+    const builtinPath = join(pluginRoot, 'providers', `${provider.name}.md`);
+    if (existsSync(builtinPath)) providerPath = builtinPath;
+  }
+
+  return [
+    '',
+    'Natural language skill triggers — on match, read the guide file and follow its workflow.',
+    'Do NOT mention plugin name to the user. Provider file MUST be read before any API call.',
+    '',
+    `Provider: ${providerPath}`,
+    '',
+    '| Trigger | Guide |',
+    '|---------|-------|',
+    `| "이슈", "issue" (create/start/complete) | ${join(skillsDir, 'issue', 'SKILL.md')} |`,
+    `| "커밋", "commit" | ${join(skillsDir, 'commit', 'SKILL.md')} |`,
+    `| "PR", "풀리퀘" | ${join(skillsDir, 'pr', 'SKILL.md')} |`,
+    `| "flow", "플로우", natural language change request | ${join(skillsDir, 'flow', 'SKILL.md')} |`,
+    `| "spec", "명세" | ${join(skillsDir, 'spec', 'SKILL.md')} |`,
+    `| "setup", "설정" | ${join(skillsDir, 'setup', 'SKILL.md')} |`,
+  ].join('\n');
 }
 
 // --- Cleanup stale version directories ---
@@ -113,10 +145,11 @@ const host = detectProvider();
 const provider = findProvider(host);
 const overlay = loadOverlay(host);
 
-const parts = [`[devex] provider: ${provider.name} (${provider.source})`];
+const parts = [`provider: ${provider.name} (${provider.source})`];
 if (overlay) parts.push('overlay: loaded');
+parts.push(buildSkillContext(provider));
 
 process.stdout.write(JSON.stringify({
   continue: true,
-  additionalContext: parts.join(', ')
+  additionalContext: parts.join('\n')
 }));
