@@ -4,6 +4,13 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.5.4] - 2026-03-20
+
+### Fixed
+- SessionStart 훅 matcher를 `""` → `"*"`로 변경 — 세션 컨텍스트 미주입 근본 원인 해소
+  - 빈 문자열 matcher로는 훅이 실행되지만 출력이 세션에 주입되지 않음
+  - OMC 플러그인과 동일한 `"*"` 와일드카드 사용
+
 ## [3.5.3] - 2026-03-20
 
 ### Added
