@@ -255,7 +255,7 @@ if (identity) {
 parts.push(buildSkillContext(provider));
 
 const context = parts.join('\n');
-process.stdout.write(JSON.stringify({
+console.log(JSON.stringify({
   continue: true,
   message: context
 }));

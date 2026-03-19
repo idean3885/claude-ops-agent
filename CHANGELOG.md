@@ -4,6 +4,13 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.5.5] - 2026-03-20
+
+### Fixed
+- SessionStart 훅 stdout 출력을 `process.stdout.write` → `console.log`로 변경
+  - Claude Code가 줄바꿈으로 출력 완료를 판단하는 것으로 추정
+  - OMC bash 훅의 `echo`와 동일하게 줄바꿈 포함 출력
+
 ## [3.5.4] - 2026-03-20
 
 ### Fixed
