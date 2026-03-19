@@ -4,6 +4,17 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.3.0] - 2026-03-19
+
+### Added
+- SessionStart 훅에서 스킬 트리거 매핑을 additionalContext로 주입
+  - 프로젝트 enabledPlugins 설정과 무관하게 스킬 동작 보장
+  - 어떤 디렉토리에서든 자연어로 스킬 트리거 가능
+  - 디스크 쓰기 없음 — 세션 메모리에만 존재
+
+### Fixed
+- provider 감지 regex 수정 — 마크다운 테이블 형식 hostPattern 파싱 실패 해소
+
 ## [3.2.2] - 2026-03-19
 
 ### Fixed
