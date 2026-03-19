@@ -4,6 +4,15 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.6.0] - 2026-03-20
+
+### Added
+- PreToolUse 훅으로 세션 컨텍스트 주입 방식 전환
+  - SessionStart 훅은 출력 주입을 지원하지 않음 (Claude Code 플랫폼 제약)
+  - SessionStart: 사이드이펙트 전담 (버전 동기화, git identity, 캐시 파일 생성)
+  - PreToolUse: 캐시 파일을 읽어 `additionalContext`로 주입
+  - 버전, provider, Git Identity, 스킬 트리거 매핑이 매 툴 사용 시 컨텍스트에 포함
+
 ## [3.5.5] - 2026-03-20
 
 ### Fixed

@@ -255,7 +255,14 @@ if (identity) {
 parts.push(buildSkillContext(provider));
 
 const context = parts.join('\n');
-console.log(JSON.stringify({
-  continue: true,
-  message: context
-}));
+
+// Write context to cache file for PreToolUse hook to read
+try {
+  const cacheDir = join(devexGlobal, '.cache');
+  if (!existsSync(cacheDir)) {
+    execSync(`mkdir -p "${cacheDir}"`, { timeout: 1000, stdio: 'ignore' });
+  }
+  writeFileSync(join(cacheDir, 'session-context.txt'), context);
+} catch { /* non-critical */ }
+
+console.log(JSON.stringify({ continue: true }));
