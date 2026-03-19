@@ -4,6 +4,13 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.2.2] - 2026-03-19
+
+### Fixed
+- .claude/ 디렉토리를 .gitignore에 추가하여 플러그인 캐시에서 제외
+  - 플러그인 캐시에 .claude/skills/가 존재하면 Claude Code가 plugin.json의 skills 등록을 무시하는 문제 해소
+  - devex 스킬(issue, commit, pr, flow, spec, setup)이 세션 스킬 목록에 정상 노출되도록 수정
+
 ## [3.2.1] - 2026-03-18
 
 ### Added

@@ -1,6 +1,5 @@
-# Claude Code 로컬 설정
-.claude/settings.local.json
-.claude/.gh-token
+# Claude Code 프로젝트 설정 (플러그인 캐시에서 스킬 등록 간섭 방지)
+.claude/
 
 # OS
 .DS_Store
