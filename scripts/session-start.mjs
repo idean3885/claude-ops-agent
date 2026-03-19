@@ -32,7 +32,14 @@ function ensurePluginGit() {
     execSync('git init', { cwd: pluginRoot, timeout: 5000, stdio: 'ignore' });
     execSync(`git remote add origin ${repoUrl}`, { cwd: pluginRoot, timeout: 5000, stdio: 'ignore' });
     execSync('git fetch origin', { cwd: pluginRoot, timeout: 10000, stdio: 'ignore' });
-    execSync('git reset --mixed origin/master', { cwd: pluginRoot, timeout: 5000, stdio: 'ignore' });
+    // Detect default branch (main or master)
+    let defaultBranch = 'main';
+    try {
+      const refs = execSync('git ls-remote --symref origin HEAD', { cwd: pluginRoot, encoding: 'utf8', timeout: 5000 });
+      const branchMatch = refs.match(/refs\/heads\/(\S+)/);
+      if (branchMatch) defaultBranch = branchMatch[1];
+    } catch { /* fallback to main */ }
+    execSync(`git reset --mixed origin/${defaultBranch}`, { cwd: pluginRoot, timeout: 5000, stdio: 'ignore' });
   } catch { /* non-critical */ }
 }
 
@@ -90,7 +97,36 @@ function loadOverlay(host) {
   return null;
 }
 
-// --- Build skill trigger context for additionalContext injection ---
+// --- Git identity detection from provider ---
+function detectGitIdentity(provider, host) {
+  let providerPath;
+  if (provider.source === 'local') {
+    providerPath = join(devexGlobal, 'providers', `${provider.name}.md`);
+  } else {
+    providerPath = join(pluginRoot, 'providers', `${provider.name}.md`);
+  }
+
+  if (!existsSync(providerPath)) return null;
+
+  const content = readFileSync(providerPath, 'utf8');
+  const nameMatch = content.match(/user\.name\s*\|\s*`([^`]+)`/);
+  const emailMatch = content.match(/user\.email\s*\|\s*`([^`]+)`/);
+
+  if (!nameMatch || !emailMatch) return null;
+
+  let credentialUser = null;
+  if (host) {
+    try {
+      const ghOutput = execSync(`gh auth status --hostname ${host} 2>&1`, { encoding: 'utf8', timeout: 3000 });
+      const userMatch = ghOutput.match(/Logged in to .+ account (\S+)/);
+      if (userMatch) credentialUser = userMatch[1];
+    } catch { /* gh not available */ }
+  }
+
+  return { name: nameMatch[1], email: emailMatch[1], credentialUser, host };
+}
+
+// --- Build skill trigger context for message injection ---
 function buildSkillContext(provider) {
   const skillsDir = join(pluginRoot, 'skills');
   if (!existsSync(skillsDir)) return '';
@@ -147,9 +183,24 @@ const overlay = loadOverlay(host);
 
 const parts = [`provider: ${provider.name} (${provider.source})`];
 if (overlay) parts.push('overlay: loaded');
+
+const identity = detectGitIdentity(provider, host);
+if (identity) {
+  parts.push('');
+  parts.push('Git Identity (MUST verify before commit/push):');
+  parts.push(`  user.name: ${identity.name}`);
+  parts.push(`  user.email: ${identity.email}`);
+  if (identity.credentialUser) {
+    parts.push(`  credential: ${identity.credentialUser}@${identity.host}`);
+  }
+  parts.push(`  Verify: git config user.name && git config user.email`);
+  parts.push(`  Fix: git config user.name "${identity.name}" && git config user.email "${identity.email}"`);
+}
+
 parts.push(buildSkillContext(provider));
 
+const context = parts.join('\n');
 process.stdout.write(JSON.stringify({
   continue: true,
-  additionalContext: parts.join('\n')
+  message: context
 }));

@@ -8,6 +8,15 @@
 
 ## 워크플로우
 
+0. **Git Identity 검증** (커밋 전 필수):
+   - 세션 컨텍스트에 주입된 Git Identity 확인
+   - `git config user.name` && `git config user.email` 로 현재 설정 확인
+   - provider의 Git Identity와 불일치 시 자동 수정:
+     ```bash
+     git config user.name "{provider user.name}"
+     git config user.email "{provider user.email}"
+     ```
+   - 글로벌/로컬 설정과 무관하게 provider 기준으로 강제 설정
 1. **변경사항 수집**:
    - `git status`로 변경 파일 목록 확인
    - `git diff`로 staged + unstaged 변경 내용 확인

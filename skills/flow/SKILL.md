@@ -78,6 +78,7 @@ Phase 7: PR 머지 + 브랜치 정리
 
 ### Phase 5: 커밋 + 푸시 + PR 생성 + 자가 검증
 
+0. **Git Identity 검증**: `/commit` 스킬의 Step 0을 수행하여 provider의 Git Identity와 일치하는지 확인 및 자동 수정
 1. `git add` + `git commit` 실행 (CLAUDE.md 커밋 컨벤션)
 2. `git push -u origin {브랜치}` 실행
 3. `/pr` 스킬의 워크플로우를 따라 PR 생성

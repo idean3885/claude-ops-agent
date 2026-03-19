@@ -4,6 +4,20 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.4.0] - 2026-03-20
+
+### Added
+- Git Identity 시스템 — 크리덴셜 기반 커밋 계정 자동 검증
+  - Provider에 `## Git Identity` 섹션 추가 (user.name, user.email)
+  - SessionStart 훅에서 `gh auth status`로 크리덴셜 계정 감지 후 컨텍스트 주입
+  - 커밋/푸시 전 provider의 Git Identity와 repo git config 자동 검증 및 수정
+  - 글로벌/로컬 git config에 의존하지 않고 크리덴셜 → identity 매핑으로 계정 오류 원천 차단
+- Provider 템플릿(PROVIDER.md)에 Git Identity 섹션 추가
+
+### Fixed
+- SessionStart 훅 출력 필드를 `additionalContext` → `message`로 변경 — 세션 복원 시 컨텍스트 미주입 버그 해소
+- `ensurePluginGit()`에서 `origin/master` 하드코딩 → 리모트 기본 브랜치 자동 감지로 변경
+
 ## [3.3.0] - 2026-03-19
 
 ### Added

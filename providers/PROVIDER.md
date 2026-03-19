@@ -33,6 +33,19 @@
 - 소요 시간 기록 방법
 - 브랜치 정리 규칙
 
+## Git Identity
+
+커밋/푸시 시 사용할 git 계정 정보.
+크리덴셜(gh auth) 계정과 일치해야 한다.
+
+| 항목 | 설명 | 예시 |
+|------|------|------|
+| user.name | git commit author name | "my-username" |
+| user.email | git commit author email | "me@example.com" |
+
+session-start 훅이 provider의 Git Identity를 감지하여 세션 컨텍스트에 주입한다.
+커밋/푸시 전에 `git config user.name/email`이 provider 설정과 일치하는지 자동 검증한다.
+
 ## Extensions
 
 provider별 확장 기능을 자유롭게 정의합니다.

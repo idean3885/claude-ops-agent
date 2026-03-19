@@ -132,7 +132,14 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 | MINOR (0.x.0) | 하위 호환 새 기능 추가 | 새 스킬 추가, 기존 스킬 기능 확장 |
 | PATCH (0.0.x) | 하위 호환 버그 수정 | 오타 수정, 동작 변경 없는 문서 정리 |
 
-변경 시 `VERSION`, `CHANGELOG.md`를 함께 업데이트한다.
+**버전업은 모든 변경에 필수이며 예외 없음.**
+1인 개발 레포이므로 변경 = 버전업이다.
+
+변경 시 반드시 아래 파일을 **동시에** 업데이트한다:
+- `VERSION`
+- `CHANGELOG.md`
+- `.claude-plugin/plugin.json` → `version`
+- `.claude-plugin/marketplace.json` → `plugins[0].version`
 
 ### 산출물 특성
 
