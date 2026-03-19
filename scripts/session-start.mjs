@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, readdirSync } from 'fs';
-import { join, resolve } from 'path';
+import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'fs';
+import { join, resolve, dirname } from 'path';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
 
@@ -158,6 +158,64 @@ function buildSkillContext(provider) {
   ].join('\n');
 }
 
+// --- Auto-sync plugin version: rename dir + update installed_plugins.json ---
+function syncPluginVersion() {
+  try {
+    const versionFile = join(pluginRoot, 'VERSION');
+    if (!existsSync(versionFile)) return;
+    const currentVersion = readFileSync(versionFile, 'utf8').trim();
+    const currentDirName = pluginRoot.split('/').pop();
+    if (currentDirName === currentVersion) return; // already in sync
+
+    const cacheParent = resolve(pluginRoot, '..');
+    const newPath = join(cacheParent, currentVersion);
+    if (existsSync(newPath)) return; // target already exists
+
+    // Rename directory
+    renameSync(pluginRoot, newPath);
+
+    // Update installed_plugins.json
+    const installedPath = join(homedir(), '.claude', 'plugins', 'installed_plugins.json');
+    if (existsSync(installedPath)) {
+      const installed = JSON.parse(readFileSync(installedPath, 'utf8'));
+      const entry = installed.plugins?.['devex@claude-devex']?.[0];
+      if (entry) {
+        entry.installPath = newPath;
+        entry.version = currentVersion;
+        entry.lastUpdated = new Date().toISOString();
+        // Update gitCommitSha if possible
+        try {
+          const sha = execSync('git rev-parse HEAD', { cwd: newPath, encoding: 'utf8', timeout: 3000 }).trim();
+          entry.gitCommitSha = sha;
+        } catch { /* skip */ }
+        writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
+      }
+    }
+  } catch { /* non-critical */ }
+}
+
+// --- Auto-set git config on plugin repo based on its own remote ---
+function ensurePluginGitIdentity() {
+  try {
+    const remote = execSync('git remote get-url origin', { cwd: pluginRoot, encoding: 'utf8', timeout: 3000 }).trim();
+    const hostMatch = remote.match(/[@/]([^:/]+)[:/]/);
+    if (!hostMatch) return;
+    const pluginHost = hostMatch[1];
+    const pluginProvider = findProvider(pluginHost);
+    const identity = detectGitIdentity(pluginProvider, pluginHost);
+    if (!identity) return;
+
+    const currentName = execSync('git config user.name', { cwd: pluginRoot, encoding: 'utf8', timeout: 1000 }).trim();
+    const currentEmail = execSync('git config user.email', { cwd: pluginRoot, encoding: 'utf8', timeout: 1000 }).trim();
+    if (currentName !== identity.name) {
+      execSync(`git config user.name "${identity.name}"`, { cwd: pluginRoot, timeout: 1000, stdio: 'ignore' });
+    }
+    if (currentEmail !== identity.email) {
+      execSync(`git config user.email "${identity.email}"`, { cwd: pluginRoot, timeout: 1000, stdio: 'ignore' });
+    }
+  } catch { /* non-critical — git config may not be set yet */ }
+}
+
 // --- Cleanup stale version directories ---
 function cleanupStaleVersions() {
   try {
@@ -175,6 +233,8 @@ function cleanupStaleVersions() {
 
 // --- Execute ---
 ensurePluginGit();
+syncPluginVersion();
+ensurePluginGitIdentity();
 cleanupStaleVersions();
 
 const host = detectProvider();

@@ -4,6 +4,17 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.4.1] - 2026-03-20
+
+### Added
+- SessionStart 훅에서 플러그인 버전 자동 동기화
+  - VERSION 파일과 캐시 디렉토리명 불일치 시 자동 리네임
+  - installed_plugins.json의 version, installPath, gitCommitSha 자동 갱신
+  - 수동 marketplace update나 재설치 불필요
+- SessionStart 훅에서 플러그인 캐시 디렉토리 git identity 자동 설정
+  - 플러그인 리모트 호스트의 provider Git Identity 기반
+  - 재설치 후에도 올바른 계정으로 자동 커밋 가능
+
 ## [3.4.0] - 2026-03-20
 
 ### Added
