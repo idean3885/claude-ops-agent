@@ -229,7 +229,14 @@ const host = detectProvider();
 const provider = findProvider(host);
 const overlay = loadOverlay(host);
 
-const parts = [`provider: ${provider.name} (${provider.source})`];
+// Read actual version from VERSION file (not directory name)
+let pluginVersion = 'unknown';
+try {
+  const vf = join(pluginRoot, 'VERSION');
+  if (existsSync(vf)) pluginVersion = readFileSync(vf, 'utf8').trim();
+} catch { /* skip */ }
+
+const parts = [`devex: v${pluginVersion}`, `provider: ${provider.name} (${provider.source})`];
 if (overlay) parts.push('overlay: loaded');
 
 const identity = detectGitIdentity(provider, host);

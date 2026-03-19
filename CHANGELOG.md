@@ -4,6 +4,13 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.5.3] - 2026-03-20
+
+### Added
+- SessionStart 훅 컨텍스트에 `devex: v{version}` 명시적 출력
+  - VERSION 파일 기반으로 실제 버전을 세션 컨텍스트 첫 줄에 주입
+  - 디렉토리명과 무관하게 AI가 정확한 버전을 인식
+
 ## [3.5.2] - 2026-03-20
 
 ### Fixed
