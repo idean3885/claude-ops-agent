@@ -4,6 +4,17 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.5.1] - 2026-03-20
+
+### Fixed
+- README에서 사내 도메인 유출 제거 (Mermaid 다이어그램 예시를 generic으로 교체)
+
+### Added
+- commit 스킬 리뷰에 대외비 검증 단계 추가
+  - 퍼블릭 리모트 대상: 사내 도메인, 내부 API URL, 조직명 등 diff 검증
+  - 로컬 전용 provider 내용이 퍼블릭 파일에 유입되지 않았는지 확인
+  - 리뷰 체크리스트에 대외비 미포함 항목 추가
+
 ## [3.5.0] - 2026-03-20
 
 ### Changed
