@@ -4,6 +4,14 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.5.2] - 2026-03-20
+
+### Fixed
+- syncPluginVersion에서 디렉토리 리네임 제거
+  - 리네임이 Claude Code의 경로 캐싱과 충돌하여 재설치/롤백 유발
+  - installed_plugins.json의 version, gitCommitSha만 갱신 (경로 유지)
+  - renameSync, dirname import 제거, pluginRoot를 const로 복원
+
 ## [3.5.1] - 2026-03-20
 
 ### Fixed

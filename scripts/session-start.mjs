@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
 
@@ -17,7 +17,7 @@ const devexGlobal = join(homedir(), '.claude', 'devex');
 
 // Resolve plugin root from script location
 const scriptDir = new URL('.', import.meta.url).pathname;
-let pluginRoot = resolve(scriptDir, '..');
+const pluginRoot = resolve(scriptDir, '..');
 
 // --- Plugin self-maintenance: ensure .git exists for development workflow ---
 function ensurePluginGit() {
@@ -158,40 +158,27 @@ function buildSkillContext(provider) {
   ].join('\n');
 }
 
-// --- Auto-sync plugin version: rename dir + update installed_plugins.json ---
+// --- Auto-sync plugin version in installed_plugins.json (no dir rename) ---
 function syncPluginVersion() {
   try {
     const versionFile = join(pluginRoot, 'VERSION');
     if (!existsSync(versionFile)) return;
     const currentVersion = readFileSync(versionFile, 'utf8').trim();
-    const currentDirName = pluginRoot.split('/').pop();
-    if (currentDirName === currentVersion) return; // already in sync
 
-    const cacheParent = resolve(pluginRoot, '..');
-    const newPath = join(cacheParent, currentVersion);
-    if (existsSync(newPath)) return; // target already exists
-
-    // Rename directory and update pluginRoot
-    renameSync(pluginRoot, newPath);
-    pluginRoot = newPath;
-
-    // Update installed_plugins.json
     const installedPath = join(homedir(), '.claude', 'plugins', 'installed_plugins.json');
-    if (existsSync(installedPath)) {
-      const installed = JSON.parse(readFileSync(installedPath, 'utf8'));
-      const entry = installed.plugins?.['devex@claude-devex']?.[0];
-      if (entry) {
-        entry.installPath = newPath;
-        entry.version = currentVersion;
-        entry.lastUpdated = new Date().toISOString();
-        // Update gitCommitSha if possible
-        try {
-          const sha = execSync('git rev-parse HEAD', { cwd: newPath, encoding: 'utf8', timeout: 3000 }).trim();
-          entry.gitCommitSha = sha;
-        } catch { /* skip */ }
-        writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
-      }
-    }
+    if (!existsSync(installedPath)) return;
+
+    const installed = JSON.parse(readFileSync(installedPath, 'utf8'));
+    const entry = installed.plugins?.['devex@claude-devex']?.[0];
+    if (!entry || entry.version === currentVersion) return; // already in sync
+
+    entry.version = currentVersion;
+    entry.lastUpdated = new Date().toISOString();
+    try {
+      const sha = execSync('git rev-parse HEAD', { cwd: pluginRoot, encoding: 'utf8', timeout: 3000 }).trim();
+      entry.gitCommitSha = sha;
+    } catch { /* skip */ }
+    writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
   } catch { /* non-critical */ }
 }
 
