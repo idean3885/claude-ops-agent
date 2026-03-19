@@ -17,7 +17,7 @@ const devexGlobal = join(homedir(), '.claude', 'devex');
 
 // Resolve plugin root from script location
 const scriptDir = new URL('.', import.meta.url).pathname;
-const pluginRoot = resolve(scriptDir, '..');
+let pluginRoot = resolve(scriptDir, '..');
 
 // --- Plugin self-maintenance: ensure .git exists for development workflow ---
 function ensurePluginGit() {
@@ -171,8 +171,9 @@ function syncPluginVersion() {
     const newPath = join(cacheParent, currentVersion);
     if (existsSync(newPath)) return; // target already exists
 
-    // Rename directory
+    // Rename directory and update pluginRoot
     renameSync(pluginRoot, newPath);
+    pluginRoot = newPath;
 
     // Update installed_plugins.json
     const installedPath = join(homedir(), '.claude', 'plugins', 'installed_plugins.json');
@@ -233,9 +234,9 @@ function cleanupStaleVersions() {
 
 // --- Execute ---
 ensurePluginGit();
+cleanupStaleVersions();
 syncPluginVersion();
 ensurePluginGitIdentity();
-cleanupStaleVersions();
 
 const host = detectProvider();
 const provider = findProvider(host);

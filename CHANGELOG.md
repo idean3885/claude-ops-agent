@@ -4,6 +4,13 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.4.2] - 2026-03-20
+
+### Fixed
+- syncPluginVersion 후 pluginRoot 미갱신으로 cleanupStaleVersions가 새 디렉토리 삭제하는 치명적 버그 수정
+  - pluginRoot를 let으로 변경, 리네임 후 즉시 갱신
+  - 실행 순서 변경: cleanupStaleVersions → syncPluginVersion (안전한 순서)
+
 ## [3.4.1] - 2026-03-20
 
 ### Added
