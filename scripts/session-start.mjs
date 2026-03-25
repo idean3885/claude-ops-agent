@@ -219,9 +219,35 @@ function cleanupStaleVersions() {
   } catch { /* non-critical */ }
 }
 
+// --- Sync marketplace metadata to latest remote (prevents stale version path) ---
+function syncMarketplace() {
+  try {
+    // Derive marketplace name from cache path: .../cache/{marketplace}/{plugin}/{version}
+    const marketplaceName = resolve(pluginRoot, '..', '..').split('/').pop();
+    const marketplaceDir = join(homedir(), '.claude', 'plugins', 'marketplaces', marketplaceName);
+    if (!existsSync(join(marketplaceDir, '.git'))) return;
+
+    // Check if remote has newer commits
+    execSync('git fetch origin', { cwd: marketplaceDir, timeout: 10000, stdio: 'ignore' });
+    let defaultBranch = 'main';
+    try {
+      const refs = execSync('git ls-remote --symref origin HEAD', { cwd: marketplaceDir, encoding: 'utf8', timeout: 5000 });
+      const m = refs.match(/refs\/heads\/(\S+)/);
+      if (m) defaultBranch = m[1];
+    } catch { /* fallback */ }
+
+    const local = execSync('git rev-parse HEAD', { cwd: marketplaceDir, encoding: 'utf8', timeout: 3000 }).trim();
+    const remote = execSync(`git rev-parse origin/${defaultBranch}`, { cwd: marketplaceDir, encoding: 'utf8', timeout: 3000 }).trim();
+    if (local === remote) return; // already up to date
+
+    execSync(`git reset --hard origin/${defaultBranch}`, { cwd: marketplaceDir, timeout: 5000, stdio: 'ignore' });
+  } catch { /* non-critical */ }
+}
+
 // --- Execute ---
 ensurePluginGit();
 cleanupStaleVersions();
+syncMarketplace();
 syncPluginVersion();
 ensurePluginGitIdentity();
 
