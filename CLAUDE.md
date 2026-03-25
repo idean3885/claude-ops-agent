@@ -163,6 +163,7 @@ main ────────────────●─────
 
 ### 변경 시 검증 체크리스트
 
+- [ ] **버전 범프**: VERSION, CHANGELOG.md, plugin.json, marketplace.json 4곳 모두 갱신 확인
 - [ ] 스킬 파일 존재 확인 (flow, issue, spec, implement, commit, pr, setup + thinking 3종)
 - [ ] README.md Mermaid 다이어그램 렌더링 확인
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
