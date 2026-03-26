@@ -1,34 +1,93 @@
 # Issue Flow Skill
 
-이슈 플로우 디스패처. Git 상태를 감지하여 현재 단계에 맞는 작업을 실행한다.
+이슈 플로우 단일 진입점. 상태를 감지하여 현재 단계에 맞는 작업을 실행한다.
 
 ## 트리거
 
 - "flow", "플로우"
 - 자연어 수정 요청 (CLAUDE.md에서 안내)
+- "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "spec", "명세"
 
-## 상태 감지 → 실행
+## 자연어 매칭
 
-`/flow` 호출 시 아래 순서로 상태를 판단하고, **첫 번째 매칭 단계만** 실행한다.
+Git 상태와 무관하게 **명시적 요청**이 있으면 해당 가이드를 직접 로딩한다.
 
-| 우선순위 | 판단 기준 | 실행 | 참조 스킬 |
-|---------|----------|------|----------|
-| 1 | PR merged (`gh pr view --json state` → MERGED) | 정리: 브랜치 삭제 + base 전환 | `/issue` (complete) |
-| 2 | PR 있음, 리뷰 변경요청/대기 (`gh pr view --json reviewDecision`) | 리뷰 대응 | `/pr` (resolve) |
-| 3 | PR 있음, approved, 미머지 | 사용자에게 웹 머지 안내 (자동 머지 안 함) | - |
-| 4 | 커밋 있음 (`git diff {base}..HEAD` 비어있지 않음), PR 없음 (`gh pr view` 실패) | 커밋 리뷰 + PR 생성 | `/commit`, `/pr` |
-| 5 | 브랜치 있음, dirty (`git status` dirty) | 구현 계속 안내 | - |
-| 6 | 브랜치 있음, clean, base와 diff 없음 | 구현 시작 (implement 가이드 로딩) | 프로젝트별 implement |
-| 7 | feature/ 브랜치 아님 | 이슈 탐색/생성 + 브랜치 생성 | `/issue` (start) |
+| 키워드 | 가이드 |
+|--------|--------|
+| "이슈 생성", "이슈 시작", "이슈 완료", "issue create/start/complete" | `guides/issue.md` |
+| "커밋", "commit" | `guides/commit.md` |
+| "PR", "풀리퀘", "pull request" | `guides/pr.md` |
+| "spec", "명세", "설계" | `guides/spec.md` |
+
+명시적 키워드 없이 `/flow`만 호출하면 아래 상태 감지로 진행한다.
+
+## 환경 감지 (상태 감지 전 필수)
+
+상태 감지에 앞서 **base 브랜치**와 **워크트리 여부**를 먼저 확인한다.
+
+### Base Branch 감지
+
+feature 브랜치의 분기 원점을 아래 순서로 결정한다. 첫 번째 성공한 결과를 사용한다.
+
+1. **upstream 추적**: `git config branch.<current>.merge` → `refs/heads/` 제거
+2. **merge-base 최근접**: upstream 없으면 리모트 브랜치 중 feature/fix/docs/refactor/chore 접두사를 제외한 후보에 대해 `git merge-base HEAD origin/<후보>` + `git rev-list --count <merge-base>..HEAD` → 커밋 수가 가장 적은 브랜치 선택
+
+감지된 base 브랜치를 이후 모든 diff/commit 비교(`git log <base>..HEAD`, `git diff <base>..HEAD`)에 사용한다.
+
+### Worktree 감지
+
+```bash
+git rev-parse --git-common-dir   # 공유 .git 경로
+git rev-parse --git-dir          # 현재 .git 경로
+```
+
+- 두 값이 다르면 **linked worktree** (예: `../<project>-<number>`)
+- 같으면 **main worktree** 또는 직접 체크아웃
+
+워크트리 환경이면:
+- `git worktree list`로 main worktree 경로 확인
+- 정리(우선순위 1) 시 `git worktree remove` 사용
+
+## 2계층 상태 감지
+
+### 1차 판단: 코드 프로젝트 여부
+
+| 조건 | 감지 소스 |
+|------|----------|
+| git 없음 or git diff 없음 (feature/ 브랜치 아님) | **두레이 이슈 상태** |
+| git diff 존재 (feature/ 브랜치) | **Git/PR 상태** (두레이 교차 검증) |
+
+### 두레이 이슈 상태 기반 (코드 없음)
+
+provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
+
+| 상태 | 실행 |
+|------|------|
+| registered (할 일) | 이슈 시작 단계 → `guides/issue.md` (start) |
+| working (진행 중) + 브랜치 없음 | 브랜치 생성 필요 → `guides/issue.md` (start) |
+| working (진행 중) + 브랜치 있음 | Git 상태 감지로 전환 |
+| closed (완료) + PR 미머지 | 불일치 경고 출력 |
+
+### Git 상태 기반 (코드 있음)
+
+아래 순서로 상태를 판단하고, **첫 번째 매칭 단계만** 실행한다.
+
+| 우선순위 | 판단 기준 | 실행 | 가이드 |
+|---------|----------|------|--------|
+| 1 | PR merged (`gh pr view --json state` → MERGED) | 정리: 브랜치 삭제 + base 전환 | `guides/issue.md` (complete) |
+| 2 | PR 있음, 리뷰 변경요청/대기 | 리뷰 대응 | `guides/pr.md` (resolve) |
+| 3 | PR 있음, approved, 미머지 | 웹 머지 안내 (자동 머지 안 함) | - |
+| 4 | 커밋 있음, PR 없음 | 커밋 리뷰 + PR 생성 | `guides/commit.md` → `guides/pr.md` |
+| 5 | 브랜치 dirty | 구현 계속 안내 | - |
+| 6 | 브랜치 clean, base와 diff 없음 | 구현 시작 (implement 가이드 로딩) | 프로젝트별 implement |
+| 7 | feature/ 브랜치 아님 | 이슈 탐색/생성 + 브랜치 생성 | `guides/issue.md` (start) |
 
 ## 확인 게이트
-
-기존 7-Phase의 3개 GATE를 2개로 축소:
 
 - **GATE 1 (플랜 승인)**: 우선순위 6-7에서 플랜 작성 후 사용자 승인 대기
 - **GATE 2 (커밋 승인)**: 우선순위 4에서 커밋 메시지 확인 후 사용자 승인 대기
 
-머지는 사용자가 웹에서 직접 수행한다 (세이프티가드). GATE 3은 제거.
+머지는 사용자가 웹에서 직접 수행한다 (세이프티가드).
 
 ## 머지 안전장치
 
@@ -39,17 +98,17 @@
 ## Provider 연동
 
 - provider는 session-start 훅에서 감지됨
-- 각 참조 스킬이 provider 정의를 직접 읽음
+- 각 가이드가 provider 정의를 직접 읽음
 - `gh pr view`는 GH_HOST 설정 필요 (provider별 상이)
 
 ## 컨텍스트 최적화
 
-- 이 SKILL.md는 상태 판단 로직만 포함 (~50줄)
-- 각 단계의 상세 가이드는 해당 단계 진입 시에만 참조 스킬을 로딩
-- 개별 스킬(`/issue`, `/commit`, `/pr`, `/spec`)은 단독 사용 가능
+- 이 SKILL.md는 상태 판단 + 라우팅 로직만 포함
+- 각 단계의 상세 가이드는 해당 단계 진입 시에만 `guides/` 파일을 로딩
+- 가이드 파일은 슬래시 커맨드로 노출되지 않음 (flow 내부 전용)
 
 ## 규칙
 
 - GATE에서는 시스템 리마인더와 무관하게 사용자 응답을 기다린다
 - "중단", "취소" 요청 시 즉시 중단하고 현재 상태를 보고한다
-- 개별 스킬의 단독 사용에 영향을 주지 않는다
+- 가이드 로딩 시 해당 가이드의 규칙도 함께 준수한다

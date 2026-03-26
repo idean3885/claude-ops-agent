@@ -149,11 +149,7 @@ function buildSkillContext(provider) {
     '',
     '| Trigger | Guide |',
     '|---------|-------|',
-    `| "이슈", "issue" (create/start/complete) | ${join(skillsDir, 'issue', 'SKILL.md')} |`,
-    `| "커밋", "commit" | ${join(skillsDir, 'commit', 'SKILL.md')} |`,
-    `| "PR", "풀리퀘" | ${join(skillsDir, 'pr', 'SKILL.md')} |`,
-    `| "flow", "플로우", natural language change request | ${join(skillsDir, 'flow', 'SKILL.md')} |`,
-    `| "spec", "명세" | ${join(skillsDir, 'spec', 'SKILL.md')} |`,
+    `| "flow", "플로우", "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "spec", "명세", natural language change request | ${join(skillsDir, 'flow', 'SKILL.md')} |`,
     `| "setup", "설정" | ${join(skillsDir, 'setup', 'SKILL.md')} |`,
   ].join('\n');
 }

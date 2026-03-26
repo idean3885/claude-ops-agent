@@ -4,6 +4,13 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.7.1] - 2026-03-26
+
+### Added
+- flow 스킬에 환경 감지 단계 추가 (상태 감지 전 필수)
+  - Base Branch 감지: upstream 추적 → merge-base 최근접 순서로 분기 원점 결정
+  - Worktree 감지: git-common-dir vs git-dir 비교로 linked worktree 판별
+
 ## [3.7.0] - 2026-03-25
 
 ### Changed
