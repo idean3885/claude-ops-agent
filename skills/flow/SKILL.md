@@ -34,6 +34,22 @@ feature 브랜치의 분기 원점을 아래 순서로 결정한다. 첫 번째 
 
 감지된 base 브랜치를 이후 모든 diff/commit 비교(`git log <base>..HEAD`, `git diff <base>..HEAD`)에 사용한다.
 
+### 브랜치 고유 커밋 감지
+
+base 대비 전체 커밋이 아니라 **이 브랜치에서만 작성된 커밋**을 세야 한다. linked worktree 환경에서 sibling 브랜치와 공유 커밋을 제외한다.
+
+```bash
+# main worktree의 HEAD (sibling 브랜치 공통 기준점)
+main_head=$(git -C <main_worktree_path> rev-parse HEAD)
+# 이 브랜치 고유 커밋 수
+git rev-list --count $main_head..HEAD
+```
+
+- linked worktree: main worktree HEAD 이후 커밋만 고유 커밋으로 간주
+- main worktree (또는 단일 worktree): base 대비 커밋 수를 그대로 사용
+
+상태 감지의 "커밋 있음/없음" 판단은 이 **고유 커밋 수**를 기준으로 한다.
+
 ### Worktree 감지
 
 ```bash
@@ -106,6 +122,15 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 - 이 SKILL.md는 상태 판단 + 라우팅 로직만 포함
 - 각 단계의 상세 가이드는 해당 단계 진입 시에만 `guides/` 파일을 로딩
 - 가이드 파일은 슬래시 커맨드로 노출되지 않음 (flow 내부 전용)
+
+## 이슈 불일치 감지
+
+현재 브랜치가 `feature/<N>` 형태이고, 사용자 요청의 이슈 번호가 `<N>`과 다를 때:
+
+1. 현재 브랜치에 PR 대기/리뷰 중 등 진행 상태가 있으면 → 간단히 질문:
+   - "현재 브랜치는 #N 작업 중입니다. 워크트리 분기 / 현재 디렉토리 신규 브랜치 중 어떻게 할까요?"
+   - 속도 이슈가 크지 않으면 **워크트리 분기를 권장**
+2. 현재 브랜치가 clean이고 작업 없으면 → 그대로 브랜치 전환 진행
 
 ## 규칙
 
