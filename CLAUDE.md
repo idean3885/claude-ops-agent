@@ -135,11 +135,17 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 **버전업은 모든 변경에 필수이며 예외 없음.**
 1인 개발 레포이므로 변경 = 버전업이다.
 
-변경 시 반드시 아래 파일을 **동시에** 업데이트한다:
+변경 시 반드시 `scripts/bump-version.sh`를 사용하여 아래 4곳을 **동시에** 업데이트한다:
 - `VERSION`
 - `CHANGELOG.md`
 - `.claude-plugin/plugin.json` → `version`
 - `.claude-plugin/marketplace.json` → `plugins[0].version`
+
+```bash
+./scripts/bump-version.sh <version> "<changelog_entry>"
+```
+
+**수동 버전 범프 금지.** 반드시 스크립트를 사용한다.
 
 ### 산출물 특성
 
