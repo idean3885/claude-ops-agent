@@ -4,6 +4,12 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.7.3] - 2026-03-27
+
+### Fixed
+- issue complete 데일리로그 처리를 provider Extensions 의존에서 toolkit `dooray-dailylog` 규칙 명시 참조로 변경
+- 일일 계획 `[x]` 체크만 수행, 완료 작업/주간 보고 이관은 다음날 데일리로그 생성 시점
+
 ## [3.7.2] - 2026-03-26
 
 ### Fixed
