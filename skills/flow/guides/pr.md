@@ -36,4 +36,6 @@ provider가 감지되지 않으면 기본 내장 provider (`providers/github.md`
 - PR 생성은 사용자 승인 후에만
 - 타겟 브랜치는 하드코딩하지 않는다 (레포마다 다를 수 있음)
 - 이슈 번호가 있으면 provider 방식에 따라 연결
+- GitHub 퍼블릭 + GitHub Issues 사용 시: PR 본문에 `Closes #{이슈번호}` 포함 (머지 시 자동 닫힘)
+- 사내 GHE + Dooray 등 외부 이슈 트래커 사용 시: Closes 키워드 사용하지 않음
 - CLAUDE.md 커밋 컨벤션과 PR 제목 형식 일치
