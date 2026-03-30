@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.8.0] - 2026-03-31
+
+### Fixed
+- feat: PR Closes 규칙 추가 — GitHub Issues 사용 시 자동 닫힘
+
 ## [3.7.4] - 2026-03-27
 
 ### Fixed
