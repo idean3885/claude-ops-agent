@@ -61,7 +61,7 @@
 ## [3.5.4] - 2026-03-20
 
 ### Fixed
-- SessionStart 훅 matcher를 `""` → `"*"`로 변경 — 세션 컨텍스트 미주입 근본 원인 해소
+- SessionStart 훅 matcher를 `""` → `"*"`로 변경 - 세션 컨텍스트 미주입 근본 원인 해소
   - 빈 문자열 matcher로는 훅이 실행되지만 출력이 세션에 주입되지 않음
   - OMC 플러그인과 동일한 `"*"` 와일드카드 사용
 
@@ -94,7 +94,7 @@
 ## [3.5.0] - 2026-03-20
 
 ### Changed
-- README.md 전면 재작성 — v3.x 플러그인 구조 반영
+- README.md 전면 재작성 - v3.x 플러그인 구조 반영
   - 이슈 사이클 → 이슈 플로우 용어 통일
   - 구버전 스킬명(/github-issue, /github-pr, /implement) 제거
   - setup.sh/템플릿 설치 방식 → 플러그인 마켓플레이스 설치로 전환
@@ -123,7 +123,7 @@
 ## [3.4.0] - 2026-03-20
 
 ### Added
-- Git Identity 시스템 — 크리덴셜 기반 커밋 계정 자동 검증
+- Git Identity 시스템 - 크리덴셜 기반 커밋 계정 자동 검증
   - Provider에 `## Git Identity` 섹션 추가 (user.name, user.email)
   - SessionStart 훅에서 `gh auth status`로 크리덴셜 계정 감지 후 컨텍스트 주입
   - 커밋/푸시 전 provider의 Git Identity와 repo git config 자동 검증 및 수정
@@ -131,7 +131,7 @@
 - Provider 템플릿(PROVIDER.md)에 Git Identity 섹션 추가
 
 ### Fixed
-- SessionStart 훅 출력 필드를 `additionalContext` → `message`로 변경 — 세션 복원 시 컨텍스트 미주입 버그 해소
+- SessionStart 훅 출력 필드를 `additionalContext` → `message`로 변경 - 세션 복원 시 컨텍스트 미주입 버그 해소
 - `ensurePluginGit()`에서 `origin/master` 하드코딩 → 리모트 기본 브랜치 자동 감지로 변경
 
 ## [3.3.0] - 2026-03-19
@@ -140,10 +140,10 @@
 - SessionStart 훅에서 스킬 트리거 매핑을 additionalContext로 주입
   - 프로젝트 enabledPlugins 설정과 무관하게 스킬 동작 보장
   - 어떤 디렉토리에서든 자연어로 스킬 트리거 가능
-  - 디스크 쓰기 없음 — 세션 메모리에만 존재
+  - 디스크 쓰기 없음 - 세션 메모리에만 존재
 
 ### Fixed
-- provider 감지 regex 수정 — 마크다운 테이블 형식 hostPattern 파싱 실패 해소
+- provider 감지 regex 수정 - 마크다운 테이블 형식 hostPattern 파싱 실패 해소
 
 ## [3.2.2] - 2026-03-19
 
@@ -161,7 +161,7 @@
 ## [3.2.0] - 2026-03-18
 
 ### Added
-- 릴리스 자동화 워크플로우 (`release.yml`) — main 브랜치 VERSION 변경 시 태그 + GitHub Release 자동 생성
+- 릴리스 자동화 워크플로우 (`release.yml`) - main 브랜치 VERSION 변경 시 태그 + GitHub Release 자동 생성
 - CHANGELOG에서 해당 버전 섹션을 자동 추출하여 릴리스 노트 생성
 
 ### Fixed
@@ -173,7 +173,7 @@
 ## [3.1.1] - 2026-03-18
 
 ### Fixed
-- issue 스킬에 provider 참조 필수 규칙 강제 — API 추측 호출 방지
+- issue 스킬에 provider 참조 필수 규칙 강제 - API 추측 호출 방지
 - provider 파일 미참조 시 API 호출 금지 명시
 - 본문 업데이트 시 기존 cc·태그 보존 필수 규칙 추가
 - workflow.json currentIssue 제거 단계 추가
@@ -181,14 +181,14 @@
 ## [3.1.0] - 2026-03-18
 
 ### Added
-- `/issue` 서브커맨드 확장 — create/start/complete 이슈 생애주기 전체 관리
-- 코드 없는 이슈 지원 — start 시 브랜치 생성 선택 (조사/문서 이슈 대응)
+- `/issue` 서브커맨드 확장 - create/start/complete 이슈 생애주기 전체 관리
+- 코드 없는 이슈 지원 - start 시 브랜치 생성 선택 (조사/문서 이슈 대응)
 - github provider에 이슈 start/complete 생애주기 추가
 - SessionStart 훅에서 plugin git 자동 복원 (marketplace update 후 수동 절차 불필요)
 - marketplace.json에 repository.url 추가
 
 ### Removed
-- `/implement` 스킬 제거 — 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
+- `/implement` 스킬 제거 - 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
 
 ### Changed
 - 플러그인명 `devex`로 통일 (plugin.json + marketplace.json)
@@ -198,14 +198,14 @@
 ### Breaking Changes
 - 이슈 사이클 → 이슈 플로우(issue flow) 용어 전환
 - `/cycle` → `/flow`, `/github-issue` → `/issue`, `/github-pr` → `/pr` 스킬 리네이밍
-- `/implement` 스킬 제거 — 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
-- Provider 추상화 도입 — 플랫폼별 이슈 동작을 provider로 분리
+- `/implement` 스킬 제거 - 프로젝트별 구현 스킬 + cross-verify 구현축으로 대체
+- Provider 추상화 도입 - 플랫폼별 이슈 동작을 provider로 분리
 
 ### Added
-- `providers/` 디렉토리 — PROVIDER.md 템플릿 + github.md 기본 내장
-- `/setup` 스킬 — provider 등록, 상태 확인, overlay 설정
-- `/issue` 서브커맨드 확장 — create/start/complete 이슈 생애주기 전체 관리
-- 코드 없는 이슈 지원 — start 시 브랜치 생성 선택, 조사/문서 이슈 대응
+- `providers/` 디렉토리 - PROVIDER.md 템플릿 + github.md 기본 내장
+- `/setup` 스킬 - provider 등록, 상태 확인, overlay 설정
+- `/issue` 서브커맨드 확장 - create/start/complete 이슈 생애주기 전체 관리
+- 코드 없는 이슈 지원 - start 시 브랜치 생성 선택, 조사/문서 이슈 대응
 - SessionStart 훅에서 git remote host 기반 provider 자동 감지
 - 로컬 provider 시스템 (`~/.claude/devex/providers/`, `~/.claude/devex/overlays/`)
 
