@@ -63,7 +63,7 @@ sequenceDiagram
 
 | 항목 | 변경 |
 |------|------|
-| `.github/workflows/claude-devex-update.yml` | 신규 — 다운스트림이 다운로드할 워크플로우 템플릿 |
+| `.github/workflows/claude-devex-update.yml` | 신규 - 다운스트림이 다운로드할 워크플로우 템플릿 |
 | `setup.sh` | `--subscribe` 옵션 추가 |
 | `README.md` | 자동 업데이트 구독 사용법 추가 |
 
