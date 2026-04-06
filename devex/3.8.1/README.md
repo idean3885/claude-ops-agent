@@ -1,6 +1,6 @@
 # claude-devex
 
-Claude Code 플러그인 - AI-Native Development Workflow
+Claude Code 플러그인 — AI-Native Development Workflow
 
 > 자연어로 요청하면 이슈 생성부터 PR 머지까지 전체 플로우를 안내합니다.
 > Provider 시스템으로 GitHub 등 다양한 이슈 트래커에 대응합니다.
@@ -10,8 +10,8 @@ Claude Code 플러그인 - AI-Native Development Workflow
 AI에게 코드를 맡기면서 개발자의 역할이 "코드 작성"에서 "의사결정과 검증"으로 옮겨갔습니다.
 이 플러그인은 그 변화를 워크플로우로 정착시키기 위해 시작되었습니다.
 
-- [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) - 이슈 플로우의 배경
-- [코드에서 사고로](https://idean3885.github.io/posts/from-coding-to-thinking/) - thinking 스킬의 배경
+- [AI에게 코드를 맡기고 나서 달라진 일하는 방식](https://idean3885.github.io/posts/ai-changed-my-workflow/) — 이슈 플로우의 배경
+- [코드에서 사고로](https://idean3885.github.io/posts/from-coding-to-thinking/) — thinking 스킬의 배경
 
 ## 이슈 플로우
 
