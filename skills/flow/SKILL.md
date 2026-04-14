@@ -70,10 +70,10 @@ git rev-parse --git-dir          # 현재 .git 경로
 
 | 조건 | 감지 소스 |
 |------|----------|
-| git 없음 or git diff 없음 (feature/ 브랜치 아님) | **두레이 이슈 상태** |
-| git diff 존재 (feature/ 브랜치) | **Git/PR 상태** (두레이 교차 검증) |
+| git 없음 or git diff 없음 (feature/ 브랜치 아님) | **이슈 상태** |
+| git diff 존재 (feature/ 브랜치) | **Git/PR 상태** (이슈 교차 검증) |
 
-### 두레이 이슈 상태 기반 (코드 없음)
+### 이슈 상태 기반 (코드 없음)
 
 provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 
