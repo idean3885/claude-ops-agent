@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.9.0] - 2026-04-14
+
+### Fixed
+- 멀티레포 오케스트레이션(org-flow) 흡수 + 리모트 원소스 워크트리 전략
+
 ## [3.8.2] - 2026-04-14
 
 ### Fixed
