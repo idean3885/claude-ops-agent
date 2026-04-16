@@ -122,6 +122,89 @@ if os.path.isdir(worktree_root):
         if os.path.isdir(repo_wt_dir) and not os.listdir(repo_wt_dir):
             os.rmdir(repo_wt_dir)
 
+# 4.5. 고아 bare repo sweep
+# 다른 org-flow state 파일이 참조하는 레포는 보존
+state_dir = os.path.dirname(state_file) if os.path.dirname(state_file) else "."
+repos_in_use = set()
+if os.path.isdir(state_dir):
+    for sf in os.listdir(state_dir):
+        if sf.startswith("org-flow-") and sf.endswith(".json"):
+            sf_path = os.path.join(state_dir, sf)
+            if sf_path == state_file:
+                continue
+            try:
+                with open(sf_path) as f:
+                    s = json.load(f)
+                for rn in s.get("repos", {}):
+                    repos_in_use.add(rn)
+            except Exception:
+                pass
+
+for entry in os.listdir(project_root):
+    if not entry.endswith(".git"):
+        continue
+    bare_path = os.path.join(project_root, entry)
+    if not os.path.isdir(bare_path):
+        continue
+    # .git 디렉토리(일반 레포)가 아닌 bare clone만 대상
+    head_file = os.path.join(bare_path, "HEAD")
+    if not os.path.isfile(head_file):
+        continue
+    repo_name = entry[:-4]  # .git 접미사 제거
+    if repo_name in repos_in_use:
+        continue  # 다른 티켓에서 사용 중
+
+    # 활성 워크트리 확인
+    r = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=bare_path, capture_output=True, text=True
+    )
+    wt_paths = [
+        line.split(" ", 1)[1]
+        for line in r.stdout.splitlines()
+        if line.startswith("worktree ") and line.split(" ", 1)[1] != bare_path
+    ]
+
+    # 고아 워크트리 제거
+    for wt in wt_paths:
+        try:
+            subprocess.run(
+                ["git", "worktree", "remove", wt, "--force"],
+                cwd=bare_path, capture_output=True, text=True
+            )
+        except Exception:
+            pass
+        if os.path.exists(wt):
+            shutil.rmtree(wt, ignore_errors=True)
+
+    # bare repo 삭제
+    shutil.rmtree(bare_path, ignore_errors=True)
+    if not os.path.exists(bare_path):
+        removed.append({"repo": repo_name, "git_dir": entry, "status": "orphan_cleaned"})
+
+# 4.6. 고아 워크트리 디렉토리 정리 (git 링크 없는 잔존 디렉토리)
+if os.path.isdir(worktree_root):
+    for repo_dir_name in os.listdir(worktree_root):
+        repo_wt_dir = os.path.join(worktree_root, repo_dir_name)
+        if not os.path.isdir(repo_wt_dir):
+            continue
+        git_link = os.path.join(repo_wt_dir, ".git")
+        # .git 파일이 없거나, 링크 대상 bare repo가 사라졌으면 고아
+        is_orphan = False
+        if not os.path.exists(git_link):
+            is_orphan = True
+        elif os.path.isfile(git_link):
+            with open(git_link) as f:
+                gitdir_line = f.read().strip()
+            if gitdir_line.startswith("gitdir: "):
+                target = gitdir_line[8:]
+                if not os.path.isdir(target):
+                    is_orphan = True
+        if is_orphan:
+            shutil.rmtree(repo_wt_dir, ignore_errors=True)
+            if not os.path.exists(repo_wt_dir):
+                removed.append({"dir": repo_dir_name, "status": "orphan_dir_cleaned"})
+
 # 5. vcs.xml 정리
 vcs_removed = 0
 if os.path.isfile(vcs_xml):
@@ -145,12 +228,26 @@ if os.path.isfile(state_file):
     os.remove(state_file)
     state_deleted = True
 
+# 6.5. 빈 worktrees 루트 정리
+if os.path.isdir(worktree_root) and not os.listdir(worktree_root):
+    os.rmdir(worktree_root)
+
 # --- 불변식 검증 ---
 violations = []
 for repo_name, repo_info in repos.items():
     worktree_abs = os.path.join(project_root, repo_info["worktree"])
     if os.path.exists(worktree_abs):
         violations.append(f"잔존 워크트리: {repo_info['worktree']}")
+
+# bare repo 잔존 확인
+for entry in os.listdir(project_root):
+    if entry.endswith(".git") and os.path.isdir(os.path.join(project_root, entry)):
+        bare_path = os.path.join(project_root, entry)
+        head_file = os.path.join(bare_path, "HEAD")
+        if os.path.isfile(head_file):
+            repo_name = entry[:-4]
+            if repo_name not in repos_in_use:
+                violations.append(f"잔존 bare repo: {entry}")
 
 result = {
     "status": "error" if violations else "ok",
