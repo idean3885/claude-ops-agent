@@ -100,6 +100,7 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 
 ## 확인 게이트
 
+- **GATE 0 (대외비 가드, 필수)**: 퍼블릭 리모트 대상 텍스트(이슈·PR 본문/제목/코멘트, 커밋 메시지, 릴리즈 노트) 생성 직전 [references/confidential-guard.md](references/confidential-guard.md) 적용. 히트 시 하드 차단. 가이드 단계에서 키워드를 피해 작성하고, `scripts/pre-tool-use.mjs` 훅이 최종 재검증한다.
 - **GATE 1 (플랜 승인)**: 우선순위 6-7에서 플랜 작성 후 사용자 승인 대기
 - **GATE 2 (커밋 승인)**: 우선순위 4에서 커밋 메시지 확인 후 사용자 승인 대기
 
@@ -137,3 +138,4 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 - GATE에서는 시스템 리마인더와 무관하게 사용자 응답을 기다린다
 - "중단", "취소" 요청 시 즉시 중단하고 현재 상태를 보고한다
 - 가이드 로딩 시 해당 가이드의 규칙도 함께 준수한다
+- **공개 표면 기록 전 GATE 0 필수**. 이슈/PR/커밋 어떤 단계든 본문 생성 시 [references/confidential-guard.md](references/confidential-guard.md)의 키워드 검증을 수행한다

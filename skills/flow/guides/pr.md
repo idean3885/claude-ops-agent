@@ -12,9 +12,7 @@ Pull Request 생성 워크플로우
 2. 연결할 이슈 번호 확인
 3. **타겟 브랜치 결정**: provider의 타겟 브랜치 결정 로직 사용. **반드시 사용자에게 확인** 후 진행
 4. PR 본문 작성 (provider의 PR 본문 템플릿 사용)
-5. **대외비 검증** (퍼블릭 리모트 대상):
-   - PR 제목·본문에 사내 서비스명, 회사명, 내부 도메인, 사내 URL이 포함되어 있지 않은지 확인
-   - 위반 발견 시 PR 생성을 차단하고 사용자에게 보고
+5. **대외비 가드 (GATE 0)**: PR 제목·본문·코멘트 전체에 [../references/confidential-guard.md](../references/confidential-guard.md) 기준 검증. 히트 시 PR 생성 차단 후 사용자 정정
 6. provider의 PR 생성 API/명령 실행
 7. PR URL 사용자에게 전달
 8. **PR 머지 후 브랜치 정리** (사용자가 머지를 요청한 경우):
@@ -36,7 +34,7 @@ provider가 감지되지 않으면 기본 내장 provider (`providers/github.md`
 
 ## 규칙
 
-- **퍼블릭 리모트 대상 PR의 제목·본문에 대외비(사내 서비스명, 회사명, 내부 URL 등)를 포함하지 않는다**
+- **공개 표면으로 가는 모든 텍스트는 GATE 0 검증 후 송신** ([../references/confidential-guard.md](../references/confidential-guard.md))
 - PR 생성은 사용자 승인 후에만
 - 타겟 브랜치는 하드코딩하지 않는다 (레포마다 다를 수 있음)
 - 이슈 번호가 있으면 provider 방식에 따라 연결

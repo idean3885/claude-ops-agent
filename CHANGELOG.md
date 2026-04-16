@@ -4,6 +4,18 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.0] - 2026-04-17
+
+### Added
+- devex:flow에 대외비 가드 (GATE 0) 추가
+  - `skills/flow/SKILL.md`: GATE 0 선언 및 규칙 업데이트
+  - `skills/flow/references/confidential-guard.md` 신설: 원칙, 키워드 소스 우선순위, 검증 절차, 드라이런 모드
+  - `skills/flow/guides/issue.md`: create/start/complete 각 워크플로우에 GATE 0 단계 삽입
+  - `skills/flow/guides/commit.md`, `pr.md`: 기존 대외비 검증을 confidential-guard 참조로 일관화
+  - `scripts/pre-tool-use.mjs`: `gh issue/pr/release` 쓰기 명령 및 `git commit`의 본문/제목/메시지 스캔, 히트 시 `permissionDecision: deny`로 차단
+  - `templates/confidential-keywords.example.json` 제공 (로컬 설정 템플릿)
+  - 환경 변수 지원: `DEVEX_CONFIDENTIAL_DRYRUN=1` (경고만), `DEVEX_CONFIDENTIAL_DISABLE=1` (전체 스킵), `DEVEX_CONFIDENTIAL_CONFIG_PATH` (키워드 파일 경로 오버라이드)
+
 ## [3.9.0] - 2026-04-14
 
 ### Fixed
