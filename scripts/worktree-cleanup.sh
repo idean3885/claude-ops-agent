@@ -20,20 +20,24 @@ find_project_root() {
   echo ""
 }
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(find_project_root "$SCRIPT_DIR")"
-if [ -z "$PROJECT_ROOT" ]; then
-  echo '{"status": "error", "message": ".devex/project.json을 찾을 수 없음"}' >&2
-  exit 1
-fi
-
-VCS_XML="$PROJECT_ROOT/.idea/vcs.xml"
 STATE_FILE="${1:?state-file 경로 필수}"
 
 if [ ! -f "$STATE_FILE" ]; then
   echo "{\"status\": \"error\", \"message\": \"상태 파일 없음: $STATE_FILE\"}" >&2
   exit 1
 fi
+
+# 프로젝트 루트 감지: state 파일 디렉토리 → 현재 작업 디렉토리 순서로 탐색
+# (스크립트 경로는 플러그인 캐시에 있어 기준이 될 수 없음)
+STATE_DIR="$(cd "$(dirname "$STATE_FILE")" && pwd)"
+PROJECT_ROOT="$(find_project_root "$STATE_DIR")"
+[ -z "$PROJECT_ROOT" ] && PROJECT_ROOT="$(find_project_root "$(pwd)")"
+if [ -z "$PROJECT_ROOT" ]; then
+  echo '{"status": "error", "message": ".devex/project.json을 찾을 수 없음"}' >&2
+  exit 1
+fi
+
+VCS_XML="$PROJECT_ROOT/.idea/vcs.xml"
 
 RESULT=$(python3 << PYEOF
 import json, subprocess, os, sys, shutil

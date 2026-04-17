@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.1] - 2026-04-17
+
+### Fixed
+- fix: worktree 스크립트 PROJECT_ROOT 감지를 state 파일 기준으로 변경 — 플러그인 캐시에서 호출 시 실패 해소
+
 ## [3.10.0] - 2026-04-17
 
 ### Added
