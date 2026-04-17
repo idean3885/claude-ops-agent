@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.2] - 2026-04-17
+
+### Fixed
+- 대외비 가드 타겟 호스트 인식 — 사내 레포/Dooray 쓰기는 externalOnly 패턴 허용
+
 ## [3.10.1] - 2026-04-17
 
 ### Fixed
