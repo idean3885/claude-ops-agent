@@ -4,10 +4,19 @@
 # 리모트 원소스 전략: 워크트리 제거 후 해당 레포에 다른 활성 워크트리가 없으면
 # bare clone도 삭제한다. 로컬에 레포 흔적을 남기지 않는다.
 #
-# 사용법: ./worktree-cleanup.sh <state-file>
-#   state-file: .omc/state/org-flow-{ticket}.json
+# 사용법:
+#   ./worktree-cleanup.sh <state-file>              # 티켓 단위 정리 (기본)
+#     state-file: .omc/state/org-flow-{ticket}.json
 #
-# 출력: JSON (status, removed[], failed[], state_deleted)
+#   ./worktree-cleanup.sh --sweep-stale [--apply]   # stale state/고아 bare clone 정리
+#     --apply 없이 실행하면 dry-run (감지만 출력).
+#     --apply 지정 시 stale state 및 고아 bare clone을 실제 제거.
+#     stale 판정: state 파일이 참조하는 워크트리 경로가 더 이상 존재하지 않음.
+#     고아 bare clone 판정: 활성 워크트리가 없고, stale이 아닌 어떤 state도 참조하지 않음.
+#
+# 출력: JSON
+#   기본 모드: {status, removed[], failed[], state_deleted, violations}
+#   sweep 모드: {status, mode:"sweep-stale", apply, stale_states[], orphan_bare_clones[]}
 
 set -euo pipefail
 
@@ -19,6 +28,132 @@ find_project_root() {
   done
   echo ""
 }
+
+# --- sweep-stale 서브커맨드 ---
+if [ "${1:-}" = "--sweep-stale" ]; then
+  APPLY="false"
+  [ "${2:-}" = "--apply" ] && APPLY="true"
+
+  PROJECT_ROOT="$(find_project_root "$(pwd)")"
+  if [ -z "$PROJECT_ROOT" ]; then
+    echo '{"status": "error", "message": ".devex/project.json을 찾을 수 없음"}' >&2
+    exit 1
+  fi
+
+  RESULT=$(APPLY_FLAG="$APPLY" PROJECT_ROOT_ENV="$PROJECT_ROOT" python3 << 'PYEOF'
+import json, os, subprocess, shutil
+
+project_root = os.environ["PROJECT_ROOT_ENV"]
+apply = os.environ["APPLY_FLAG"] == "true"
+state_dir = os.path.join(project_root, ".omc", "state")
+
+stale_states = []  # [{file, ticket, reason, repos_missing[]}]
+# state 파일별로 worktree 경로 실존 검증
+active_repos = set()  # stale이 아닌 state가 참조하는 repo name
+state_repo_map = {}  # state_file -> {repo_name: worktree_abs}
+
+if os.path.isdir(state_dir):
+    for sf in sorted(os.listdir(state_dir)):
+        if not (sf.startswith("org-flow-") and sf.endswith(".json")):
+            continue
+        sf_path = os.path.join(state_dir, sf)
+        try:
+            with open(sf_path) as f:
+                s = json.load(f)
+        except Exception as e:
+            continue
+        repos = s.get("repos", {})
+        missing = []
+        for rn, rinfo in repos.items():
+            wt_abs = os.path.join(project_root, rinfo.get("worktree", ""))
+            if not os.path.isdir(wt_abs):
+                missing.append({"repo": rn, "worktree": rinfo.get("worktree")})
+        is_stale = bool(repos) and len(missing) == len(repos)
+        if is_stale:
+            stale_states.append({
+                "file": sf,
+                "ticket": s.get("ticket"),
+                "reason": "모든 참조 워크트리 부재",
+                "repos_missing": missing,
+            })
+        else:
+            for rn in repos:
+                active_repos.add(rn)
+        state_repo_map[sf_path] = {rn: rinfo.get("worktree") for rn, rinfo in repos.items()}
+
+# 고아 bare clone 판정
+orphan_bare_clones = []
+for entry in sorted(os.listdir(project_root)):
+    if not entry.endswith(".git"):
+        continue
+    bare_path = os.path.join(project_root, entry)
+    if not os.path.isdir(bare_path):
+        continue
+    if not os.path.isfile(os.path.join(bare_path, "HEAD")):
+        continue  # bare가 아님
+    repo_name = entry[:-4]
+    if repo_name in active_repos:
+        continue  # stale 아닌 state가 참조
+
+    # 활성 워크트리 체크
+    r = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=bare_path, capture_output=True, text=True
+    )
+    wt_paths = [
+        line.split(" ", 1)[1]
+        for line in r.stdout.splitlines()
+        if line.startswith("worktree ") and line.split(" ", 1)[1] != bare_path
+    ]
+    if wt_paths:
+        continue  # 활성 워크트리 있음
+
+    orphan_bare_clones.append({"repo": repo_name, "bare": entry})
+
+# apply 모드: 실제 제거
+if apply:
+    for st in stale_states:
+        sf_path = os.path.join(state_dir, st["file"])
+        try:
+            os.remove(sf_path)
+            st["removed"] = True
+        except Exception as e:
+            st["removed"] = False
+            st["error"] = str(e)
+    for ob in orphan_bare_clones:
+        bare_path = os.path.join(project_root, ob["bare"])
+        try:
+            shutil.rmtree(bare_path, ignore_errors=True)
+            ob["removed"] = not os.path.exists(bare_path)
+        except Exception as e:
+            ob["removed"] = False
+            ob["error"] = str(e)
+
+    # 빈 worktree 레포 디렉토리 정리
+    worktree_root = os.path.join(project_root, "worktrees")
+    if os.path.isdir(worktree_root):
+        for d in os.listdir(worktree_root):
+            p = os.path.join(worktree_root, d)
+            if os.path.isdir(p) and not os.listdir(p):
+                os.rmdir(p)
+        if not os.listdir(worktree_root):
+            os.rmdir(worktree_root)
+
+result = {
+    "status": "ok",
+    "mode": "sweep-stale",
+    "apply": apply,
+    "stale_states": stale_states,
+    "orphan_bare_clones": orphan_bare_clones,
+}
+print(json.dumps(result, ensure_ascii=False))
+PYEOF
+)
+  echo "$RESULT"
+  exit 0
+fi
+
+# --- 기본: 티켓 단위 정리 ---
 
 STATE_FILE="${1:?state-file 경로 필수}"
 
@@ -124,96 +259,18 @@ for repo_name, repo_info in repos.items():
             shutil.rmtree(git_dir, ignore_errors=True)
             removed.append({"repo": repo_name, "git_dir": os.path.basename(git_dir), "status": "clone_deleted"})
 
-# 4. 빈 워크트리 디렉토리 정리
+# 4. 빈 워크트리 디렉토리 정리 — 현재 티켓이 비운 레포 디렉토리만
 worktree_root = os.path.join(project_root, "worktrees")
 if os.path.isdir(worktree_root):
-    for repo_dir_name in os.listdir(worktree_root):
-        repo_wt_dir = os.path.join(worktree_root, repo_dir_name)
+    for repo_name in repos.keys():
+        repo_wt_dir = os.path.join(worktree_root, repo_name)
         if os.path.isdir(repo_wt_dir) and not os.listdir(repo_wt_dir):
             os.rmdir(repo_wt_dir)
 
-# 4.5. 고아 bare repo sweep
-# 다른 org-flow state 파일이 참조하는 레포는 보존
-state_dir = os.path.dirname(state_file) if os.path.dirname(state_file) else "."
-repos_in_use = set()
-if os.path.isdir(state_dir):
-    for sf in os.listdir(state_dir):
-        if sf.startswith("org-flow-") and sf.endswith(".json"):
-            sf_path = os.path.join(state_dir, sf)
-            if sf_path == state_file:
-                continue
-            try:
-                with open(sf_path) as f:
-                    s = json.load(f)
-                for rn in s.get("repos", {}):
-                    repos_in_use.add(rn)
-            except Exception:
-                pass
-
-for entry in os.listdir(project_root):
-    if not entry.endswith(".git"):
-        continue
-    bare_path = os.path.join(project_root, entry)
-    if not os.path.isdir(bare_path):
-        continue
-    # .git 디렉토리(일반 레포)가 아닌 bare clone만 대상
-    head_file = os.path.join(bare_path, "HEAD")
-    if not os.path.isfile(head_file):
-        continue
-    repo_name = entry[:-4]  # .git 접미사 제거
-    if repo_name in repos_in_use:
-        continue  # 다른 티켓에서 사용 중
-
-    # 활성 워크트리 확인
-    r = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],
-        cwd=bare_path, capture_output=True, text=True
-    )
-    wt_paths = [
-        line.split(" ", 1)[1]
-        for line in r.stdout.splitlines()
-        if line.startswith("worktree ") and line.split(" ", 1)[1] != bare_path
-    ]
-
-    # 고아 워크트리 제거
-    for wt in wt_paths:
-        try:
-            subprocess.run(
-                ["git", "worktree", "remove", wt, "--force"],
-                cwd=bare_path, capture_output=True, text=True
-            )
-        except Exception:
-            pass
-        if os.path.exists(wt):
-            shutil.rmtree(wt, ignore_errors=True)
-
-    # bare repo 삭제
-    shutil.rmtree(bare_path, ignore_errors=True)
-    if not os.path.exists(bare_path):
-        removed.append({"repo": repo_name, "git_dir": entry, "status": "orphan_cleaned"})
-
-# 4.6. 고아 워크트리 디렉토리 정리 (git 링크 없는 잔존 디렉토리)
-if os.path.isdir(worktree_root):
-    for repo_dir_name in os.listdir(worktree_root):
-        repo_wt_dir = os.path.join(worktree_root, repo_dir_name)
-        if not os.path.isdir(repo_wt_dir):
-            continue
-        git_link = os.path.join(repo_wt_dir, ".git")
-        # .git 파일이 없거나, 링크 대상 bare repo가 사라졌으면 고아
-        is_orphan = False
-        if not os.path.exists(git_link):
-            is_orphan = True
-        elif os.path.isfile(git_link):
-            with open(git_link) as f:
-                gitdir_line = f.read().strip()
-            if gitdir_line.startswith("gitdir: "):
-                target = gitdir_line[8:]
-                if not os.path.isdir(target):
-                    is_orphan = True
-        if is_orphan:
-            shutil.rmtree(repo_wt_dir, ignore_errors=True)
-            if not os.path.exists(repo_wt_dir):
-                removed.append({"dir": repo_dir_name, "status": "orphan_dir_cleaned"})
+# 과거 "4.5 고아 bare repo sweep", "4.6 고아 워크트리 디렉토리 정리" 블록 제거.
+# 현재 state에 명시되지 않은 bare repo/워크트리를 "고아"로 판단해 삭제하는 동작이
+# 멀티레포 환경에서 다른 티켓·수동 관리 작업까지 휩쓸어 버리는 사고를 유발.
+# 정리는 반드시 state에 명시된 레포만 대상으로 한다.
 
 # 5. vcs.xml 정리
 vcs_removed = 0
@@ -243,21 +300,16 @@ if os.path.isdir(worktree_root) and not os.listdir(worktree_root):
     os.rmdir(worktree_root)
 
 # --- 불변식 검증 ---
+# state에 명시된 레포의 워크트리·bare clone만 검증 대상.
+# 다른 레포의 잔존은 본 스크립트의 관심사가 아니다.
 violations = []
 for repo_name, repo_info in repos.items():
     worktree_abs = os.path.join(project_root, repo_info["worktree"])
     if os.path.exists(worktree_abs):
         violations.append(f"잔존 워크트리: {repo_info['worktree']}")
-
-# bare repo 잔존 확인
-for entry in os.listdir(project_root):
-    if entry.endswith(".git") and os.path.isdir(os.path.join(project_root, entry)):
-        bare_path = os.path.join(project_root, entry)
-        head_file = os.path.join(bare_path, "HEAD")
-        if os.path.isfile(head_file):
-            repo_name = entry[:-4]
-            if repo_name not in repos_in_use:
-                violations.append(f"잔존 bare repo: {entry}")
+    bare_path = os.path.join(project_root, f"{repo_name}.git")
+    if os.path.isdir(bare_path):
+        violations.append(f"잔존 bare repo: {repo_name}.git")
 
 result = {
     "status": "error" if violations else "ok",
