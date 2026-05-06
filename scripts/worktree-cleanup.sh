@@ -88,9 +88,15 @@ for repo_name, repo_info in repos.items():
             shutil.rmtree(worktree_abs, ignore_errors=True)
 
     # 2. 로컬 브랜치 삭제
+    # bare clone은 직후 step 3에서 통째로 삭제되므로 ancestry 기반 안전 삭제(-d)가 의미 없다.
+    # bare HEAD가 default branch(main)인 반면 PR base가 release/* 등 다른 브랜치이면
+    # 머지가 정상이어도 fully-merged 판정에 실패해 not-fully-merged false negative가 발생한다.
+    # bare clone에 한해 -D로 강제 삭제하고, 일반 레포는 안전 삭제 -d를 유지한다.
     if git_dir:
+        is_bare = git_dir.endswith(".git")
+        delete_flag = "-D" if is_bare else "-d"
         r = subprocess.run(
-            ["git", "branch", "-d", branch],
+            ["git", "branch", delete_flag, branch],
             cwd=git_dir, capture_output=True, text=True
         )
         if r.returncode == 0:

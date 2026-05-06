@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.3] - 2026-05-06
+
+### Fixed
+- worktree-cleanup: bare clone 브랜치 삭제 시 -D 사용 (not-fully-merged false negative 제거)
+
 ## [3.10.2] - 2026-04-17
 
 ### Fixed
