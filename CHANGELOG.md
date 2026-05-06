@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.6] - 2026-05-06
+
+### Fixed
+- fix(worktree-cleanup): 자동 orphan sweep 제거 + --sweep-stale 서브커맨드로 분리 (멀티레포 안전성)
+
 ## [3.10.5] - 2026-05-06
 
 ### Fixed
