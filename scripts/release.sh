@@ -9,6 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_NAME="devex@claude-devex"
+REMOTE_URL="${DEVEX_REMOTE_URL:-https://github.com/idean3885/claude-devex.git}"
 
 # --- 인자 파싱 ---
 if [ $# -lt 1 ]; then
@@ -41,7 +42,7 @@ cd "$ROOT_DIR"
 if [ ! -d .git ]; then
   echo "⚠ .git 없음 — git init"
   git init --quiet
-  git remote add origin git@github.com:dongyoung-kim/claude-devex.git 2>/dev/null || true
+  git remote add origin "$REMOTE_URL" 2>/dev/null || true
   git add -A
   git commit -m "init: sync before release $NEW_VERSION" --quiet
 fi
@@ -68,7 +69,7 @@ NEW_CACHE="$CACHE_BASE/$NEW_VERSION"
 if [ -d "$NEW_CACHE" ] && [ ! -d "$NEW_CACHE/.git" ]; then
   cd "$NEW_CACHE"
   git init --quiet
-  git remote add origin git@github.com:dongyoung-kim/claude-devex.git 2>/dev/null || true
+  git remote add origin "$REMOTE_URL" 2>/dev/null || true
   git add -A
   git commit -m "init: sync from marketplace $NEW_VERSION" --quiet
   echo "✔ 캐시 git 복원 ($NEW_VERSION)"

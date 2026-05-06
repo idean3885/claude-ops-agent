@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.4] - 2026-05-06
+
+### Fixed
+- release.sh: origin URL 하드코딩 제거 (idean3885 HTTPS 기본값 + DEVEX_REMOTE_URL env override)
+
 ## [3.10.3] - 2026-05-06
 
 ### Fixed
