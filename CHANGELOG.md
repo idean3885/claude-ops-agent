@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.5] - 2026-05-06
+
+### Fixed
+- release.sh: 검증 단계 cache 경로를 PLUGIN_NAME 기반 절대경로로 — cache 외부 호출에서도 정상 검증
+
 ## [3.10.4] - 2026-05-06
 
 ### Fixed

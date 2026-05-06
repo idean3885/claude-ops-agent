@@ -63,7 +63,12 @@ claude plugins update "$PLUGIN_NAME" 2>&1 || { echo "✘ 마켓플레이스 업�
 echo "✔ 마켓플레이스 업데이트 완료"
 
 # --- Step 4: 새 캐시 디렉토리 git 복원 ---
-CACHE_BASE="$(dirname "$ROOT_DIR")"
+# PLUGIN_NAME = "{plugin}@{marketplace}" → ~/.claude/plugins/cache/{marketplace}/{plugin}/{version}/
+# release.sh를 cache 외부(임시 클론 등)에서 호출해도 실제 마켓플레이스 cache 경로를 정확히 찾도록
+# ROOT_DIR 상대 경로 대신 명시 경로를 사용한다.
+PLUGIN_PART="${PLUGIN_NAME%%@*}"
+MARKETPLACE_PART="${PLUGIN_NAME##*@}"
+CACHE_BASE="$HOME/.claude/plugins/cache/$MARKETPLACE_PART/$PLUGIN_PART"
 NEW_CACHE="$CACHE_BASE/$NEW_VERSION"
 
 if [ -d "$NEW_CACHE" ] && [ ! -d "$NEW_CACHE/.git" ]; then
