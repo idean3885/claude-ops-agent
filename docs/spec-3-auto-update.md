@@ -47,7 +47,10 @@ sequenceDiagram
 
 ### 4.1 다운스트림 워크플로우 템플릿
 
-파일: `.github/workflows/claude-devex-update.yml`
+원격 위치: `templates/workflows/claude-devex-update.yml` (본 레포)
+설치 위치: `.github/workflows/claude-devex-update.yml` (다운스트림)
+
+> 본 레포 `.github/workflows/`에 두면 본 레포 자기 자신에서도 cron이 동작하여 자기 업데이트를 시도하므로, 템플릿은 `templates/workflows/` 하위에 보관하고 `setup.sh --subscribe`가 다운스트림의 `.github/workflows/`로 배치한다.
 
 - `schedule`: 매일 09:00 KST (UTC 00:00) 자동 실행
 - `workflow_dispatch`: 수동 트리거 지원
@@ -63,7 +66,7 @@ sequenceDiagram
 
 | 항목 | 변경 |
 |------|------|
-| `.github/workflows/claude-devex-update.yml` | 신규 - 다운스트림이 다운로드할 워크플로우 템플릿 |
+| `templates/workflows/claude-devex-update.yml` | 다운스트림이 다운로드할 워크플로우 템플릿 (본 레포의 `.github/workflows/`에는 두지 않음) |
 | `setup.sh` | `--subscribe` 옵션 추가 |
 | `README.md` | 자동 업데이트 구독 사용법 추가 |
 
@@ -79,7 +82,7 @@ sequenceDiagram
 
 | 파일 | 동작 |
 |------|------|
-| `.github/workflows/claude-devex-update.yml` | `--subscribe` 시 신규 생성 |
+| `.github/workflows/claude-devex-update.yml` (다운스트림) | `--subscribe` 시 `templates/workflows/`에서 fetch하여 신규 생성 |
 | `.claude/skills/*` | `--update`에 의해 갱신 (기존과 동일) |
 | `.claude/project-profile.md` | 보존 (기존과 동일) |
 | `CLAUDE.md` | 보존 (기존과 동일) |

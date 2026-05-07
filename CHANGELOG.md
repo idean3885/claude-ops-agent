@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.7] - 2026-05-07
+
+### Fixed
+- fix: claude-devex-update 워크플로 템플릿을 templates/workflows/로 이동 — 본 레포 .github/workflows/에서 제거하여 자기 자신 cron 트리거 차단 (#57)
+
 ## [3.10.6] - 2026-05-06
 
 ### Fixed

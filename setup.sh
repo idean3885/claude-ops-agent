@@ -222,7 +222,7 @@ cmd_subscribe() {
     echo "[설치] .github/workflows/claude-devex-update.yml"
   fi
 
-  if ! fetch_raw ".github/workflows/claude-devex-update.yml" ".github/workflows/claude-devex-update.yml"; then
+  if ! fetch_raw "templates/workflows/claude-devex-update.yml" ".github/workflows/claude-devex-update.yml"; then
     echo "[오류] 워크플로우 파일을 다운로드할 수 없습니다." >&2
     exit 1
   fi
