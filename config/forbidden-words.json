@@ -1,0 +1,55 @@
+{
+  "_comment": "기본 금지 표현 룰. 어시스턴트 응답에서 이 패턴이 등장하면 stop hook이 검출하여 다음 턴 사용자에게 알림. 개인 추가 룰은 ~/.claude/forbidden-words.local.json에 작성하면 머지됨.",
+  "rules": [
+    {
+      "pattern": "박았|박힘|박혀|박힌|박은|박아|박혔",
+      "replacement": "명시/고정/기재되어 있다",
+      "reason": "비격식·저속한 어조"
+    },
+    {
+      "pattern": "고수준|저수준|고차원|저차원적",
+      "replacement": "기능을 직접 기술",
+      "reason": "AI 슬롭 — 과시성 수식어"
+    },
+    {
+      "pattern": "포괄적|체계적|효율적|총체적|일관된 흐름|유기적",
+      "replacement": "구체 표현 (무엇을/어떻게)",
+      "reason": "AI 슬롭 — 추상적 과장 형용사"
+    },
+    {
+      "pattern": "원활(한|히|하게|함)|매끄(럽|러운|러이)",
+      "replacement": "구체 동작 동사",
+      "reason": "AI 슬롭 — 의미 없는 부사/형용사"
+    },
+    {
+      "pattern": "강력한|우아한|견고한|튼튼한 구조",
+      "replacement": "구체 속성 (어떤 점에서)",
+      "reason": "AI 슬롭 — 과장형 형용사"
+    },
+    {
+      "pattern": "을 통해|를 통해",
+      "replacement": "~로/~으로 (직접 수단)",
+      "reason": "AI 슬롭 — 영어 'through' 직역체"
+    },
+    {
+      "pattern": "활용하여|활용함으로써|활용한",
+      "replacement": "써서/사용하여",
+      "reason": "AI 슬롭 — 격식 과잉"
+    },
+    {
+      "pattern": "본 (문서|시스템|기능|보고서|작업)은",
+      "replacement": "주어 직접 명시",
+      "reason": "AI 슬롭 — 보고서체"
+    },
+    {
+      "pattern": "보장(합니다|됩니다|된)|담보(합니다|됩니다)",
+      "replacement": "조건/근거 직접 기술",
+      "reason": "AI 슬롭 — 근거 없는 단언"
+    },
+    {
+      "pattern": "심층(적|적인|있는)|심도(있는|깊은)",
+      "replacement": "범위 구체 명시",
+      "reason": "AI 슬롭 — 깊이 자랑"
+    }
+  ]
+}

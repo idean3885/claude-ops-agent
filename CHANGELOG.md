@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.11.0] - 2026-05-08
+
+### Fixed
+- feat: 금지 표현/AI 슬롭 hook 추가 (UserPromptSubmit 룰 주입 + Stop 사후 탐지, 사용자 추가 룰은 ~/.claude/forbidden-words.local.json 머지)
+
 ## [3.10.8] - 2026-05-08
 
 ### Fixed
