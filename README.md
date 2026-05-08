@@ -80,6 +80,17 @@ Provider별 Git Identity(user.name, user.email)를 정의하여,
 | `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘" |
 | `/dependency-map` | 의존성 맵 생성, 변경 영향도 분석 (Mermaid) | "의존성 분석해줘" |
 
+## 표현 가드
+
+어시스턴트 답변에 등장하는 금지 표현(과장형 형용사·보고서체·근거 없는 단언 등)을 감지하여 다음 턴 사용자에게 알립니다. UserPromptSubmit hook이 룰을 system-reminder로 주입하고, Stop hook이 직전 응답을 정규식 매칭하여 위반을 기록합니다. Claude Code 자체는 응답 텍스트를 사전 차단하지 못하므로 사후 알림 + 모델 자제 의존이 한계입니다.
+
+| 위치 | 역할 |
+|------|------|
+| [`config/forbidden-words.json`](config/forbidden-words.json) | 기본 룰 (한국어 어휘 표준) |
+| `~/.claude/forbidden-words.local.json` | 사용자 추가 룰 (선택, 머지됨) |
+
+룰 추가는 JSON에 `{pattern, replacement, reason}` 객체 하나만 추가하면 즉시 반영됩니다. 패턴은 Python 정규식 문법.
+
 ## 설치
 
 Claude Code 플러그인 마켓플레이스에서 설치합니다.
@@ -124,7 +135,11 @@ claude-devex/
 │   ├── plugin.json                  # 플러그인 메타데이터
 │   └── marketplace.json             # 마켓플레이스 등록 정보
 ├── hooks/
-│   └── hooks.json                   # SessionStart 훅 등록
+│   ├── hooks.json                   # 훅 등록 (SessionStart / PreToolUse / UserPromptSubmit / Stop)
+│   ├── forbidden-words-prompt.sh    # UserPromptSubmit — 금지 표현 룰 주입
+│   └── forbidden-words-stop.sh      # Stop — 직전 응답 위반 검출
+├── config/
+│   └── forbidden-words.json         # 표현 가드 룰
 ├── scripts/
 │   └── session-start.mjs            # provider 감지, Git Identity, 버전 동기화
 ├── providers/

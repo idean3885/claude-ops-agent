@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.11.1] - 2026-05-08
+
+### Fixed
+- docs: README에 '표현 가드' 섹션 추가 + 파일 구조 갱신 (forbidden-words hook)
+
 ## [3.11.0] - 2026-05-08
 
 ### Fixed
