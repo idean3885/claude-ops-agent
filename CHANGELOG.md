@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.10.8] - 2026-05-08
+
+### Fixed
+- fix(worktree-cleanup): heredoc 인용 + argv 전달로 본문 백틱 명령 치환 차단
+
 ## [3.10.7] - 2026-05-07
 
 ### Fixed

@@ -174,12 +174,10 @@ fi
 
 VCS_XML="$PROJECT_ROOT/.idea/vcs.xml"
 
-RESULT=$(python3 << PYEOF
+RESULT=$(python3 - "$PROJECT_ROOT" "$VCS_XML" "$STATE_FILE" << 'PYEOF'
 import json, subprocess, os, sys, shutil
 
-project_root = "$PROJECT_ROOT"
-vcs_xml = "$VCS_XML"
-state_file = "$STATE_FILE"
+project_root, vcs_xml, state_file = sys.argv[1], sys.argv[2], sys.argv[3]
 
 with open(state_file) as f:
     state = json.load(f)
