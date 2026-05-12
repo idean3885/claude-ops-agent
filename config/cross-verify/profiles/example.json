@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "project": "my-project",
+  "description": "Example profile — customize for your project",
+  "conventions": [
+    ".claude/CLAUDE.md"
+  ],
+  "designDocs": "docs/",
+  "focusAxes": ["decision", "design", "documentation", "implementation"],
+  "customChecks": {
+    "decision": [
+      "Is there a documented rationale for this choice?",
+      "Were alternatives considered and trade-offs explicit?"
+    ],
+    "design": [
+      "Are edge cases and failure modes addressed?",
+      "Is the design consistent with existing conventions?"
+    ],
+    "documentation": [
+      "Is the target audience clear?",
+      "Are terms used consistently?"
+    ],
+    "implementation": [
+      "Does the code accurately reflect the design?",
+      "Are there unintended side effects?"
+    ]
+  }
+}
