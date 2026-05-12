@@ -116,6 +116,24 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 - `README.md`에 기술 스택, 디렉토리 구조, 실행 방법 등 작성
 - `.claude/settings.local.json`에 로컬 전용 설정 추가
 
+## 워크트리 분기
+
+여러 브랜치를 동시에 작업하거나 같은 레포의 다른 PR 을 병렬로 검토할 때 워크트리를 분기한다.
+
+| 자원 | 위치 | 비고 |
+|------|------|------|
+| 워크트리 생성 | `scripts/worktree-create.sh <state-file>` | clone-on-demand + 워크트리 일괄 생성 + vcs.xml 매핑 |
+| 워크트리 정리 | `scripts/worktree-cleanup.sh` | bare clone 포함 정리 |
+| state 파일 포맷 | `.omc/state/org-flow-{ticket}.json` | 경로 컨벤션 (이름 잔재, 리네임은 별 이슈) |
+| 하네스 자체 워크트리 | Claude Code `Agent` 도구의 `isolation: "worktree"` | 단발 isolation 작업용 — 위 스크립트와 무관 |
+
+분기 판단:
+- 같은 이슈의 단일 PR → 일반 브랜치
+- 같은 레포의 여러 PR 병렬 검토 → `scripts/worktree-create.sh`
+- 단발 isolation (실험·임시 빌드) → `Agent` 도구 isolation
+
+`.omc/state/` 경로명은 이전 자산 호환을 위해 유지한다. 추후 `.devex/state/` 로 리네임할 가능성이 있으며 별 이슈로 추적한다.
+
 ---
 
 ## 이 프로젝트 (claude-devex)
