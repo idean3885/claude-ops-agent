@@ -215,6 +215,23 @@ function cleanupStaleVersions() {
   } catch { /* non-critical */ }
 }
 
+// --- Migrate legacy .omc/state/ to .devex/state/ (5.0.0 rename) ---
+// 워크트리 state 경로 컨벤션이 5.0.0 에서 변경되었다.
+// cwd 또는 worktree 루트에 .omc/state/ 가 남아 있고 .devex/state/ 가 없으면 1회 이동.
+// .devex/state/ 가 이미 있으면 사용자가 수동 처리한 것으로 간주하고 건드리지 않음.
+function migrateOmcStateToDevex() {
+  try {
+    const legacy = join(cwd, '.omc', 'state');
+    const target = join(cwd, '.devex', 'state');
+    if (!existsSync(legacy)) return;
+    if (existsSync(target)) return; // 사용자 수동 처리분 보존
+    execSync(`mkdir -p "${join(cwd, '.devex')}"`, { timeout: 1000, stdio: 'ignore' });
+    execSync(`mv "${legacy}" "${target}"`, { timeout: 2000, stdio: 'ignore' });
+    // .omc 디렉토리가 비었으면 정리
+    try { execSync(`rmdir "${join(cwd, '.omc')}" 2>/dev/null`, { timeout: 1000, stdio: 'ignore' }); } catch { /* skip */ }
+  } catch { /* non-critical */ }
+}
+
 // --- Mirror style-rules SSOT to ~/.claude/devex/style-rules/ ---
 // devex 의 base/extensions 룰을 사용자 스코프로 미러링한다.
 // toolkit 등 외부 소비자는 이 경로를 참조한다 (devex 캐시 버전 디렉토리는 갱신 시 바뀌므로).
@@ -273,6 +290,7 @@ syncMarketplace();
 syncPluginVersion();
 ensurePluginGitIdentity();
 mirrorStyleRules();
+migrateOmcStateToDevex();
 
 const host = detectProvider();
 const provider = findProvider(host);
