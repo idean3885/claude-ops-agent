@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.1.0] - 2026-05-12
+
+### Fixed
+- feat: extension 4개 본문(issue·dailylog·peer-review·work-review) + .omc/state 마이그레이션 hook
+
 ## [5.0.0] - 2026-05-12
 
 ### Fixed
