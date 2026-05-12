@@ -215,6 +215,32 @@ function cleanupStaleVersions() {
   } catch { /* non-critical */ }
 }
 
+// --- Mirror style-rules SSOT to ~/.claude/devex/style-rules/ ---
+// devex 의 base/extensions 룰을 사용자 스코프로 미러링한다.
+// toolkit 등 외부 소비자는 이 경로를 참조한다 (devex 캐시 버전 디렉토리는 갱신 시 바뀌므로).
+// *.local.* 파일은 사용자 추가 룰이므로 덮어쓰지 않는다.
+function mirrorStyleRules() {
+  try {
+    const src = join(pluginRoot, 'config', 'style-rules');
+    if (!existsSync(src)) return;
+    const dst = join(devexGlobal, 'style-rules');
+    execSync(`mkdir -p "${dst}/base" "${dst}/extensions"`, { timeout: 1000, stdio: 'ignore' });
+
+    for (const sub of ['base', 'extensions']) {
+      const subSrc = join(src, sub);
+      const subDst = join(dst, sub);
+      if (!existsSync(subSrc)) continue;
+      for (const file of readdirSync(subSrc)) {
+        if (file.includes('.local.')) continue; // 사용자 로컬 룰 보호
+        const srcPath = join(subSrc, file);
+        const dstPath = join(subDst, file);
+        const content = readFileSync(srcPath, 'utf8');
+        writeFileSync(dstPath, content);
+      }
+    }
+  } catch { /* non-critical */ }
+}
+
 // --- Sync marketplace metadata to latest remote (prevents stale version path) ---
 function syncMarketplace() {
   try {
@@ -246,6 +272,7 @@ cleanupStaleVersions();
 syncMarketplace();
 syncPluginVersion();
 ensurePluginGitIdentity();
+mirrorStyleRules();
 
 const host = detectProvider();
 const provider = findProvider(host);

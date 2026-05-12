@@ -80,16 +80,53 @@ Provider별 Git Identity(user.name, user.email)를 정의하여,
 | `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘" |
 | `/dependency-map` | 의존성 맵 생성, 변경 영향도 분석 (Mermaid) | "의존성 분석해줘" |
 
-## 표현 가드
+## 스타일 룰 (Style Rules)
 
-어시스턴트 답변에 등장하는 금지 표현(과장형 형용사·보고서체·근거 없는 단언 등)을 감지하여 다음 턴 사용자에게 알립니다. UserPromptSubmit hook이 룰을 system-reminder로 주입하고, Stop hook이 직전 응답을 정규식 매칭하여 위반을 기록합니다. Claude Code 자체는 응답 텍스트를 사전 차단하지 못하므로 사후 알림 + 모델 자제 의존이 한계입니다.
+블로그·위키·이슈·PoC·데일리로그·동료리뷰·성과평가 등 **모든 한국어 문서**에 적용되는 작성 SSOT 를 제공합니다.
+base(공통) + extensions(유형별 추가 규칙) 구조로, 작성 빈도와 함께 점진 보강합니다.
+
+### 구조
+
+```
+config/style-rules/
+├── base/
+│   ├── ai-tells.md       # AI 티 분류 (A~J 10대 카테고리, S1/S2/S3)
+│   ├── readability.md    # 구조 가독성 (P/H/L/C/V/K/B)
+│   ├── tone.md           # 저자 톤 (T1~T13)
+│   └── punctuation.md    # 한국어 구두점 (PN1~PN5)
+└── extensions/
+    ├── blog.md           # 블로그 (PAAR, 포트폴리오 어필)
+    ├── wiki.md           # 사내 위키 (시리즈 인덱스, 상세도)
+    ├── poc.md            # PoC (결론 선행, 재현 가능성)
+    ├── info.md           # 정보성 (따라하기 용이성)
+    ├── knowledge.md      # 개발 사전 (저자 실무 판단)
+    ├── issue.md          # 이슈 (재현 절차) — 골격
+    ├── dailylog.md       # 데일리로그 — 골격
+    ├── peer-review.md    # 동료리뷰 — 골격
+    └── work-review.md    # 성과평가 — 골격
+```
+
+### AI 티 분류 (im-not-ai 차용)
+
+`base/ai-tells.md`의 10대 카테고리 골격(A 번역투 / B 영어 인용 / C 구조적 AI 패턴 / D AI 관용구 / E 리듬 균일성 / F 수식·중복 / G Hedging / H 접속사 / I 형식명사 / J 시각 장식)과 심각도(S1/S2/S3) 체계는 [`epoko77-ai/im-not-ai`](https://github.com/epoko77-ai/im-not-ai) (MIT) 의 한국어 humanize 스킬에서 차용했습니다. 처방·예시·forbidden-words hook 매핑은 한국어 기술 블로그 맥락으로 자체 작성한 파생물입니다.
+
+### 표현 가드 (응답 차단 hook)
+
+답변에 등장하는 금지 표현(과장형 형용사·보고서체·근거 없는 단언 등)을 감지하여 다음 턴 사용자에게 알립니다. UserPromptSubmit hook이 룰을 system-reminder로 주입하고, Stop hook이 직전 응답을 정규식 매칭하여 위반을 기록합니다. `base/ai-tells.md`의 S1 패턴 중 즉시 차단 가치가 있는 룰이 등록되어 있습니다.
 
 | 위치 | 역할 |
 |------|------|
-| [`config/forbidden-words.json`](config/forbidden-words.json) | 기본 룰 (한국어 어휘 표준) |
+| [`config/forbidden-words.json`](config/forbidden-words.json) | 기본 룰 (응답 hook용 패턴) |
 | `~/.claude/forbidden-words.local.json` | 사용자 추가 룰 (선택, 머지됨) |
 
 룰 추가는 JSON에 `{pattern, replacement, reason}` 객체 하나만 추가하면 즉시 반영됩니다. 패턴은 Python 정규식 문법.
+신규 패턴은 먼저 `base/ai-tells.md` 분류 체계에 카테고리 ID 부여 후 S1 으로 판정될 때 등록합니다.
+
+### 사용자 스코프 미러
+
+SessionStart hook에서 `config/style-rules/` 의 base·extensions 를 `~/.claude/devex/style-rules/` 로 미러링합니다.
+toolkit 등 외부 소비자(예: `toolkit:content-write`, `toolkit:wiki-publish`)는 이 경로를 참조합니다.
+사용자 로컬 추가 룰(`*.local.md`, `*.local.json`)은 미러 시 덮어쓰지 않습니다.
 
 ## 설치
 
@@ -139,9 +176,25 @@ claude-devex/
 │   ├── forbidden-words-prompt.sh    # UserPromptSubmit — 금지 표현 룰 주입
 │   └── forbidden-words-stop.sh      # Stop — 직전 응답 위반 검출
 ├── config/
-│   └── forbidden-words.json         # 표현 가드 룰
+│   ├── forbidden-words.json         # 응답 차단 hook 룰
+│   └── style-rules/
+│       ├── base/                    # 모든 문서 공통 SSOT
+│       │   ├── ai-tells.md          # AI 티 분류 (im-not-ai 차용, MIT)
+│       │   ├── readability.md       # 구조 가독성
+│       │   ├── tone.md              # 저자 톤
+│       │   └── punctuation.md       # 한국어 구두점
+│       └── extensions/              # 문서 유형별 추가 규칙
+│           ├── blog.md
+│           ├── wiki.md
+│           ├── poc.md
+│           ├── info.md
+│           ├── knowledge.md
+│           ├── issue.md
+│           ├── dailylog.md
+│           ├── peer-review.md
+│           └── work-review.md
 ├── scripts/
-│   └── session-start.mjs            # provider 감지, Git Identity, 버전 동기화
+│   └── session-start.mjs            # provider 감지, Git Identity, 버전·SSOT 동기화
 ├── providers/
 │   ├── PROVIDER.md                  # 커스텀 provider 템플릿
 │   └── github.md                    # GitHub 기본 내장 provider
@@ -166,3 +219,7 @@ claude-devex/
 ## 라이선스
 
 MIT
+
+### 차용한 외부 자원
+
+- [`epoko77-ai/im-not-ai`](https://github.com/epoko77-ai/im-not-ai) (MIT) — `config/style-rules/base/ai-tells.md` 의 10대 분류 골격(A~J)과 심각도(S1/S2/S3) 체계. 처방·예시·hook 매핑은 자체 작성.

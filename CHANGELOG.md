@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [3.12.0] - 2026-05-12
+
+### Fixed
+- feat: style-rules SSOT 기반 구조 신설 (base+extensions) — im-not-ai 차용 분류(MIT), 가독성·톤·구두점·AI 티 통합, session-start 미러 hook (#59 회고)
+
 ## [3.11.1] - 2026-05-08
 
 ### Fixed
