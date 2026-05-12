@@ -6,7 +6,7 @@
 #
 # 사용법:
 #   ./worktree-cleanup.sh <state-file>              # 티켓 단위 정리 (기본)
-#     state-file: .omc/state/org-flow-{ticket}.json
+#     state-file: .devex/state/org-flow-{ticket}.json
 #
 #   ./worktree-cleanup.sh --sweep-stale [--apply]   # stale state/고아 bare clone 정리
 #     --apply 없이 실행하면 dry-run (감지만 출력).
