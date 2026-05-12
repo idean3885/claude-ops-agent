@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [4.0.0] - 2026-05-12
+
+### Fixed
+- feat: content-publisher + cross-verify 흡수, 글로벌 OMC 가이드 제거, 단일 prefix(devex:*). BREAKING: content:* / cross-verify:* prefix 제거, devex:content-* / devex:cross-verify 로 통합. (#66 마일스톤)
+
 ## [3.12.0] - 2026-05-12
 
 ### Fixed
