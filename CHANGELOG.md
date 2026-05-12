@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.0.0] - 2026-05-12
+
+### Fixed
+- feat: .devex/state 경로 리네임 + usage-tracker 5스킬 흡수 (devex:usage-*)
+
 ## [4.1.0] - 2026-05-12
 
 ### Fixed
