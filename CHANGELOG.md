@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [4.1.0] - 2026-05-12
+
+### Fixed
+- feat: content-verify 사실 정확성 축에 의미 보존 13항 체크리스트 보강 (im-not-ai MIT 차용, #62)
+
 ## [4.0.0] - 2026-05-12
 
 ### Fixed
