@@ -1,13 +1,146 @@
+---
+name: org-flow
+description: 멀티레포 오케스트레이션 + 사내/퍼블릭 provider 분기. 최초 호출 시 org 셋업 마법사로 매니페스트 생성. 트리거 "org-flow", "멀티레포", "multi-repo", "/org-flow", "org 셋업".
+---
+
 # Multi-Repo Orchestration (org-flow)
 
-멀티레포 프로젝트에서 관련 레포 간 워크트리 동기화 + 파이프라인 추적을 제공한다.
+멀티레포 프로젝트 오케스트레이션 + 사내/퍼블릭 provider 분기.
 `devex:flow`의 단일 레포 이슈 라이프사이클 위에서 동작한다.
 
 ## 트리거
 
-- "org-flow", "멀티레포", "multi-repo"
+이 스킬 호출 자체가 **"현재 디렉토리를 GitHub 조직(org)으로 취급한다"는 사용자 컨펌**이다.
+디렉토리 이름은 조직명과 동일하다고 전제한다 (예: `<org>/` → org=`<org>`).
 
-## 전제조건
+- "/org-flow", "org-flow", "멀티레포", "multi-repo", "org 셋업"
+
+## 최초 호출 — 셋업 마법사
+
+cwd basename 으로 org 이름을 추론한 뒤, 두 위치에서 매니페스트를 조회한다.
+
+| 위치 | 용도 |
+|------|------|
+| `~/.claude/devex/orgs/<org>.json` | 퍼블릭 (devex 내장 GitHub provider) |
+| `~/.claude/toolkits/<toolkit>/orgs/<org>.json` | 사내 (외부 toolkit 플러그인의 사내 provider) |
+
+둘 다 없으면 셋업 마법사로 진입한다.
+
+**Step 1: 단일 질문 (사내/퍼블릭 분기)**
+
+> "`{org}` 는 사내(외부 toolkit) 인가 퍼블릭(devex) 인가?"
+
+사용자 응답에 따라 매니페스트 생성 위치 결정.
+
+**Step 2: 매니페스트 생성**
+
+선택한 위치에 `<org>.json` 작성. 스키마는 아래 컨벤션 참조.
+사내 분기 시 toolkit 측 디렉토리(`~/.claude/toolkits/<toolkit>/orgs/`)가 없으면 생성.
+
+**Step 3: 프로젝트 로컬 매니페스트 안내**
+
+`.devex/project.json` 이 없으면 멀티레포 구조 정의를 안내한다 (repos / domains / worktreeRoot — "전제조건" 섹션 참조).
+
+**Step 4: 셋업 종료**
+
+이후 같은 cwd 에서 호출하면 매니페스트 로딩 후 본문 흐름으로 직접 진입한다.
+
+## orgs/<org>.json 매니페스트 컨벤션
+
+사내 예시 (외부 toolkit 어댑터 식별자 사용):
+
+```json
+{
+  "org": "<org>",
+  "scope": "internal",
+  "githubHost": "<internal-host>",
+  "rootDir": "/path/to/<org>",
+  "providers": {
+    "issue": "<adapter-id>",
+    "notify": "<adapter-id>",
+    "dailylog": "<adapter-id>",
+    "apiGuard": "<adapter-id>"
+  },
+  "scriptOverrides": {
+    "worktreeCleanup": "<toolkit-id>:scripts/<script>.sh"
+  }
+}
+```
+
+퍼블릭 예시 (devex 내장 provider):
+
+```json
+{
+  "org": "<org>",
+  "scope": "public",
+  "githubHost": "github.com",
+  "rootDir": "/path/to/<org>",
+  "providers": {
+    "issue": "github"
+  }
+}
+```
+
+| 키 | 타입 | 설명 |
+|---|---|---|
+| `org` | string | GitHub 조직명 (cwd basename 과 동일) |
+| `scope` | "internal" \| "public" | 사내/퍼블릭 분류. 셋업 시 결정 |
+| `githubHost` | string | 사내 GHE 호스트 또는 `github.com` |
+| `rootDir` | string | 프로젝트 루트 절대 경로 (매니페스트 작성 시점 기준) |
+| `providers.*` | string | provider 어댑터 식별자 (선택 키, 미정의 시 fallback) |
+| `scriptOverrides.*` | string | 본체 스크립트 대신 사용할 외부 경로 (선택) |
+
+`providers.*` 키 미정의 시 devex 의 기존 host 기반 provider 자동 감지로 fallback 한다 (`providers/github.md` 등).
+
+## provider 분기
+
+매니페스트의 `providers.*` 키를 해석하여 어댑터를 위임 호출한다. 어댑터 구현은 외부 플러그인(toolkit) 또는 devex 내장 provider.
+
+| 키 | 호출 시점 | 어댑터 책임 |
+|----|---------|----------|
+| `issue` | devex:flow 위임 시 | 이슈 트래커 API (create/start/complete) |
+| `notify` | submit 단계 PR 알림 | 메신저·웹훅 알림 발송 |
+| `dailylog` | start 검증 (외부 어댑터 정의 시) | 일일 계획 항목 존재 확인 |
+| `apiGuard` | devex:flow 위임 전후 | API 폭주 방지 마커 set/clear |
+
+식별자 prefix 컨벤션:
+
+- 외부 toolkit 플러그인 측 어댑터: 해당 toolkit 의 네임스페이스 prefix (예: `<toolkit>-<service>`)
+- devex 내장 / 퍼블릭 어댑터: `github`, `slack` 등
+
+어댑터 호출 규약: `<adapter-id>` 를 키로 외부 플러그인의 동명 스킬 또는 스크립트에 위임. 위임 인터페이스는 외부 플러그인 측 가이드에서 정의한다.
+
+## cwd resolver
+
+워크트리 내부 또는 하위 디렉토리에서 호출되어도 부모 추적으로 매니페스트를 발견한다.
+
+```
+1. cwd → 부모 순회 (max depth 6)
+2. 각 부모에서 .devex/project.json 또는 basename 매칭 시도
+3. basename = <org> 면 `~/.claude/devex/orgs/<basename>.json` 와 `~/.claude/toolkits/*/orgs/<basename>.json` 검색
+4. 발견된 매니페스트 사용
+5. depth 6 까지 미발견 시 셋업 마법사 진입 (Step 1)
+```
+
+## 역할 분담
+
+```
+devex:flow   — 이슈 생성/시작/완료 (이슈 트래커 + 주 레포 브랜치)
+org-flow     — 스코핑 + 관련 레포 워크트리 + 파이프라인 추적 + 커밋/PR 오케스트레이션 + provider 분기
+```
+
+| 책임 | 담당 |
+|------|------|
+| 이슈 생성/시작/완료 | `devex:flow` — **org-flow가 직접 수행 금지** |
+| 스코핑 (영향 레포 산정) | org-flow |
+| 관련 레포 워크트리 생성 | org-flow (`scripts/worktree-create.sh`) |
+| 파이프라인 실행 (구현/검증) | org-flow → 프로젝트 스킬 |
+| 각 레포 커밋/PR | org-flow → `devex:flow` commit/PR 위임 |
+| 워크트리 정리 | org-flow (`scripts/worktree-cleanup.sh` 또는 매니페스트의 `scriptOverrides.worktreeCleanup`) |
+| 이슈 트래커 직접 호출 | 매니페스트의 `providers.issue` 어댑터에 위임 |
+| PR 알림 | 매니페스트의 `providers.notify` 어댑터에 위임 |
+
+## 전제조건 (프로젝트 로컬 매니페스트)
 
 프로젝트 루트에 `.devex/project.json` 매니페스트가 존재해야 한다.
 
@@ -35,21 +168,7 @@
 }
 ```
 
-## 역할 분담
-
-```
-devex:flow   — 이슈 생성/시작/완료 (이슈 트래커 + 주 레포 브랜치)
-org-flow     — 스코핑 + 관련 레포 워크트리 + 파이프라인 추적 + 커밋/PR 오케스트레이션
-```
-
-| 책임 | 담당 |
-|------|------|
-| 이슈 생성/시작/완료 | `devex:flow` — **org-flow가 직접 수행 금지** |
-| 스코핑 (영향 레포 산정) | org-flow |
-| 관련 레포 워크트리 생성 | org-flow (`scripts/worktree-create.sh`) |
-| 파이프라인 실행 (구현/검증) | org-flow → 프로젝트 스킬 |
-| 각 레포 커밋/PR | org-flow → `devex:flow` commit/PR 위임 |
-| 워크트리 정리 | org-flow (`scripts/worktree-cleanup.sh`) |
+`orgs/<org>.json` (글로벌 org 단위) 과 `.devex/project.json` (프로젝트 멀티레포 구조) 은 합성되어 동작한다.
 
 ## 리모트 원소스 전략
 
@@ -65,32 +184,39 @@ org-flow     — 스코핑 + 관련 레포 워크트리 + 파이프라인 추적
 
 스코핑 → devex:flow 위임 → 관련 레포 워크트리 생성.
 
-**Step 1: 스코핑**
+**Step 1: 셋업 가드**
 
-매니페스트의 `domains`에서 영향 받는 레포를 조회한다.
+매니페스트(`orgs/<org>.json` + `.devex/project.json`) 둘 다 존재해야 한다. 부재 시 셋업 마법사 진입.
+
+**Step 2: 스코핑**
+
+`.devex/project.json` 의 `domains` 에서 영향 받는 레포를 조회한다.
 주 레포 결정: 사용자 입력 또는 도메인 role 기반.
 
-**Step 2: devex:flow 위임 (GATE)**
+**Step 3: provider 가드 set (선택)**
 
-주 레포 디렉토리에서 devex:flow `issue start`를 호출한다.
-org-flow가 이슈 트래커 API를 직접 호출하지 않는다.
+매니페스트의 `providers.apiGuard` 가 정의되어 있으면 어댑터에 위임하여 API 가드 마커 설정.
+
+**Step 4: devex:flow 위임 (GATE)**
+
+주 레포 디렉토리에서 devex:flow `issue start` 호출. org-flow 가 이슈 트래커 API 를 직접 호출하지 않는다.
+
+이슈 트래커는 매니페스트의 `providers.issue` 어댑터에 위임된다 (외부 toolkit 또는 devex 내장).
 
 위임 완료 후 검증:
 - 주 레포에 `feature/{ticket}` 브랜치 존재
 - 이슈 상태가 "진행 중"
+- (사내) `providers.dailylog` 정의 시 일일 계획 항목 존재 확인
 
-하나라도 실패 시 다음 단계로 진행하지 않는다.
-
-**Step 3: 워크트리 생성 (스크립트)**
+**Step 5: 워크트리 생성**
 
 ```bash
 scripts/worktree-create.sh .devex/state/org-flow-{ticket}.json
 ```
 
-clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성.
-vcs.xml 매핑 자동 추가.
+clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성. vcs.xml 매핑 자동 추가.
 
-**Step 4: 상태 저장**
+**Step 6: 상태 저장**
 
 `.devex/state/org-flow-{ticket}.json`:
 
@@ -112,13 +238,17 @@ vcs.xml 매핑 자동 추가.
 }
 ```
 
+**Step 7: provider 가드 clear**
+
+`providers.apiGuard` 정의 시 가드 마커 해제.
+
 ### `/org-flow status`
 
 관련 레포의 git 상태 + 파이프라인 진행률을 통합 조회한다.
 
 ### `/org-flow submit`
 
-검증 → 커밋 → PR → 알림. 각 레포에서 `devex:flow` commit/PR을 위임한다.
+검증 → 커밋 → PR → 알림. 각 레포에서 `devex:flow` commit/PR 위임.
 
 **Step 1: 완료 게이트**
 
@@ -126,8 +256,11 @@ vcs.xml 매핑 자동 추가.
 
 **Step 2: 각 레포 커밋/PR**
 
-변경 있는 레포마다 해당 레포의 `devex:flow` commit → PR 스킬을 실행한다.
-커밋 메시지는 기능 변경(What)을 기술한다.
+변경 있는 레포마다 해당 레포의 `devex:flow` commit → PR 위임. 커밋 메시지는 기능 변경(What) 기술.
+
+**Step 3: PR 알림**
+
+매니페스트의 `providers.notify` 어댑터에 위임 (외부 toolkit 또는 devex 내장).
 
 ### `/org-flow finish`
 
@@ -135,36 +268,48 @@ vcs.xml 매핑 자동 추가.
 
 **Step 1: 머지 확인 (GATE)**
 
-모든 관련 레포의 PR이 머지되었는지 확인한다.
+모든 관련 레포의 PR 머지 확인.
 
-**Step 2: devex:flow 위임 (GATE)**
+**Step 2: dirty 워크트리 사전 게이트 (권장)**
 
-주 레포에서 devex:flow `issue complete`를 호출한다.
-완료 후 이슈 상태가 "closed"인지 검증한다.
+cleanup 은 `git worktree remove --force` + `shutil.rmtree(ignore_errors=True)` 로 untracked·modified 파일을 무조건 삭제한다. 진입 전 현재 티켓의 워크트리만 대상으로 dirty 검사 권장 (`git status --porcelain` 비어 있어야 PASS).
 
-**Step 3: 워크트리 정리 (스크립트)**
+dirty 발견 시 finish 호출 금지 — 사용자 검토 후 명시적 커밋/푸시 또는 폐기 동의 필요.
+
+**Step 3: devex:flow 위임 (GATE)**
+
+주 레포에서 devex:flow `issue complete` 호출. 매니페스트의 `providers.issue` 어댑터가 완료 처리.
+
+위임 완료 후 검증:
+- 이슈 상태가 "closed"
+- 외부 어댑터 측이 추가 검증을 정의한 경우 그 어댑터에 위임 (예: 사내 트래커 의 워크플로우 클래스 검증)
+
+**Step 4: 워크트리 정리**
 
 ```bash
-scripts/worktree-cleanup.sh .devex/state/org-flow-{ticket}.json
+# 매니페스트의 scriptOverrides.worktreeCleanup 정의 시 그 스크립트 사용
+# 미정의 시 본체 scripts/worktree-cleanup.sh 사용
+<cleanup-script> .devex/state/org-flow-{ticket}.json
 ```
 
 워크트리 제거 + bare clone 삭제 + vcs.xml 정리 + 상태 파일 삭제.
 
 ## 파이프라인 연동
 
-프로젝트별 파이프라인은 `.devex/project.json` 또는 프로젝트 CLAUDE.md에서 정의한다.
-org-flow는 `currentStage`를 추적하고 다음 단계를 안내한다.
+프로젝트별 파이프라인은 `.devex/project.json` 또는 프로젝트 CLAUDE.md 에서 정의한다.
+org-flow 는 `currentStage` 를 추적하고 다음 단계를 안내한다.
 
 ## 프로젝트별 오버라이드
 
-프로젝트 고유 동작(provider 통합, 파이프라인, 알림)은 프로젝트의
-`.claude/skills/org-flow/SKILL.md`에서 이 스킬을 확장한다.
+프로젝트 고유 동작(파이프라인 세부 단계, 프로젝트별 검증)은 프로젝트의
+`.claude/skills/org-flow/SKILL.md` 에서 이 스킬을 확장한다.
 
-devex의 org-flow는 범용 골격이며, 프로젝트 레벨에서 오버라이드할 수 있다.
+devex 의 org-flow 는 범용 골격이며, 프로젝트 레벨에서 매니페스트 + 로컬 SKILL 로 오버라이드할 수 있다.
 
 ## 규칙
 
-- devex:flow 위임 없이 이슈 트래커 API를 직접 호출하지 않는다
+- devex:flow 위임 없이 이슈 트래커 API 를 직접 호출하지 않는다
 - 워크트리 생성/정리는 스크립트로 원자 실행한다
-- 프로젝트별 설정은 매니페스트(`.devex/project.json`)에서 읽는다
-- 하드코딩된 URL, 조직명, 제품명을 포함하지 않는다
+- provider 분기는 매니페스트의 `providers.*` 키로만 결정한다 (하드코딩된 호스트 분기 금지)
+- 하드코딩된 URL, 조직명, 제품명을 본체에 두지 않는다 — 매니페스트로 외부화
+- 매니페스트 부재 시 셋업 마법사 외 경로로 진입하지 않는다
