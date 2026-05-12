@@ -5,7 +5,7 @@
 # 레포가 없으면 bare clone → worktree 생성. 정리 시 bare clone도 삭제.
 #
 # 사용법: ./worktree-create.sh <state-file>
-#   state-file: .omc/state/org-flow-{ticket}.json
+#   state-file: .devex/state/org-flow-{ticket}.json
 #
 # 입력 JSON 구조 (필수 필드):
 #   ticket, primaryRepo, repos.{name}.{branch, base, worktree}

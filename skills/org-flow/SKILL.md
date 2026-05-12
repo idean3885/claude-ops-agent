@@ -84,7 +84,7 @@ org-flow가 이슈 트래커 API를 직접 호출하지 않는다.
 **Step 3: 워크트리 생성 (스크립트)**
 
 ```bash
-scripts/worktree-create.sh .omc/state/org-flow-{ticket}.json
+scripts/worktree-create.sh .devex/state/org-flow-{ticket}.json
 ```
 
 clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성.
@@ -92,7 +92,7 @@ vcs.xml 매핑 자동 추가.
 
 **Step 4: 상태 저장**
 
-`.omc/state/org-flow-{ticket}.json`:
+`.devex/state/org-flow-{ticket}.json`:
 
 ```json
 {
@@ -145,7 +145,7 @@ vcs.xml 매핑 자동 추가.
 **Step 3: 워크트리 정리 (스크립트)**
 
 ```bash
-scripts/worktree-cleanup.sh .omc/state/org-flow-{ticket}.json
+scripts/worktree-cleanup.sh .devex/state/org-flow-{ticket}.json
 ```
 
 워크트리 제거 + bare clone 삭제 + vcs.xml 정리 + 상태 파일 삭제.
