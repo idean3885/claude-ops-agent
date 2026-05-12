@@ -1,3 +1,8 @@
+---
+name: flow
+description: 이슈 플로우 단일 진입점 (issue → spec → implement → commit → pr). Git 상태 감지 후 단계별 작업 수행. 트리거 "flow", "플로우", "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "spec", "명세".
+---
+
 # Issue Flow Skill
 
 이슈 플로우 단일 진입점. 상태를 감지하여 현재 단계에 맞는 작업을 실행한다.
