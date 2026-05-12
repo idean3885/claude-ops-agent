@@ -45,7 +45,27 @@ import json, os, subprocess, shutil
 
 project_root = os.environ["PROJECT_ROOT_ENV"]
 apply = os.environ["APPLY_FLAG"] == "true"
-state_dir = os.path.join(project_root, ".omc", "state")
+state_dir = os.path.join(project_root, ".devex", "state")
+# 5.0.0 리네임. 구 .omc/state/ 가 있으면 fallback 지원 (사용자 미마이그레이션 자산).
+if not os.path.isdir(state_dir):
+    legacy = os.path.join(project_root, ".omc", "state")
+    if os.path.isdir(legacy):
+        state_dir = legacy
+
+
+def is_bare_clone(git_dir):
+    """`git_dir`이 bare clone 인지 git rev-parse 로 확정 검증.
+    HEAD 파일 존재만으로는 정규 clone 내부 .git/ 디렉토리도 통과해 오판 위험.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--is-bare-repository"],
+            cwd=git_dir, capture_output=True, text=True
+        )
+        return r.returncode == 0 and r.stdout.strip() == "true"
+    except Exception:
+        return False
+
 
 stale_states = []  # [{file, ticket, reason, repos_missing[]}]
 # state 파일별로 worktree 경로 실존 검증
@@ -89,8 +109,8 @@ for entry in sorted(os.listdir(project_root)):
     bare_path = os.path.join(project_root, entry)
     if not os.path.isdir(bare_path):
         continue
-    if not os.path.isfile(os.path.join(bare_path, "HEAD")):
-        continue  # bare가 아님
+    if not is_bare_clone(bare_path):
+        continue  # bare가 아님 (정규 clone 의 .git/ 오판 방지)
     repo_name = entry[:-4]
     if repo_name in active_repos:
         continue  # stale 아닌 state가 참조
@@ -189,6 +209,20 @@ removed = []
 failed = []
 
 
+def is_bare_clone(git_dir):
+    """`git_dir`이 bare clone 인지 git rev-parse 로 확정 검증.
+    .git 접미사 휴리스틱은 사용자가 정규 clone 을 임의 이름으로 두면 오판 가능.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--is-bare-repository"],
+            cwd=git_dir, capture_output=True, text=True
+        )
+        return r.returncode == 0 and r.stdout.strip() == "true"
+    except Exception:
+        return False
+
+
 def resolve_git_dir(repo_name):
     """레포의 git 디렉토리를 찾는다. bare(.git/) 또는 일반 모두 지원."""
     bare_dir = os.path.join(project_root, f"{repo_name}.git")
@@ -226,7 +260,7 @@ for repo_name, repo_info in repos.items():
     # 머지가 정상이어도 fully-merged 판정에 실패해 not-fully-merged false negative가 발생한다.
     # bare clone에 한해 -D로 강제 삭제하고, 일반 레포는 안전 삭제 -d를 유지한다.
     if git_dir:
-        is_bare = git_dir.endswith(".git")
+        is_bare = is_bare_clone(git_dir)
         delete_flag = "-D" if is_bare else "-d"
         r = subprocess.run(
             ["git", "branch", delete_flag, branch],
