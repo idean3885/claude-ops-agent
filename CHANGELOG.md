@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.2.0] - 2026-05-12
+
+### Fixed
+- feat: patch-hud 이관 — claude-hud 0.1.0 wrapWidth 변경 반영하여 compact-nowrap 패치 갱신 + SessionStart hook 등록 (#81)
+
 ## [5.1.0] - 2026-05-12
 
 ### Fixed
