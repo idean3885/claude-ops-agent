@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.3.0] - 2026-05-13
+
+### Fixed
+- feat: flow/setup description + org-flow 셋업 마법사 · provider 분기 + worktree-cleanup 안전 보강 (#83/#84/#85)
+
 ## [5.2.0] - 2026-05-12
 
 ### Fixed
