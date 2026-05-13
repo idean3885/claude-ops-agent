@@ -1,3 +1,8 @@
+---
+name: setup
+description: devex provider 등록·상태 조회·overlay 설정. 이슈 트래커 provider(github 등) 추가 및 host별 오버레이 구성. 트리거 "setup", "설정", "provider 등록", "프로바이더".
+---
+
 # Setup Skill
 
 provider 등록 및 프로젝트 설정 워크플로우
