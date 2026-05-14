@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.3.1] - 2026-05-14
+
+### Fixed
+- 커밋·PR 메시지 도메인 What 추상화 룰 추가 (mermaid 권장, 클래스명·헥사고날 어휘·산출물 카운트 금지)
+
 ## [5.3.0] - 2026-05-13
 
 ### Fixed
