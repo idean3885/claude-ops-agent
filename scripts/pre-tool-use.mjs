@@ -34,6 +34,9 @@ const sessionContext = existsSync(cachePath) ? readFileSync(cachePath, 'utf8') :
 const DISABLE = process.env.DEVEX_CONFIDENTIAL_DISABLE === '1';
 const DRYRUN = process.env.DEVEX_CONFIDENTIAL_DRYRUN === '1';
 
+const WHAT_GUARD_DISABLE = process.env.DEVEX_WHAT_GUARD_DISABLE === '1';
+const WHAT_GUARD_DRYRUN = process.env.DEVEX_WHAT_GUARD_DRYRUN === '1';
+
 if (!DISABLE) {
   try {
     const hookInput = JSON.parse(input);
@@ -64,6 +67,35 @@ if (!DISABLE) {
             },
           }));
           process.exit(0);
+        }
+      }
+
+      // 도메인 What 추상화 가드: 커밋·PR·이슈 본문에서 구현 세부 노출 차단
+      if (!WHAT_GUARD_DISABLE) {
+        const whatResult = runWhatAbstractionGuard(command);
+        if (whatResult.blocked) {
+          const header = WHAT_GUARD_DRYRUN
+            ? '[DEVEX What 추상화 가드 · 드라이런]'
+            : '[DEVEX What 추상화 가드 · 차단]';
+          const hitLines = whatResult.hits
+            .map(h => `  - [${h.rule}] "${h.match}": ${h.context}`).join('\n');
+          const msg = `${header} 본문에 구현 세부가 노출되어 있습니다.\n${hitLines}\n\n` +
+            `해결: 도메인 행위·사용자 가치만 기술하세요. 클래스명·메서드명·어노테이션·헥사고날 어휘·yaml 키·산출물 카운트 모두 제거.\n` +
+            `흐름은 mermaid flowchart/sequenceDiagram 사용.\n` +
+            `가이드: ~/.claude/plugins/cache/claude-devex/devex/*/skills/flow/guides/commit.md 의 "도메인 What 추상화" 섹션\n` +
+            `비활성: DEVEX_WHAT_GUARD_DISABLE=1 (예외 상황만)`;
+          if (WHAT_GUARD_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: {
+                hookEventName: 'PreToolUse',
+                permissionDecision: 'deny',
+                permissionDecisionReason: msg,
+              },
+            }));
+            process.exit(0);
+          }
         }
       }
     }
@@ -298,4 +330,102 @@ function snippet(text, index, length) {
   const after = Math.min(text.length, index + length + 25);
   const frag = text.substring(before, after).replace(/\s+/g, ' ');
   return `"${before > 0 ? '…' : ''}${frag}${after < text.length ? '…' : ''}"`;
+}
+
+// ─── 도메인 What 추상화 가드 ───
+// 커밋/PR/이슈 본문에서 구현 세부(클래스명·메서드명·어노테이션·헥사고날 어휘·yaml 키·산출물 카운트) 차단
+function runWhatAbstractionGuard(command) {
+  const writePatterns = [
+    /\bgh\s+issue\s+(create|edit|comment)\b/,
+    /\bgh\s+pr\s+(create|edit|comment|review)\b/,
+    /\bgh\s+release\s+(create|edit)\b/,
+    /\bgit\s+commit\b/,
+  ];
+  if (!writePatterns.some(re => re.test(command))) {
+    return { blocked: false, hits: [] };
+  }
+
+  const texts = [];
+  // 제목은 이슈/PR 번호 prefix 또는 짧은 도메인 표현이라 검사 대상 아님 — body/m/subject·body-file만
+  extractOption(command, 'body', texts);
+  extractShortOption(command, 'm', texts);
+  extractFileOption(command, 'body-file', texts);
+  extractFileOption(command, 'notes-file', texts);
+
+  if (texts.length === 0) return { blocked: false, hits: [] };
+
+  // 룰 정의
+  const rules = [
+    {
+      id: 'hexagonal-classname',
+      // PascalCase + 헥사고날 접미사 합성어 (단어 경계)
+      // 예: WorkloadSnapshotUserService, NodeContainerMetricPortAdapter
+      regex: /\b[A-Z][a-zA-Z0-9]+(Port|Adapter|UseCase|Listener|Service|Repository|Validator|Controller|Handler)\b/g,
+      threshold: 1,
+    },
+    {
+      id: 'annotation',
+      // Spring/Lombok/Jakarta 어노테이션 (PascalCase)
+      // 예: @TransactionalEventListener, @RequiredArgsConstructor
+      regex: /@[A-Z][a-zA-Z]+/g,
+      threshold: 1,
+    },
+    {
+      id: 'tx-phase-const',
+      // 트랜잭션 phase/propagation 상수
+      regex: /\b(AFTER_COMMIT|BEFORE_COMMIT|AFTER_COMPLETION|AFTER_ROLLBACK|REQUIRES_NEW|MANDATORY|REQUIRED|SUPPORTS|NOT_SUPPORTED|NESTED|NEVER)\b/g,
+      threshold: 1,
+    },
+    {
+      id: 'config-file-path',
+      // application-*.yml / application-*.yaml / build.gradle / *.properties 같은 의존성 파일 경로
+      regex: /\bapplication-[a-z0-9_-]+\.ya?ml\b|\bbuild\.gradle\b|\b[a-z0-9_-]+\.properties\b/g,
+      threshold: 1,
+    },
+    {
+      id: 'artifact-count',
+      // "N종 신규", "N files changed", "+M / -N"
+      regex: /\d+\s*(종\s*신규|files?\s+changed|insertions?\b|deletions?\b)|\+\d+\s*\/\s*-\d+/g,
+      threshold: 1,
+    },
+    {
+      id: 'method-signature',
+      // camelCase + 빈 괄호 (메서드 호출 표기) — 예: validateForCreate(), startDelegation()
+      regex: /\b[a-z][a-zA-Z0-9]*\(\)/g,
+      threshold: 1,
+    },
+  ];
+
+  const hits = [];
+  for (const t of texts) {
+    // mermaid 코드 블록은 흐름 시각화라 검사 제외
+    const stripped = t.value.replace(/```mermaid[\s\S]*?```/g, '');
+    for (const rule of rules) {
+      const re = new RegExp(rule.regex.source, rule.regex.flags);
+      let count = 0;
+      let m;
+      while ((m = re.exec(stripped)) !== null) {
+        count++;
+        if (count <= 3) {
+          hits.push({
+            rule: rule.id,
+            match: m[0],
+            source: t.source,
+            context: snippet(stripped, m.index, m[0].length),
+          });
+        }
+        if (m.index === re.lastIndex) re.lastIndex++;
+      }
+      // threshold 미만이면 이번 룰 히트 무효화 (예: threshold=3 인데 1개만 매치 → 무시)
+      if (count < rule.threshold) {
+        const removeCount = Math.min(count, hits.length);
+        for (let i = 0; i < removeCount; i++) {
+          // 마지막 N개 제거
+          if (hits[hits.length - 1].rule === rule.id) hits.pop();
+        }
+      }
+    }
+  }
+
+  return { blocked: hits.length > 0, hits };
 }

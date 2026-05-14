@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.4.0] - 2026-05-14
+
+### Fixed
+- PreToolUse 도메인 What 추상화 가드 추가 (커밋/PR 본문에 클래스명·어노테이션·헥사고날 어휘·yaml 경로·산출물 카운트·메서드 시그니처 차단, mermaid 블록 제외)
+
 ## [5.3.1] - 2026-05-14
 
 ### Fixed
