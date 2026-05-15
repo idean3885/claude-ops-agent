@@ -60,6 +60,12 @@
       "replacement": "범위 구체 명시",
       "reason": "AI 슬롭 — 깊이 자랑",
       "taxonomyId": "ai-tells.md D-9"
+    },
+    {
+      "pattern": "멀쩡(한|하다|히|함)",
+      "replacement": "도메인 동사 (중단되지 않는다/유지된다/동작한다)",
+      "reason": "감정체·의인화 — 사람 상태 형용사로 시스템 묘사",
+      "taxonomyId": "ai-tells.md K-1"
     }
   ]
 }

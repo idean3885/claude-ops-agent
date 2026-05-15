@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.4.1] - 2026-05-15
+
+### Fixed
+- K 카테고리 (감정체·의인화) 신설, K-1 `멀쩡` forbidden 등록 (#89)
+
 ## [5.4.0] - 2026-05-14
 
 ### Fixed
