@@ -4,6 +4,12 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [Unreleased]
+
+### Added
+- usage:* 에 cwd-based aggregation 모드 추가 — worktree-per-task 환경에서 ticket 단위 분리 (#91)
+- docs/usage-cwd-aggregation.md 신규
+
 ## [5.5.0] - 2026-05-19
 
 ### Fixed

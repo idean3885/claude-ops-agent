@@ -30,9 +30,14 @@ cat "$HOME/.claude/usage-tracker/tasks.json"
 
 ### 2. 최종 사용량 데이터 조회
 
-snap과 동일 — ccusage를 조회하여 집계합니다.
+`bindings[].cwd` 가 있으면 trace jsonl 의 `cwd` 필드로 ticket 단위 합산한다 (`usage:report` Mode A 와 동일). 없으면 ccusage fallback.
 
 ```bash
+# Mode A — cwd-based (default for new tasks)
+# python3 으로 ~/.claude/projects/*/*.jsonl 순회 → assistant entry 의 cwd 필드 일치 시 합산
+# 알고리즘은 docs/usage-cwd-aggregation.md 참조
+
+# Mode B — ccusage fallback (bindings[].cwd 가 없는 legacy task 한정)
 ccusage session --since {task.startedAt as YYYYMMDD} --json --breakdown
 ```
 

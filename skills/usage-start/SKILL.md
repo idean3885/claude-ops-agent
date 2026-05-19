@@ -24,9 +24,16 @@ Start tracking token usage for a new task.
 ### 1. Detect current context
 
 ```bash
-# Get current session ID from the most recent JSONL in this project
-PROJECT_PATH=$(pwd | sed "s|$HOME/||" | sed 's|/|-|g' | sed 's|^|-|')
-SESSION_ID=$(ls -t ~/.claude/projects/${PROJECT_PATH}/*.jsonl 2>/dev/null | head -1 | xargs basename | sed 's/.jsonl//')
+# Get absolute cwd (worktree path is preserved here — required for cwd-based aggregation)
+CWD=$(pwd)
+
+# Path-encoded project key (legacy ccusage matching fallback)
+PROJECT_PATH=$(echo "$CWD" | sed "s|$HOME/||" | sed 's|/|-|g' | sed 's|^|-|')
+
+# Most recent session JSONL — Claude Code stores traces under the parent project dir,
+# not under the worktree path. cwd-based aggregation does not depend on this lookup,
+# but it is kept for ccusage fallback.
+SESSION_ID=$(ls -t ~/.claude/projects/${PROJECT_PATH}/*.jsonl 2>/dev/null | head -1 | xargs basename 2>/dev/null | sed 's/.jsonl//')
 
 # Get current git branch (if git project)
 GIT_BRANCH=$(git branch --show-current 2>/dev/null || echo "none")
@@ -60,6 +67,7 @@ Add to tasks.json:
       "tags": ["{tag1}", "{tag2}"],
       "bindings": [
         {
+          "cwd": "{CWD}",
           "project": "{PROJECT_PATH}",
           "branch": "{GIT_BRANCH}"
         }
@@ -87,5 +95,8 @@ Output:
 - Label: {label}
 - Approach: {approach}
 - Session: {SESSION_ID}
-- Binding: {project} @ {branch}
+- Binding: {CWD} ({project} @ {branch})
+
+`cwd` 가 bindings 에 포함되어야 worktree-per-task 환경에서 ticket 단위 분리가 동작한다.
+상세는 [docs/usage-cwd-aggregation.md](../../docs/usage-cwd-aggregation.md) 참조.
 ```

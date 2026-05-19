@@ -26,17 +26,27 @@ description: 모든 추적된 작업의 비교 대시보드를 표시합니다. 
 cat "$HOME/.claude/usage-tracker/tasks.json"
 ```
 
-### 2. Query ccusage
+### 2. Aggregation
+
+두 모드를 순서대로 시도한다.
+
+**Mode A — cwd-based (default).** task 의 `bindings[].cwd` 가 있으면 적용된다. worktree-per-task 환경에서 ticket 단위로 분리된 정확한 비용을 얻는다.
+
+1. `cwd → taskId` 매핑 테이블을 만든다 (`tasks[*].bindings[*].cwd`)
+2. `~/.claude/projects/*/*.jsonl` 의 모든 trace 를 순회하면서 `type == "assistant"` entry 만 추출
+3. 각 entry 의 `cwd` 필드로 매핑 테이블 조회 → 해당 taskId 의 token / cost 누적
+4. cost = 모델별 단가 × (input + output + cache_creation + cache_read)
+
+알고리즘과 sample python 은 [docs/usage-cwd-aggregation.md](../../docs/usage-cwd-aggregation.md) 참조.
+
+**Mode B — ccusage fallback.** `bindings[].cwd` 가 없는 legacy task 한정.
 
 ```bash
 ccusage session --since {earliest task startedAt as YYYYMMDD} --json --breakdown
 ```
 
-각 task의 sessions 배열에서 session ID를 매칭하여 해당 task에 속하는 비용만 집계한다.
-
-**매칭 로직:**
-- task의 bindings[].project와 ccusage의 sessionId를 매칭
-- 같은 프로젝트에 여러 작업이 있을 경우, 세션 시작 시간과 task의 sessions[].id로 구분
+- task 의 `bindings[].project` 와 ccusage 의 `sessionId` 를 매칭
+- 같은 parent project 의 여러 ticket 은 분리되지 않으므로 합산 결과만 표시 + 경고 출력
 
 ### 3. Output comparison table
 
