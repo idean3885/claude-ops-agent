@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.5.0] - 2026-05-19
+
+### Fixed
+- org-flow 에 usage 어댑터 위임 단계 추가 — 추적 단위를 이슈로 정렬 (#90)
+
 ## [5.4.3] - 2026-05-18
 
 ### Fixed
