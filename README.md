@@ -80,6 +80,20 @@ Provider별 Git Identity(user.name, user.email)를 정의하여,
 | `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘" |
 | `/dependency-map` | 의존성 맵 생성, 변경 영향도 분석 (Mermaid) | "의존성 분석해줘" |
 
+## Usage Tracking
+
+ticket 단위로 토큰·비용을 추적하는 스킬 묶음입니다. worktree-per-task 환경에서 정확히 분리됩니다.
+
+| 스킬 | 역할 |
+|------|------|
+| `/usage-start` | 추적 시작. cwd / project / branch 기록 |
+| `/usage-checkpoint` | 단계 표시 (구현 → 검증 등 구간 분리) |
+| `/usage-snap` | 현재 누적 스냅샷 |
+| `/usage-complete` | 완료 처리 + 리포트 저장 |
+| `/usage-report` | 모든 task 비교 대시보드 |
+
+worktree-per-task 환경에서 ticket 단위 분리가 동작하는 원리·알고리즘은 [docs/usage-cwd-aggregation.md](docs/usage-cwd-aggregation.md) 참조.
+
 ## 스타일 룰 (Style Rules)
 
 블로그·위키·이슈·PoC·데일리로그·동료리뷰·성과평가 등 **모든 한국어 문서**에 적용되는 작성 SSOT 를 제공합니다.
