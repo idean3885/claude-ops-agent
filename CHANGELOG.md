@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.6.0] - 2026-05-19
+
+### Fixed
+- usage:* cwd-based aggregation 모드 추가 (#91)
+
 ## [Unreleased]
 
 ### Added
