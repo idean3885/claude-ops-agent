@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.7.0] - 2026-05-20
+
+### Fixed
+- 콘텐츠 룰: 시리즈 베이스 → 단편 베이스 전환, 드래프트 단계 도입 (blog.md B6/B7, content-write·content-publish 반영)
+
 ## [5.6.0] - 2026-05-19
 
 ### Fixed
