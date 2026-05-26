@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.7.1] - 2026-05-26
+
+### Fixed
+- confidential-guard 의 cwd 추출에 명령 텍스트 fallback 추가 (#95)
+
 ## [5.7.0] - 2026-05-20
 
 ### Fixed
