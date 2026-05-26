@@ -191,8 +191,24 @@ function collectHits(t, keywords, patterns, hits) {
   }
 }
 
+/**
+ * 명령 텍스트에서 작업 디렉토리 후보를 추출한다.
+ *
+ * hookInput.cwd 가 호출자(예: 사용자 셸 또는 도구) 의 진입 디렉토리로 들어오는 경우, 명령 내부에서 워크트리·하위 레포로 cd 한 뒤 git 명령을
+ * 실행하는 패턴이면 origin remote 조회 cwd 가 어긋난다. 첫 번째 `cd <path>` 또는 `git -C <path>` 패턴을 우선 사용하고, 없으면
+ * 원본 cwd 로 fallback 한다.
+ */
+function extractCwdFromCommand(command, fallbackCwd) {
+  const cdMatch = command.match(/\bcd\s+["']?([^\s"'&;|]+)["']?/);
+  if (cdMatch) return cdMatch[1];
+  const gitCMatch = command.match(/\bgit\s+-C\s+["']?([^\s"'&;|]+)["']?/);
+  if (gitCMatch) return gitCMatch[1];
+  return fallbackCwd;
+}
+
 function resolveTarget(command, cwd, internalHosts) {
   const hosts = internalHosts || [];
+  const effectiveCwd = extractCwdFromCommand(command, cwd);
   // 1. gh 명령: GH_HOST 환경 변수 접두어 우선
   const ghHostMatch = command.match(/\bGH_HOST=([^\s'"]+)/);
   if (ghHostMatch) {
@@ -207,7 +223,7 @@ function resolveTarget(command, cwd, internalHosts) {
   if (/\bgh\s+(issue|pr|release)\b/.test(command)) {
     try {
       const defaultHost = execSync('gh config get -h github.com active_account 2>/dev/null; gh auth status 2>&1', {
-        cwd, encoding: 'utf8', timeout: 2000,
+        cwd: effectiveCwd, encoding: 'utf8', timeout: 2000,
       });
       for (const host of hosts) {
         if (defaultHost.includes(host)) {
@@ -222,7 +238,7 @@ function resolveTarget(command, cwd, internalHosts) {
   if (/\bgit\s+commit\b/.test(command)) {
     try {
       const url = execSync('git remote get-url origin 2>/dev/null', {
-        cwd, encoding: 'utf8', timeout: 2000,
+        cwd: effectiveCwd, encoding: 'utf8', timeout: 2000,
       }).trim();
       for (const host of hosts) {
         if (url.includes(host)) {
@@ -230,7 +246,7 @@ function resolveTarget(command, cwd, internalHosts) {
         }
       }
       return { scope: 'external', reason: `origin remote 외부: ${url.substring(0, 60)}` };
-    } catch { return { scope: 'external', reason: 'origin remote 조회 실패' }; }
+    } catch { return { scope: 'external', reason: `origin remote 조회 실패 (cwd=${effectiveCwd})` }; }
   }
 
   // 4. 기본값: 안전하게 external
