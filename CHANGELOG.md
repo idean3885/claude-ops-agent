@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.8.1] - 2026-05-27
+
+### Fixed
+- pre-tool-use 가드 cwd ~ expand + release.sh 옛 버전 심볼릭 보존
+
 ## [5.8.0] - 2026-05-27
 
 ### Fixed

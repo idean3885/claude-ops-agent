@@ -80,6 +80,27 @@ if [ -d "$NEW_CACHE" ] && [ ! -d "$NEW_CACHE/.git" ]; then
   echo "✔ 캐시 git 복원 ($NEW_VERSION)"
 fi
 
+# --- Step 4b: 옛 버전 디렉토리를 신버전 심볼릭 링크로 교체 ---
+# 활성 세션의 PreToolUse / SessionStart hook 은 시작 시점에 결정된 plugin root 경로 (옛 버전) 를 계속 호출한다.
+# 옛 디렉토리를 그대로 삭제하면 활성 세션에서 hook 이 ENOENT 로 실패하므로, 신버전 디렉토리를 가리키는
+# 심볼릭 링크로 교체한다. 다음 hook 호출이 자동으로 신버전 코드를 해소하여 사용자 측 reload 가 필요 없다.
+# (관련 회귀: 활성 세션 중 release 직후 'Plugin directory does not exist' 에러.)
+if [ -d "$CACHE_BASE" ]; then
+  for OLD_DIR in "$CACHE_BASE"/*/; do
+    [ -d "$OLD_DIR" ] || continue
+    OLD_NAME=$(basename "$OLD_DIR")
+    [ "$OLD_NAME" = "$NEW_VERSION" ] && continue
+    # 이미 심볼릭이면 신버전을 가리키도록 갱신, 일반 디렉토리면 제거 후 심볼릭으로 교체
+    if [ -L "$CACHE_BASE/$OLD_NAME" ]; then
+      ln -sfn "$NEW_VERSION" "$CACHE_BASE/$OLD_NAME"
+    else
+      rm -rf "$CACHE_BASE/$OLD_NAME"
+      ln -s "$NEW_VERSION" "$CACHE_BASE/$OLD_NAME"
+    fi
+    echo "✔ 옛 버전 보존: $OLD_NAME → $NEW_VERSION (활성 세션 hook 경로 유지)"
+  done
+fi
+
 # --- Step 5: 검증 ---
 INSTALLED_VERSION=$(cat "$NEW_CACHE/VERSION" 2>/dev/null || echo "MISSING")
 if [ "$INSTALLED_VERSION" = "$NEW_VERSION" ]; then

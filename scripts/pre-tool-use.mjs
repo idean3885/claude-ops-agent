@@ -197,12 +197,23 @@ function collectHits(t, keywords, patterns, hits) {
  * hookInput.cwd 가 호출자(예: 사용자 셸 또는 도구) 의 진입 디렉토리로 들어오는 경우, 명령 내부에서 워크트리·하위 레포로 cd 한 뒤 git 명령을
  * 실행하는 패턴이면 origin remote 조회 cwd 가 어긋난다. 첫 번째 `cd <path>` 또는 `git -C <path>` 패턴을 우선 사용하고, 없으면
  * 원본 cwd 로 fallback 한다.
+ *
+ * 셸 expansion 전 텍스트라 `~` 가 리터럴로 들어온다. execSync 의 cwd 로 그대로 넘기면 ENOENT 가 발생하므로
+ * `~`/`~/` 를 `$HOME` 으로 치환한다.
  */
+function expandHome(path) {
+  const home = process.env.HOME;
+  if (!home || !path) return path;
+  if (path === '~') return home;
+  if (path.startsWith('~/')) return home + path.slice(1);
+  return path;
+}
+
 function extractCwdFromCommand(command, fallbackCwd) {
   const cdMatch = command.match(/\bcd\s+["']?([^\s"'&;|]+)["']?/);
-  if (cdMatch) return cdMatch[1];
+  if (cdMatch) return expandHome(cdMatch[1]);
   const gitCMatch = command.match(/\bgit\s+-C\s+["']?([^\s"'&;|]+)["']?/);
-  if (gitCMatch) return gitCMatch[1];
+  if (gitCMatch) return expandHome(gitCMatch[1]);
   return fallbackCwd;
 }
 
