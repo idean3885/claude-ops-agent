@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.8.0] - 2026-05-27
+
+### Fixed
+- org-flow start Step 2 — 메인 클론 일괄 pull 일반 골격 (pull-mains.sh + pullMainsOnStart 매니페스트 키)
+
 ## [5.7.1] - 2026-05-26
 
 ### Fixed
