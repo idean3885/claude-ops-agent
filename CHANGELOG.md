@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.8.2] - 2026-05-27
+
+### Fixed
+- worktree-create.sh 워크트리 생성 후 post-worktree-create.d hook 디렉토리 호출
+
 ## [5.8.1] - 2026-05-27
 
 ### Fixed
