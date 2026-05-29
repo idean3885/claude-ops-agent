@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.0] - 2026-05-30
+
+### Fixed
+- content-verify opt-in PostToolUse hook 추가 (#102) — 문서 편집 후 AI 티·가독성·톤·구두점 자가 점검 유도, .devex/content-verify.json 마커 기반
+
 ## [5.9.0] - 2026-05-30
 
 ### Fixed

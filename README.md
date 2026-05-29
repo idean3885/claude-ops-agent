@@ -144,6 +144,26 @@ SessionStart hook에서 `config/style-rules/` 의 base·extensions 를 `~/.claud
 toolkit 등 외부 소비자(예: `toolkit:content-write`, `toolkit:wiki-publish`)는 이 경로를 참조합니다.
 사용자 로컬 추가 룰(`*.local.md`, `*.local.json`)은 미러 시 덮어쓰지 않습니다.
 
+### content-verify 자동 점검 hook (opt-in)
+
+문서 편집(Edit/Write/MultiEdit) 직후 content-verify 관점(AI 티·가독성·톤·구두점) 자가 점검을 유도하는 PostToolUse hook 입니다. 수기 호출 없이도 검증이 걸리게 합니다.
+
+opt-in 방식이라 프로젝트 루트에 마커 파일이 있을 때만 작동합니다. 모든 프로젝트의 모든 문서 편집마다 뜨지 않습니다.
+
+마커: `.devex/content-verify.json`
+
+```json
+{
+  "include": ["**/*.md", "resume/*.html"],
+  "exclude": ["node_modules/**", "CHANGELOG.md"],
+  "note": "프로젝트별 추가 안내 (선택, 리마인더에 함께 출력)"
+}
+```
+
+- `include` 생략 시 기본값 `["**/*.md"]`
+- em dash·AI 슬롭 표현은 hook 이 기계 검출해 즉시 플래그
+- 도메인 특화 검증(예: 이력서 ATS·PDF 동기)은 소비 레포의 프로젝트 스코프 hook 으로 별도 구성
+
 ## 설치
 
 Claude Code 플러그인 마켓플레이스에서 설치합니다.
@@ -188,9 +208,10 @@ claude-devex/
 │   ├── plugin.json                  # 플러그인 메타데이터
 │   └── marketplace.json             # 마켓플레이스 등록 정보
 ├── hooks/
-│   ├── hooks.json                   # 훅 등록 (SessionStart / PreToolUse / UserPromptSubmit / Stop)
+│   ├── hooks.json                   # 훅 등록 (SessionStart / PreToolUse / PostToolUse / UserPromptSubmit / Stop)
 │   ├── forbidden-words-prompt.sh    # UserPromptSubmit — 금지 표현 룰 주입
-│   └── forbidden-words-stop.sh      # Stop — 직전 응답 위반 검출
+│   ├── forbidden-words-stop.sh      # Stop — 직전 응답 위반 검출
+│   └── content-verify-posttool.sh   # PostToolUse — (opt-in) 콘텐츠 편집 후 content-verify 유도
 ├── config/
 │   ├── forbidden-words.json         # 표현 가드 룰 (사전 가이드 + 사후 통지)
 │   └── style-rules/
