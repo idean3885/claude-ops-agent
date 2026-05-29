@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.8.4] - 2026-05-29
+
+### Fixed
+- release.sh: update 가 제거한 옛 버전 캐시 경로를 심볼릭으로 복원 — 활성 세션 hook 유지
+
 ## [5.8.3] - 2026-05-29
 
 ### Fixed

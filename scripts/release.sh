@@ -58,17 +58,22 @@ EOF
 git push origin main 2>&1 || { echo "✘ 푸시 실패"; exit 1; }
 echo "✔ 푸시 완료"
 
+# --- 캐시 경로 + update 전 기존 버전 캡처 ---
+# PLUGIN_NAME = "{plugin}@{marketplace}" → ~/.claude/plugins/cache/{marketplace}/{plugin}/{version}/
+# release.sh를 cache 외부(임시 클론 등)에서 호출해도 실제 cache 경로를 정확히 찾도록 명시 경로를 쓴다.
+PLUGIN_PART="${PLUGIN_NAME%%@*}"
+MARKETPLACE_PART="${PLUGIN_NAME##*@}"
+CACHE_BASE="$HOME/.claude/plugins/cache/$MARKETPLACE_PART/$PLUGIN_PART"
+# `claude plugins update` 는 옛 버전 캐시 디렉토리를 제거한다. update 후에 "남은 디렉토리"를 순회하면
+# 복원 대상이 이미 사라진 뒤다. 활성 세션 hook 경로를 복원하려면 update 직전의 버전 목록을 먼저 기록한다.
+BEFORE_VERSIONS=""
+[ -d "$CACHE_BASE" ] && BEFORE_VERSIONS=$(ls -1 "$CACHE_BASE" 2>/dev/null || true)
+
 # --- Step 3: 마켓플레이스 업데이트 ---
 claude plugins update "$PLUGIN_NAME" 2>&1 || { echo "✘ 마켓플레이스 업데이트 실패"; exit 1; }
 echo "✔ 마켓플레이스 업데이트 완료"
 
 # --- Step 4: 새 캐시 디렉토리 git 복원 ---
-# PLUGIN_NAME = "{plugin}@{marketplace}" → ~/.claude/plugins/cache/{marketplace}/{plugin}/{version}/
-# release.sh를 cache 외부(임시 클론 등)에서 호출해도 실제 마켓플레이스 cache 경로를 정확히 찾도록
-# ROOT_DIR 상대 경로 대신 명시 경로를 사용한다.
-PLUGIN_PART="${PLUGIN_NAME%%@*}"
-MARKETPLACE_PART="${PLUGIN_NAME##*@}"
-CACHE_BASE="$HOME/.claude/plugins/cache/$MARKETPLACE_PART/$PLUGIN_PART"
 NEW_CACHE="$CACHE_BASE/$NEW_VERSION"
 
 if [ -d "$NEW_CACHE" ] && [ ! -d "$NEW_CACHE/.git" ]; then
@@ -80,26 +85,23 @@ if [ -d "$NEW_CACHE" ] && [ ! -d "$NEW_CACHE/.git" ]; then
   echo "✔ 캐시 git 복원 ($NEW_VERSION)"
 fi
 
-# --- Step 4b: 옛 버전 디렉토리를 신버전 심볼릭 링크로 교체 ---
-# 활성 세션의 PreToolUse / SessionStart hook 은 시작 시점에 결정된 plugin root 경로 (옛 버전) 를 계속 호출한다.
-# 옛 디렉토리를 그대로 삭제하면 활성 세션에서 hook 이 ENOENT 로 실패하므로, 신버전 디렉토리를 가리키는
-# 심볼릭 링크로 교체한다. 다음 hook 호출이 자동으로 신버전 코드를 해소하여 사용자 측 reload 가 필요 없다.
+# --- Step 4b: update 가 제거한 옛 버전 경로를 신버전 심볼릭으로 복원 ---
+# 활성 세션의 PreToolUse / SessionStart hook 은 시작 시점에 결정된 plugin root 경로(옛 버전)를 계속 호출한다.
+# update 가 옛 버전 디렉토리를 제거하면 그 경로가 ENOENT 가 되어 활성 세션 hook 이 실패한다.
+# 그래서 update 직전 캡처한 BEFORE_VERSIONS 를 기준으로, 사라진 옛 버전 이름마다 신버전을 가리키는
+# 심볼릭을 만들어 활성 세션 hook 경로를 유지한다. 다음 hook 호출이 신버전 코드를 해소하므로 reload 가 필요 없다.
 # (관련 회귀: 활성 세션 중 release 직후 'Plugin directory does not exist' 에러.)
-if [ -d "$CACHE_BASE" ]; then
-  for OLD_DIR in "$CACHE_BASE"/*/; do
-    [ -d "$OLD_DIR" ] || continue
-    OLD_NAME=$(basename "$OLD_DIR")
-    [ "$OLD_NAME" = "$NEW_VERSION" ] && continue
-    # 이미 심볼릭이면 신버전을 가리키도록 갱신, 일반 디렉토리면 제거 후 심볼릭으로 교체
-    if [ -L "$CACHE_BASE/$OLD_NAME" ]; then
-      ln -sfn "$NEW_VERSION" "$CACHE_BASE/$OLD_NAME"
-    else
-      rm -rf "$CACHE_BASE/$OLD_NAME"
-      ln -s "$NEW_VERSION" "$CACHE_BASE/$OLD_NAME"
-    fi
-    echo "✔ 옛 버전 보존: $OLD_NAME → $NEW_VERSION (활성 세션 hook 경로 유지)"
-  done
-fi
+RESTORED=0
+for OLD_NAME in $BEFORE_VERSIONS; do
+  [ "$OLD_NAME" = "$NEW_VERSION" ] && continue
+  TARGET="$CACHE_BASE/$OLD_NAME"
+  # update 가 옛 버전을 실제 디렉토리로 그대로 남겨 두었다면(누적형) 건드리지 않는다.
+  [ -e "$TARGET" ] && [ ! -L "$TARGET" ] && continue
+  ln -sfn "$NEW_VERSION" "$TARGET"
+  echo "✔ 옛 버전 경로 복원: $OLD_NAME → $NEW_VERSION (활성 세션 hook 유지)"
+  RESTORED=$((RESTORED + 1))
+done
+[ "$RESTORED" -eq 0 ] && echo "ℹ 복원할 옛 버전 경로 없음"
 
 # --- Step 5: 검증 ---
 INSTALLED_VERSION=$(cat "$NEW_CACHE/VERSION" 2>/dev/null || echo "MISSING")
