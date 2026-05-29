@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.9.0] - 2026-05-30
+
+### Fixed
+- 글로벌 ~/.claude/CLAUDE.md 조립 엔진 — SessionStart 가 ~/.claude/global-md/ 조각을 마커 조립 (idempotent, 수기 파일 .bak 백업). 퍼블릭 base 조각 분리, 외부 소비자 NN-*.md 규약 (#101)
+
 ## [5.8.5] - 2026-05-30
 
 ### Fixed

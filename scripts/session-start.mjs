@@ -258,6 +258,72 @@ function mirrorStyleRules() {
   } catch { /* non-critical */ }
 }
 
+// --- Assemble global ~/.claude/CLAUDE.md from managed fragments ---
+// 분리 조립: devex 가 퍼블릭 base 조각을 ~/.claude/global-md/00-devex-base.md 로 기록하고,
+// 외부 소비자(사내 어댑터 등)는 NN-*.md 규약으로 같은 디렉토리에 자기 조각을 둔다.
+// 조각들을 파일명 순으로 마커와 함께 연결 + 로컬 오버레이(CLAUDE.local.md)를 더해
+// ~/.claude/CLAUDE.md 로 조립한다. 결과가 기존과 동일하면 기록을 생략한다 (idempotent).
+// 기존 CLAUDE.md 가 이 엔진 생성물(마커 없음)이 아니면 .bak 로 1회 백업 후 전환한다.
+const GLOBAL_MD_MARKER = '<!-- devex:global-md assembled — 직접 편집 금지. 원천은 각 조각 -->';
+
+function assembleGlobalClaudeMd() {
+  try {
+    const claudeHome = join(homedir(), '.claude');
+    const fragDir = join(claudeHome, 'global-md');
+    execSync(`mkdir -p "${fragDir}"`, { timeout: 1000, stdio: 'ignore' });
+
+    // devex base 조각 기록 (플러그인 소유, 갱신 시 덮어씀)
+    const baseSrc = join(pluginRoot, 'config', 'global-md', 'base.md');
+    if (existsSync(baseSrc)) {
+      const baseDst = join(fragDir, '00-devex-base.md');
+      const baseContent = readFileSync(baseSrc, 'utf8');
+      if (!existsSync(baseDst) || readFileSync(baseDst, 'utf8') !== baseContent) {
+        writeFileSync(baseDst, baseContent);
+      }
+    }
+
+    // 조각 디렉토리에서 *.md 를 파일명 순으로 수집 (00-devex-base, NN-*, ...)
+    const fragFiles = readdirSync(fragDir).filter((f) => f.endsWith('.md')).sort();
+    if (fragFiles.length === 0) return;
+
+    const sections = [GLOBAL_MD_MARKER, ''];
+    for (const f of fragFiles) {
+      const content = readFileSync(join(fragDir, f), 'utf8').trim();
+      if (!content) continue;
+      sections.push(`<!-- BEGIN ${f} -->`);
+      sections.push(content);
+      sections.push(`<!-- END ${f} -->`);
+      sections.push('');
+    }
+
+    // 로컬 오버레이 (사용자 소유, 덮어쓰지 않음, 최하단)
+    const localOverlay = join(claudeHome, 'CLAUDE.local.md');
+    if (existsSync(localOverlay)) {
+      const content = readFileSync(localOverlay, 'utf8').trim();
+      if (content) {
+        sections.push('<!-- BEGIN CLAUDE.local.md (사용자 로컬) -->');
+        sections.push(content);
+        sections.push('<!-- END CLAUDE.local.md -->');
+        sections.push('');
+      }
+    }
+
+    const assembled = sections.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+
+    const target = join(claudeHome, 'CLAUDE.md');
+    if (existsSync(target)) {
+      const current = readFileSync(target, 'utf8');
+      if (current === assembled) return; // idempotent — 변경 없음
+      // 생성 마커가 없으면 수기 파일 — .bak 로 1회 백업 (덮어쓰지 않음)
+      if (!current.startsWith(GLOBAL_MD_MARKER)) {
+        const bak = join(claudeHome, 'CLAUDE.md.bak');
+        if (!existsSync(bak)) writeFileSync(bak, current);
+      }
+    }
+    writeFileSync(target, assembled);
+  } catch { /* non-critical */ }
+}
+
 // --- Sync marketplace metadata to latest remote (prevents stale version path) ---
 function syncMarketplace() {
   try {
@@ -290,6 +356,7 @@ syncMarketplace();
 syncPluginVersion();
 ensurePluginGitIdentity();
 mirrorStyleRules();
+assembleGlobalClaudeMd();
 migrateOmcStateToDevex();
 
 const host = detectProvider();
