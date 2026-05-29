@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.8.3] - 2026-05-29
+
+### Fixed
+- forbidden-words: 저속어 '땜빵/땜방' 금지 룰 추가 (T8)
+
 ## [5.8.2] - 2026-05-27
 
 ### Fixed

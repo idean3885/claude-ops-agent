@@ -8,6 +8,12 @@
       "taxonomyId": "tone.md T8"
     },
     {
+      "pattern": "땜빵|땜방",
+      "replacement": "표면 수정/임시 회피/근본 미해결",
+      "reason": "비격식·저속한 어조 — 임시 조치를 가리키는 속어",
+      "taxonomyId": "tone.md T8"
+    },
+    {
       "pattern": "고수준|저수준|고차원|저차원적",
       "replacement": "기능을 직접 기술",
       "reason": "AI 슬롭 — 과시성 수식어",
