@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.8.5] - 2026-05-30
+
+### Fixed
+- forbidden-words: '응답 차단' 표현을 사전 가이드 + 사후 통지 실제 동작에 맞게 정합 — prompt hook 에 출력 직전 자가 대조 의무 한 줄 주입 (#100)
+
 ## [5.8.4] - 2026-05-29
 
 ### Fixed

@@ -124,13 +124,15 @@ config/style-rules/
 
 `base/ai-tells.md`의 10대 카테고리 골격(A 번역투 / B 영어 인용 / C 구조적 AI 패턴 / D AI 관용구 / E 리듬 균일성 / F 수식·중복 / G Hedging / H 접속사 / I 형식명사 / J 시각 장식)과 심각도(S1/S2/S3) 체계는 [`epoko77-ai/im-not-ai`](https://github.com/epoko77-ai/im-not-ai) (MIT) 의 한국어 humanize 스킬에서 차용했습니다. 처방·예시·forbidden-words hook 매핑은 한국어 기술 블로그 맥락으로 자체 작성한 파생물입니다.
 
-### 표현 가드 (응답 차단 hook)
+### 표현 가드 hook (사전 가이드 + 사후 통지)
 
-답변에 등장하는 금지 표현(과장형 형용사·보고서체·근거 없는 단언 등)을 감지하여 다음 턴 사용자에게 알립니다. UserPromptSubmit hook이 룰을 system-reminder로 주입하고, Stop hook이 직전 응답을 정규식 매칭하여 위반을 기록합니다. `base/ai-tells.md`의 S1 패턴 중 즉시 차단 가치가 있는 룰이 등록되어 있습니다.
+금지 표현(과장형 형용사·보고서체·근거 없는 단언 등)을 응답 출력 직전에 막거나 재작성하지는 않습니다. 대신 두 단계로 동작합니다. UserPromptSubmit hook이 금지 표현 룰을 system-reminder로 사전 주입하고, Stop hook이 직전 응답을 정규식 매칭해 위반을 기록한 뒤 다음 턴 사용자에게 통지합니다.
+
+따라서 출력 직전 패턴 자가 대조는 어시스턴트의 의무이며, hook은 이를 돕는 사전 가이드와 사후 통지 역할입니다. `base/ai-tells.md`의 S1 패턴 중 즉시 교정 가치가 있는 룰이 등록되어 있습니다.
 
 | 위치 | 역할 |
 |------|------|
-| [`config/forbidden-words.json`](config/forbidden-words.json) | 기본 룰 (응답 hook용 패턴) |
+| [`config/forbidden-words.json`](config/forbidden-words.json) | 기본 룰 (표현 가드 패턴) |
 | `~/.claude/forbidden-words.local.json` | 사용자 추가 룰 (선택, 머지됨) |
 
 룰 추가는 JSON에 `{pattern, replacement, reason}` 객체 하나만 추가하면 즉시 반영됩니다. 패턴은 Python 정규식 문법.
@@ -190,7 +192,7 @@ claude-devex/
 │   ├── forbidden-words-prompt.sh    # UserPromptSubmit — 금지 표현 룰 주입
 │   └── forbidden-words-stop.sh      # Stop — 직전 응답 위반 검출
 ├── config/
-│   ├── forbidden-words.json         # 응답 차단 hook 룰
+│   ├── forbidden-words.json         # 표현 가드 룰 (사전 가이드 + 사후 통지)
 │   └── style-rules/
 │       ├── base/                    # 모든 문서 공통 SSOT
 │       │   ├── ai-tells.md          # AI 티 분류 (im-not-ai 차용, MIT)

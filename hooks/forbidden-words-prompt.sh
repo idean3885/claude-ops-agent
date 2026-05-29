@@ -34,7 +34,10 @@ if os.path.exists(local_path):
 
 merged = list(plugin_rules) + list(local_rules)
 
-lines = ["[금지 표현 강제 — 어시스턴트 응답에 포함 금지]"]
+lines = [
+    "[금지 표현 강제 — 어시스턴트 응답에 포함 금지]",
+    "  ※ 이 hook은 출력을 막거나 재작성하지 않는다. 출력 직전 패턴 자가 대조는 어시스턴트의 의무다.",
+]
 for rule in merged:
     pat = rule.get("pattern", "")
     rep = rule.get("replacement", "")
@@ -48,7 +51,7 @@ if os.path.exists(pending_path):
         lines.append("")
         lines.append("[직전 응답에서 검출된 위반]")
         lines.append(violations)
-        lines.append("→ 다음 응답부터 금지 표현 사용 금지. 사용자에게 사과 1회만, 반복 금지.")
+        lines.append("→ 다음 응답 작성 시 위 패턴을 먼저 자가 점검하라. 사용자에게 사과 1회만, 반복 금지.")
     os.remove(pending_path)
 
 print("\n".join(lines))
