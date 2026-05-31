@@ -134,6 +134,14 @@ for repo_name, repo_info in repos.items():
             continue
 
     try:
+        # bare clone(특히 clone-on-demand)은 remote.origin.fetch refspec을 설정하지 않아
+        # refs/remotes/origin/* 추적 ref가 생성되지 않는다. 그러면 아래 worktree add의
+        # start point origin/{base}가 invalid reference로 실패한다.
+        # 신규 clone·기존 bare·finish 후 재생성 경로를 모두 커버하도록 fetch 직전에 idempotent하게 보장한다.
+        subprocess.run(
+            ["git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+            cwd=git_dir, capture_output=True
+        )
         subprocess.run(["git", "fetch", "origin"], cwd=git_dir, capture_output=True, check=True)
 
         if repo_name == primary_repo:

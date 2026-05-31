@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.5] - 2026-05-31
+
+### Fixed
+- worktree-create: clone-on-demand bare clone 의 원격 추적 ref 누락으로 워크트리 생성이 실패하던 문제 수정 — fetch 직전에 추적 참조를 보장해 origin/{base} 해석 실패를 막는다 (#93, #94·#99 통합)
+
 ## [5.10.4] - 2026-05-31
 
 ### Fixed
