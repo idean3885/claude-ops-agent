@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.2] - 2026-05-31
+
+### Fixed
+- README·design-philosophy 저자 톤 정합: 본문 합쇼체 통일 + em dash 제거 (tone.md T1 / readability.md K2 준수). About 설명 em dash 도 제거 (#106)
+
 ## [5.10.1] - 2026-05-31
 
 ### Fixed
