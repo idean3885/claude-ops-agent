@@ -50,22 +50,16 @@ provider는 SessionStart 훅에서 git remote host 기반으로 자동 감지됩
 
 | 스킬 | 역할 | 트리거 |
 |------|------|--------|
-| `/flow` | 이슈 플로우 전체 오케스트레이션 | "flow", "플로우", 자연어 수정 요청 |
-| `/issue` | 이슈 생애주기 (create/start/complete) | "이슈", "issue" |
-| `/spec` | 요구사항 분석, 아키텍처 설계 | "spec", "명세" |
-| `/commit` | 커밋 리뷰 + 커밋 | "commit", "커밋" |
-| `/pr` | PR 생성 + 머지 | "PR", "풀리퀘" |
+| `/flow` | 이슈 플로우 단일 진입점 (issue → spec → 구현 → commit → pr) | "flow", "플로우", 자연어 수정 요청 |
+| `/org-flow` | 멀티레포 오케스트레이션 + 사내/퍼블릭 provider 분기 | "org-flow", "멀티레포" |
 | `/setup` | provider 등록, 상태 확인, overlay 설정 | "setup", "설정" |
+| `/content-write` | 콘텐츠 작성 엔진 (성격 파악, 시리즈 구조, 인라인 검증) | "콘텐츠 작성", "글 작성" |
+| `/content-verify` | 마크다운 검증 (AI 티·가독성·톤·구두점) | "검증", "가독성 검사" |
+| `/content-publish` | 블로그 발행 (Jekyll 변환) | "블로그 발행", "publish" |
+| `/cross-verify` | 교차 검증 (의사결정·설계·문서·구현 4축) | "교차 검증", "크로스 체크" |
+| `/usage-*` | ticket 단위 토큰·비용 추적 (start/checkpoint/snap/complete/report) | "사용량 추적", "스냅샷" |
 
-### Thinking 스킬
-
-의사결정과 검증을 구조화하는 도구. 이슈 플로우와 독립적으로 사용하거나 연계할 수 있다.
-
-| 스킬 | 역할 | 자연어 트리거 예시 |
-|------|------|-------------------|
-| `/decision-record` | 아키텍처 의사결정 기록 (MADR 기반) | "이 결정 기록해줘", "ADR 작성" |
-| `/verify` | 3-Layer 정합성 검증 (Philosophy → Strategy → Tactics) | "이 설계 검증해줘", "정합성 확인" |
-| `/dependency-map` | 의존성 맵 생성 및 변경 영향도 분석 | "의존성 분석해줘", "영향도 파악" |
+issue · spec · commit · pr 은 별도 스킬이 아니라 `/flow` 내부의 단계 가이드(`skills/flow/guides/`)로 통합되어 있다. 단계 진입 시에만 로딩된다.
 
 ## 핵심 규칙
 
@@ -96,7 +90,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 ## 커밋 컨벤션
 
-`/commit` 스킬 호출 시 컨벤션이 자동 적용됩니다.
+`/flow` 의 commit 단계에서 커밋 컨벤션이 자동 적용됩니다.
 
 타입: `init`, `feat`, `fix`, `docs`, `refactor`, `chore`
 
@@ -183,12 +177,12 @@ main ────────────────●─────
 
 - `develop` 브랜치 없음 (소규모 도구 레포)
 - PR 타겟: `main` 직접
-- 이슈 플로우 동일 적용: `/issue` → `/spec` → `/implement` → `/commit` → `/pr`
+- 이슈 플로우 동일 적용: `/flow` 단일 진입 (issue → spec → 구현 → commit → pr)
 
 ### 변경 시 검증 체크리스트
 
 - [ ] **버전 범프**: VERSION, CHANGELOG.md, plugin.json, marketplace.json 4곳 모두 갱신 확인
-- [ ] 스킬 파일 존재 확인 (flow, issue, spec, implement, commit, pr, setup + thinking 3종)
+- [ ] 스킬 파일 존재 확인 (flow, org-flow, setup, content-write/verify/publish, cross-verify, usage-* + flow guides: issue/spec/commit/pr)
 - [ ] README.md Mermaid 다이어그램 렌더링 확인
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인

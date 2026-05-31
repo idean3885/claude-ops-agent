@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.4] - 2026-05-31
+
+### Fixed
+- 프로젝트 CLAUDE.md 스킬 인벤토리 정합화: 실재하지 않는 thinking 스킬(decision-record·verify·dependency-map) 표기 제거, 스킬 목록을 flow·org-flow·setup·content-*·cross-verify·usage-* 로 정정, issue·spec·commit·pr 은 flow 내부 가이드로 명시 (#105)
+
 ## [5.10.3] - 2026-05-31
 
 ### Fixed
