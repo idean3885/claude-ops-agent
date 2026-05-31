@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.1] - 2026-05-31
+
+### Fixed
+- README 를 통합 개발 어시스턴트 관점으로 재구성 + docs/design-philosophy.md 신설 — 이슈 플로우·콘텐츠 작성·교차 검증·사상 주입 하네스 3축으로 묶고 누락 스킬 편입, 실재 안 하는 thinking 표기 제거 (#104). CLAUDE.md 정합화는 #105
+
 ## [5.10.0] - 2026-05-30
 
 ### Fixed
