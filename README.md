@@ -109,7 +109,7 @@ config/style-rules/
 │   ├── ai-tells.md       # AI 티 분류 (A~J 10대 카테고리, S1/S2/S3)
 │   ├── readability.md    # 구조 가독성 (P/H/L/C/V/K/B)
 │   ├── tone.md           # 저자 톤 (T1~T13)
-│   └── punctuation.md    # 한국어 구두점 (PN1~PN5)
+│   └── punctuation.md    # 한국어 구두점 (PN1~PN6)
 └── extensions/
     ├── blog.md  wiki.md  poc.md  info.md  knowledge.md
     └── issue.md  dailylog.md  peer-review.md  work-review.md
