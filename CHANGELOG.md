@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.6] - 2026-06-05
+
+### Fixed
+- feat(org-flow): start 시 state에 startedAt(tz-aware ISO) 기록 — usage 집계 기준점 확보 및 finish 단계 tz-naive 혼합 비교 방지
+
 ## [5.10.5] - 2026-05-31
 
 ### Fixed

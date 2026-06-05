@@ -60,6 +60,15 @@ with open(manifest_path) as f:
 ticket = state["ticket"]
 primary_repo = state["primaryRepo"]
 
+state_dirty = False
+
+# startedAt: usage 집계의 기준점. start 시점에 1회 기록한다.
+# tz-aware ISO 8601 로 남겨야 finish 단계 usage 위임에서 tz-naive 혼합 비교가 발생하지 않는다.
+if not state.get("startedAt"):
+    from datetime import datetime
+    state["startedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    state_dirty = True
+
 # repos: 상태 파일 우선, 없으면 매니페스트에서 도메인으로 조회
 if "repos" in state and state["repos"]:
     repos = state["repos"]
@@ -80,6 +89,9 @@ else:
             "worktree": f"{wt_root}/{name}/feature-{ticket}"
         }
     state["repos"] = repos
+    state_dirty = True
+
+if state_dirty:
     with open("$STATE_FILE", "w") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 

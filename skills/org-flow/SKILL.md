@@ -247,6 +247,7 @@ clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성. vcs.xml
   "taskId": "...",
   "domain": "user",
   "primaryRepo": "frontend",
+  "startedAt": "2026-01-01T09:00:00+09:00",
   "repos": {
     "frontend": {
       "branch": "feature/123",
@@ -258,6 +259,8 @@ clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성. vcs.xml
   "currentStage": ""
 }
 ```
+
+- `startedAt` 은 `scripts/worktree-create.sh` 가 start 시점에 tz-aware ISO 8601 로 1회 자동 기록한다(없을 때만). usage 어댑터의 집계 기준점이며, tz 를 포함하므로 finish 단계에서 tz-naive 혼합 비교가 발생하지 않는다.
 
 **Step 8: provider 가드 clear**
 
