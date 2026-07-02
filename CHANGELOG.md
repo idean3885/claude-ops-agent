@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.9] - 2026-07-02
+
+### Fixed
+- fix: release.sh 를 post-merge-sync.sh 로 축소 — git add -A + main 직접 push 제거, 버전 범프는 PR 안에서 처리 (#111)
+
 ## [5.10.8] - 2026-07-02
 
 ### Fixed
