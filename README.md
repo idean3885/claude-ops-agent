@@ -209,11 +209,16 @@ claude plugins add devex@claude-devex --marketplace claude-devex
 
 ### 로컬 개발
 
-캐시 디렉토리에서 직접 수정 후 커밋·푸시합니다. 다음 세션 시작 시 버전 동기화가 자동 수행됩니다.
+변경은 워크트리에서 작업하고 PR 로 머지합니다. main 직접 push 는 하지 않습니다.
 
 ```bash
-cd ~/.claude/plugins/cache/claude-devex/devex/{version}/
-# 수정 → git add → git commit → git push origin master:main
+# 1. 워크트리 분기 (origin/main 기준)
+git worktree add ../claude-devex-{타입}-{번호} -b {타입}/{번호} origin/main
+# 2. 수정 + 버전 범프 (VERSION·CHANGELOG·plugin.json·marketplace.json 동시 갱신)
+./scripts/bump-version.sh <version> "<변경 설명>"
+# 3. 커밋 → 브랜치 push → PR → 웹 머지
+# 4. 머지 후 로컬 캐시 동기 (마켓플레이스 update + 활성 세션 경로 복원)
+./scripts/post-merge-sync.sh
 ```
 
 ## 파일 구조
@@ -243,7 +248,7 @@ claude-devex/
 ├── scripts/
 │   ├── session-start.mjs            # provider 감지, Git Identity, 버전·SSOT 동기화, md 조립
 │   ├── pre-tool-use.mjs             # 대외비 키워드 하드 차단
-│   ├── bump-version.sh / release.sh # 버전 범프 / 릴리즈
+│   ├── bump-version.sh / post-merge-sync.sh # 버전 범프 / 머지 후 캐시 동기
 │   └── worktree-create.sh / -cleanup.sh  # 워크트리 분기/정리
 ├── providers/
 │   ├── PROVIDER.md                  # 커스텀 provider 템플릿
