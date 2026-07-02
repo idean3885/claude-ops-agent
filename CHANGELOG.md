@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.8] - 2026-07-02
+
+### Fixed
+- docs: README 를 프로젝트 소개 중심으로 재정돈 + org-flow 오케스트레이션 노출, 3축 명칭 정리 (#109)
+
 ## [5.10.7] - 2026-07-02
 
 ### Fixed
