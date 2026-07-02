@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.7] - 2026-07-02
+
+### Fixed
+- fix(content-publish): 대상 레포 CLAUDE.md 필수 푸터(AI 협업 표기) 자동 삽입 규칙 + Phase 6 확인 항목 추가 — 발행 경로 무관 누락 방지 (#108)
+
 ## [5.10.6] - 2026-06-05
 
 ### Fixed
