@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.10] - 2026-07-02
+
+### Fixed
+- docs(style-rules): 저자 톤 T14 신설 (방어적·변명조 프레이밍·과장 금지)
+
 ## [5.10.9] - 2026-07-02
 
 ### Fixed

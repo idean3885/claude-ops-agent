@@ -6,7 +6,7 @@
 > Nielsen Norman Group 웹 가독성 연구, WCAG CJK 타이포그래피 권장사항 종합.
 
 > **분리 구조**: 본 파일은 구조 가독성(P/H/L/C/V/K/B)만 다룬다.
-> - 저자 톤(T1~T13) → [`tone.md`](./tone.md)
+> - 저자 톤(T1~T14) → [`tone.md`](./tone.md)
 > - 한국어 구두점(PN1~PN6) → [`punctuation.md`](./punctuation.md)
 > - AI 티 분류(A~J) → [`ai-tells.md`](./ai-tells.md)
 > - 문서 유형별 적용 강도 → [`../extensions/{유형}.md`](../extensions/)
@@ -357,6 +357,6 @@ A~J 항목은 `ai-tells.md` 분류 SSOT를 본다.
 | K2 | 종결 통일 | 가능 | 합쇼체로 통일되었는가? |
 | K3 | 외래어 병기 | 부분 | 기술 용어 첫 등장에 원어가 병기되었는가? |
 | B1 | Blockquote 개행 | 가능 | prompt blockquote에서 문장 종결 후 `<br>`이 있는가? |
-| T1~T13 | 저자 톤 | — | `tone.md` 참조 |
+| T1~T14 | 저자 톤 | — | `tone.md` 참조 |
 | PN1~PN6 | 한국어 구두점 | — | `punctuation.md` 참조 |
 | A~J | AI 티 분류 | — | `ai-tells.md` 참조 |
