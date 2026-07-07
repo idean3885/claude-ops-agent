@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.11] - 2026-07-07
+
+### Fixed
+- docs: README 강한 정리 (279→110줄, 가치 우선 재구성) + hook·설정 상세를 docs/hooks-config.md 로 이전 (#116)
+
 ## [5.10.10] - 2026-07-02
 
 ### Fixed
