@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.13] - 2026-07-07
+
+### Fixed
+- docs: README 포지셔닝 재정의 — 기능 나열에서 개인 AI 작업 비서로, 역량 중심 재구성 (#121)
+
 ## [5.10.12] - 2026-07-07
 
 ### Fixed
