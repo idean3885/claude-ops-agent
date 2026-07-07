@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.15] - 2026-07-07
+
+### Fixed
+- docs: README org-flow 에 멀티레포 실사용 예시 추가 (인증서 자동 갱신, #125)
+
 ## [5.10.14] - 2026-07-07
 
 ### Fixed

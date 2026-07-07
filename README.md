@@ -50,6 +50,16 @@ graph LR
 - **org-flow**: 여러 레포에 걸친 변경에서 통일 브랜치명·레포별 provider·Git Identity·워크트리를 한 흐름으로 맞춥니다.
 - **provider 시스템**: 이슈 트래커별 동작을 추상화하고 SessionStart 훅이 git remote host 로 자동 감지합니다. provider별 Git Identity 를 커밋 전 자동 검증·수정해, 글로벌 git config 에 의존한 계정 오류를 막습니다.
 
+예를 들어 인증서 자동 갱신 기능은 서로 다른 두 도메인 서비스에 걸칩니다.
+
+```
+acme/                        # org = 현재 디렉토리
+├── cert-service/            # 인증서 발급·갱신 도메인
+└── notification-service/    # 갱신 결과 알림 도메인
+```
+
+이슈 #42 "만료 임박 인증서 자동 갱신"에서 cert-service 는 갱신 스케줄러와 발급 로직을, notification-service 는 갱신 완료·실패 알림을 맡습니다. `/org-flow "#42 인증서 자동 갱신"` 한 번이면 두 레포에 통일 브랜치(`feature/42`)로 워크트리를 격리 생성하고 레포별 provider·Git Identity 를 자동 분기한 뒤, 각 레포에서 `flow`(issue → spec → 구현 → commit → PR)를 병렬로 진행합니다.
+
 ## 2. 콘텐츠 작성·검증
 
 블로그·위키·이슈·PoC 등 한국어 문서를 작성하고 검증하는 흐름입니다.
