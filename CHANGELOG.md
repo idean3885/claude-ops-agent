@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.13] - 2026-07-07
+
+### Fixed
+- docs: README 상단 인용구 중복 제거 (#119)
+
 ## [5.10.12] - 2026-07-07
 
 ### Fixed
