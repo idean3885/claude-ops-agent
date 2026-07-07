@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "project": "my-project",
+  "description": "Direction profile. 소비 프로젝트가 자기 스코프에 복사해 커스텀한다. advisor 엔진은 이 스키마만 알고, 실제 방향·데이터는 소비 프로젝트가 채운다. project=프로파일 매칭 키(여러 개일 때 현재 프로젝트와 매칭). direction·lenses는 필수, references·notesRef·para는 선택(PARA 미사용 시 para 생략).",
+  "direction": {
+    "targetRoles": [
+      "성장하려는 역할/방향 (예: 대규모 트래픽 서비스 백엔드)"
+    ],
+    "growthAxes": [
+      "성장 축 (예: 설계 판단 깊이)",
+      "성장 축 (예: 운영 깊이)"
+    ],
+    "notesRef": "방향을 자세히 적은 소비 프로젝트 파일 경로 (예: profile/context.md). 비워도 됨"
+  },
+  "lenses": [
+    {
+      "name": "senior-engineer",
+      "focus": "설계 판단·트레이드오프·해당 도메인 문해력. 제대로 된 설계면 당연한 결과를 성과로 포장했는지, 순진한 모델이 드러나는지."
+    },
+    {
+      "name": "interviewer",
+      "focus": "이 서술이 부르는 질문·방어 가능성. 근거(코드·기록)로 뒷받침되지 않는 단정·함정이 있는지."
+    },
+    {
+      "name": "reviewer",
+      "focus": "스캔 가독성·타깃 적합·첫인상. 신호 대 노이즈, 방향과 무관한 내용으로 초점이 흐려지는지."
+    }
+  ],
+  "references": [
+    ".claude/CLAUDE.md"
+  ],
+  "para": {
+    "root": "knowledge/",
+    "buckets": {
+      "projects": "projects/",
+      "areas": "areas/",
+      "resources": "resources/",
+      "archives": "archives/"
+    }
+  }
+}
