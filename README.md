@@ -43,7 +43,7 @@ graph LR
 
 | 스킬 | 역할 | 트리거 |
 |------|------|--------|
-| `/flow` | 이슈 플로우 단일 진입점 (issue → spec → 구현 → commit → pr) | "flow", "플로우", 자연어 수정 요청 |
+| `/flow` | 이슈 플로우 단일 진입점 (위 도식) | "flow", "플로우", 자연어 수정 요청 |
 | `/org-flow` | 멀티레포 오케스트레이션 + 사내/퍼블릭 provider 분기 | "org-flow", "멀티레포" |
 | `/setup` | provider 등록, 상태 확인, overlay 설정 | "setup", "설정" |
 
@@ -58,7 +58,7 @@ acme/                        # org = 현재 디렉토리
 └── notification-service/    # 갱신 결과 알림 도메인
 ```
 
-이슈 #42 "만료 임박 인증서 자동 갱신"에서 cert-service 는 갱신 스케줄러와 발급 로직을, notification-service 는 갱신 완료·실패 알림을 맡습니다. `/org-flow "#42 인증서 자동 갱신"` 한 번이면 두 레포에 통일 브랜치(`feature/42`)로 워크트리를 격리 생성하고 레포별 provider·Git Identity 를 자동 분기한 뒤, 각 레포에서 `flow`(issue → spec → 구현 → commit → PR)를 병렬로 진행합니다.
+이슈 #42 "만료 임박 인증서 자동 갱신"에서 cert-service 는 갱신 스케줄러와 발급 로직을, notification-service 는 갱신 완료·실패 알림을 맡습니다. `/org-flow "#42 인증서 자동 갱신"` 한 번이면 두 레포에 통일 브랜치(`feature/42`)로 워크트리를 격리 생성하고 레포별 provider·Git Identity 를 자동 분기한 뒤, 각 레포에서 `flow` 를 병렬로 진행합니다.
 
 ## 2. 콘텐츠 작성·검증
 
@@ -72,7 +72,7 @@ acme/                        # org = 현재 디렉토리
 | `/cross-verify` | 교차 검증 (의사결정·설계·문서·구현 4축) | "교차 검증" |
 
 - **cross-verify**: 자동화가 아니라 개발자가 의도적으로 멈추고 확인하는 행위를 구조화한 것입니다. 도구가 측정 못 하는 의미적 판단에 집중합니다.
-- **스타일 룰(SSOT)**: 모든 한국어 문서에 적용되는 작성 단일 출처입니다. base(공통) + extensions(유형별) 구조로, SessionStart hook 이 `~/.claude/devex/style-rules/` 로 미러링해 외부 소비자가 참조합니다. AI 티 분류는 [`epoko77-ai/im-not-ai`](https://github.com/epoko77-ai/im-not-ai)(MIT) 의 골격을 차용했습니다.
+- **스타일 룰(SSOT)**: 모든 한국어 문서에 적용되는 작성 단일 출처입니다. base(공통) + extensions(유형별) 구조로, SessionStart hook 이 `~/.claude/devex/style-rules/` 로 미러링해 외부 소비자가 참조합니다.
 
 ```
 config/style-rules/
@@ -82,7 +82,7 @@ config/style-rules/
 
 ## 3. 규칙 자동 적용
 
-작성 원칙과 워크플로우 규칙을 세 시점에 겁니다. 시점마다 막는 실수가 다릅니다. 설계 배경은 [docs/design-philosophy.md](docs/design-philosophy.md) 를 참조하세요.
+작성 원칙과 워크플로우 규칙을 세 시점에 겁니다. 시점마다 막는 실수가 다릅니다.
 
 | hook | 시점 | 동작 |
 |------|------|------|

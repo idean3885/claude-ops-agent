@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.16] - 2026-07-07
+
+### Fixed
+- docs: README 잔여 중복 제거 — flow 문자열·im-not-ai·design-philosophy 링크 (#127)
+
 ## [5.10.15] - 2026-07-07
 
 ### Fixed
