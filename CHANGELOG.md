@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.14] - 2026-07-07
+
+### Fixed
+- docs: README 상단 인용구 제거 — 글-인용구-글 과도한 강조 해소 (#123)
+
 ## [5.10.13] - 2026-07-07
 
 ### Fixed
