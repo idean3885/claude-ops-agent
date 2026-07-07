@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.11.0] - 2026-07-08
+
+### Added
+- feat: 방향성 기반 advisor 엔진 (설정 구동 리뷰/조언 + PARA 스켈레톤 템플릿). 엔진은 devex, 방향·데이터는 소비 프로젝트 스코프 (#129)
+
 ## [5.10.16] - 2026-07-07
 
 ### Fixed
