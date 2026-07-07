@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [5.10.12] - 2026-07-07
+
+### Fixed
+- docs: design-philosophy 를 의사결정 기록으로 재구성 (톤 다운 + 판단력 프레이밍, #113)
+
 ## [5.10.11] - 2026-07-07
 
 ### Fixed
