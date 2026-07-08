@@ -1,10 +1,10 @@
 {
-  "$schema": "로컬 전용 대외비 키워드 설정. ~/.claude/devex/confidential-keywords.local.json 에 배치하면 pre-tool-use.mjs 훅이 자동 로드.",
+  "$schema": "로컬 전용 대외비 키워드 설정. ~/.claude/ops-agent/confidential-keywords.local.json 에 배치하면 pre-tool-use.mjs 훅이 자동 로드.",
   "$usage": [
-    "1. 이 파일을 ~/.claude/devex/confidential-keywords.local.json 로 복사",
+    "1. 이 파일을 ~/.claude/ops-agent/confidential-keywords.local.json 로 복사",
     "2. keywords, patterns를 조직/레포 특화 용어로 채움",
     "3. 공개 GitHub 레포에는 절대 커밋되지 않도록 .gitignore 처리",
-    "4. DEVEX_CONFIDENTIAL_DRYRUN=1 로 드라이런 후 오탐 조정"
+    "4. OPS_AGENT_CONFIDENTIAL_DRYRUN=1 로 드라이런 후 오탐 조정"
   ],
   "keywords": [
     "{조직 내부 시스템명}",

@@ -1,12 +1,12 @@
 {
-  "name": "devex",
-  "version": "5.11.0",
+  "name": "ops-agent",
+  "version": "6.0.0",
   "description": "AI-Native Development Workflow — Issue Flow with pluggable providers",
   "author": {
     "name": "idean3885"
   },
   "keywords": [
-    "devex",
+    "ops-agent",
     "issue-flow",
     "provider",
     "github",

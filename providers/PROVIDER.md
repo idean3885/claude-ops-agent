@@ -1,7 +1,7 @@
 # Provider Template
 
 이슈 플로우에 사용할 이슈 트래커 provider를 정의하는 템플릿입니다.
-`~/.claude/devex/providers/{name}.md` 에 이 템플릿을 기반으로 작성합니다.
+`~/.claude/ops-agent/providers/{name}.md` 에 이 템플릿을 기반으로 작성합니다.
 
 ## Required
 
@@ -9,7 +9,7 @@
 |------|------|------|
 | name | provider 식별자 | "my-tracker" |
 | hostPattern | git remote host 매칭 패턴 | "tracker.company.com" |
-| auth | 인증 방식 | `{ type: "env", key: "TRACKER_TOKEN", location: "~/.claude/devex/.env" }` |
+| auth | 인증 방식 | `{ type: "env", key: "TRACKER_TOKEN", location: "~/.claude/ops-agent/.env" }` |
 
 ## Issue Lifecycle
 
@@ -62,8 +62,8 @@ provider별 확장 기능을 자유롭게 정의합니다.
 
 ## 설치 방법
 
-1. 이 템플릿을 복사하여 `~/.claude/devex/providers/{name}.md` 로 저장
+1. 이 템플릿을 복사하여 `~/.claude/ops-agent/providers/{name}.md` 로 저장
 2. 필수 항목과 Issue Lifecycle 섹션을 채움
-3. 인증 토큰을 `~/.claude/devex/.env` 에 추가
-4. 필요 시 `~/.claude/devex/overlays/{hostPattern}.json` 에 프로젝트별 설정 추가
+3. 인증 토큰을 `~/.claude/ops-agent/.env` 에 추가
+4. 필요 시 `~/.claude/ops-agent/overlays/{hostPattern}.json` 에 프로젝트별 설정 추가
 5. `/reload-plugins` 로 반영

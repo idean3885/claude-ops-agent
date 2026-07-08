@@ -95,9 +95,9 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 ---
 
-## 이 프로젝트 (claude-devex)
+## 이 프로젝트 (claude-ops-agent)
 
-이슈 사이클 워크플로우를 제공하는 DevEx 템플릿 레포입니다.
+이슈 사이클 워크플로우를 제공하는 ops-agent 템플릿 레포입니다.
 
 ### 버전 관리
 

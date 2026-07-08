@@ -23,7 +23,7 @@ README 의 [3. 규칙 자동 적용](../README.md#3-규칙-자동-적용) 에서
 
 ## content-verify 자동 점검 (opt-in)
 
-문서 편집(Edit/Write) 직후 content-verify 관점(AI 티·가독성·톤·구두점) 자가 점검을 유도하는 PostToolUse hook 입니다. 프로젝트 루트에 마커 파일(`.devex/content-verify.json`)이 있을 때만 작동합니다.
+문서 편집(Edit/Write) 직후 content-verify 관점(AI 티·가독성·톤·구두점) 자가 점검을 유도하는 PostToolUse hook 입니다. 프로젝트 루트에 마커 파일(`.ops-agent/content-verify.json`)이 있을 때만 작동합니다.
 
 ```json
 {

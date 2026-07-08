@@ -13,7 +13,7 @@ for await (const chunk of process.stdin) {
 
 const data = JSON.parse(input);
 const cwd = data.cwd || process.cwd();
-const devexGlobal = join(homedir(), '.claude', 'devex');
+const ops-agentGlobal = join(homedir(), '.claude', 'ops-agent');
 
 // Resolve plugin root from script location
 const scriptDir = new URL('.', import.meta.url).pathname;
@@ -56,8 +56,8 @@ function detectProvider() {
 function findProvider(host) {
   if (!host) return { name: 'github', source: 'default' };
 
-  // Local providers first (~/.claude/devex/providers/)
-  const localProviders = join(devexGlobal, 'providers');
+  // Local providers first (~/.claude/ops-agent/providers/)
+  const localProviders = join(ops-agentGlobal, 'providers');
   if (existsSync(localProviders)) {
     for (const file of readdirSync(localProviders).filter(f => f.endsWith('.md'))) {
       try {
@@ -89,7 +89,7 @@ function findProvider(host) {
 
 function loadOverlay(host) {
   if (!host) return null;
-  const overlayPath = join(devexGlobal, 'overlays', `${host}.json`);
+  const overlayPath = join(ops-agentGlobal, 'overlays', `${host}.json`);
   if (existsSync(overlayPath)) {
     try { return JSON.parse(readFileSync(overlayPath, 'utf8')); }
     catch { /* skip */ }
@@ -101,7 +101,7 @@ function loadOverlay(host) {
 function detectGitIdentity(provider, host) {
   let providerPath;
   if (provider.source === 'local') {
-    providerPath = join(devexGlobal, 'providers', `${provider.name}.md`);
+    providerPath = join(ops-agentGlobal, 'providers', `${provider.name}.md`);
   } else {
     providerPath = join(pluginRoot, 'providers', `${provider.name}.md`);
   }
@@ -133,7 +133,7 @@ function buildSkillContext(provider) {
 
   let providerPath = join(pluginRoot, 'providers', 'github.md');
   if (provider.source === 'local') {
-    const localPath = join(devexGlobal, 'providers', `${provider.name}.md`);
+    const localPath = join(ops-agentGlobal, 'providers', `${provider.name}.md`);
     if (existsSync(localPath)) providerPath = localPath;
   } else if (provider.source === 'builtin') {
     const builtinPath = join(pluginRoot, 'providers', `${provider.name}.md`);
@@ -165,7 +165,7 @@ function syncPluginVersion() {
     if (!existsSync(installedPath)) return;
 
     const installed = JSON.parse(readFileSync(installedPath, 'utf8'));
-    const entry = installed.plugins?.['devex@claude-devex']?.[0];
+    const entry = installed.plugins?.['ops-agent@claude-ops-agent']?.[0];
     if (!entry || entry.version === currentVersion) return; // already in sync
 
     entry.version = currentVersion;
@@ -215,32 +215,32 @@ function cleanupStaleVersions() {
   } catch { /* non-critical */ }
 }
 
-// --- Migrate legacy .omc/state/ to .devex/state/ (5.0.0 rename) ---
+// --- Migrate legacy .omc/state/ to .ops-agent/state/ (5.0.0 rename) ---
 // 워크트리 state 경로 컨벤션이 5.0.0 에서 변경되었다.
-// cwd 또는 worktree 루트에 .omc/state/ 가 남아 있고 .devex/state/ 가 없으면 1회 이동.
-// .devex/state/ 가 이미 있으면 사용자가 수동 처리한 것으로 간주하고 건드리지 않음.
-function migrateOmcStateToDevex() {
+// cwd 또는 worktree 루트에 .omc/state/ 가 남아 있고 .ops-agent/state/ 가 없으면 1회 이동.
+// .ops-agent/state/ 가 이미 있으면 사용자가 수동 처리한 것으로 간주하고 건드리지 않음.
+function migrateOmcStateToOpsAgent() {
   try {
     const legacy = join(cwd, '.omc', 'state');
-    const target = join(cwd, '.devex', 'state');
+    const target = join(cwd, '.ops-agent', 'state');
     if (!existsSync(legacy)) return;
     if (existsSync(target)) return; // 사용자 수동 처리분 보존
-    execSync(`mkdir -p "${join(cwd, '.devex')}"`, { timeout: 1000, stdio: 'ignore' });
+    execSync(`mkdir -p "${join(cwd, '.ops-agent')}"`, { timeout: 1000, stdio: 'ignore' });
     execSync(`mv "${legacy}" "${target}"`, { timeout: 2000, stdio: 'ignore' });
     // .omc 디렉토리가 비었으면 정리
     try { execSync(`rmdir "${join(cwd, '.omc')}" 2>/dev/null`, { timeout: 1000, stdio: 'ignore' }); } catch { /* skip */ }
   } catch { /* non-critical */ }
 }
 
-// --- Mirror style-rules SSOT to ~/.claude/devex/style-rules/ ---
-// devex 의 base/extensions 룰을 사용자 스코프로 미러링한다.
-// toolkit 등 외부 소비자는 이 경로를 참조한다 (devex 캐시 버전 디렉토리는 갱신 시 바뀌므로).
+// --- Mirror style-rules SSOT to ~/.claude/ops-agent/style-rules/ ---
+// ops-agent 의 base/extensions 룰을 사용자 스코프로 미러링한다.
+// toolkit 등 외부 소비자는 이 경로를 참조한다 (ops-agent 캐시 버전 디렉토리는 갱신 시 바뀌므로).
 // *.local.* 파일은 사용자 추가 룰이므로 덮어쓰지 않는다.
 function mirrorStyleRules() {
   try {
     const src = join(pluginRoot, 'config', 'style-rules');
     if (!existsSync(src)) return;
-    const dst = join(devexGlobal, 'style-rules');
+    const dst = join(ops-agentGlobal, 'style-rules');
     execSync(`mkdir -p "${dst}/base" "${dst}/extensions"`, { timeout: 1000, stdio: 'ignore' });
 
     for (const sub of ['base', 'extensions']) {
@@ -259,12 +259,12 @@ function mirrorStyleRules() {
 }
 
 // --- Assemble global ~/.claude/CLAUDE.md from managed fragments ---
-// 분리 조립: devex 가 퍼블릭 base 조각을 ~/.claude/global-md/00-devex-base.md 로 기록하고,
+// 분리 조립: ops-agent 가 퍼블릭 base 조각을 ~/.claude/global-md/00-ops-agent-base.md 로 기록하고,
 // 외부 소비자(사내 어댑터 등)는 NN-*.md 규약으로 같은 디렉토리에 자기 조각을 둔다.
 // 조각들을 파일명 순으로 마커와 함께 연결 + 로컬 오버레이(CLAUDE.local.md)를 더해
 // ~/.claude/CLAUDE.md 로 조립한다. 결과가 기존과 동일하면 기록을 생략한다 (idempotent).
 // 기존 CLAUDE.md 가 이 엔진 생성물(마커 없음)이 아니면 .bak 로 1회 백업 후 전환한다.
-const GLOBAL_MD_MARKER = '<!-- devex:global-md assembled — 직접 편집 금지. 원천은 각 조각 -->';
+const GLOBAL_MD_MARKER = '<!-- ops-agent:global-md assembled — 직접 편집 금지. 원천은 각 조각 -->';
 
 function assembleGlobalClaudeMd() {
   try {
@@ -272,17 +272,17 @@ function assembleGlobalClaudeMd() {
     const fragDir = join(claudeHome, 'global-md');
     execSync(`mkdir -p "${fragDir}"`, { timeout: 1000, stdio: 'ignore' });
 
-    // devex base 조각 기록 (플러그인 소유, 갱신 시 덮어씀)
+    // ops-agent base 조각 기록 (플러그인 소유, 갱신 시 덮어씀)
     const baseSrc = join(pluginRoot, 'config', 'global-md', 'base.md');
     if (existsSync(baseSrc)) {
-      const baseDst = join(fragDir, '00-devex-base.md');
+      const baseDst = join(fragDir, '00-ops-agent-base.md');
       const baseContent = readFileSync(baseSrc, 'utf8');
       if (!existsSync(baseDst) || readFileSync(baseDst, 'utf8') !== baseContent) {
         writeFileSync(baseDst, baseContent);
       }
     }
 
-    // 조각 디렉토리에서 *.md 를 파일명 순으로 수집 (00-devex-base, NN-*, ...)
+    // 조각 디렉토리에서 *.md 를 파일명 순으로 수집 (00-ops-agent-base, NN-*, ...)
     const fragFiles = readdirSync(fragDir).filter((f) => f.endsWith('.md')).sort();
     if (fragFiles.length === 0) return;
 
@@ -357,7 +357,7 @@ syncPluginVersion();
 ensurePluginGitIdentity();
 mirrorStyleRules();
 assembleGlobalClaudeMd();
-migrateOmcStateToDevex();
+migrateOmcStateToOpsAgent();
 
 const host = detectProvider();
 const provider = findProvider(host);
@@ -370,7 +370,7 @@ try {
   if (existsSync(vf)) pluginVersion = readFileSync(vf, 'utf8').trim();
 } catch { /* skip */ }
 
-const parts = [`devex: v${pluginVersion}`, `provider: ${provider.name} (${provider.source})`];
+const parts = [`ops-agent: v${pluginVersion}`, `provider: ${provider.name} (${provider.source})`];
 if (overlay) parts.push('overlay: loaded');
 
 const identity = detectGitIdentity(provider, host);
@@ -392,7 +392,7 @@ const context = parts.join('\n');
 
 // Write context to cache file for PreToolUse hook to read
 try {
-  const cacheDir = join(devexGlobal, '.cache');
+  const cacheDir = join(ops-agentGlobal, '.cache');
   if (!existsSync(cacheDir)) {
     execSync(`mkdir -p "${cacheDir}"`, { timeout: 1000, stdio: 'ignore' });
   }

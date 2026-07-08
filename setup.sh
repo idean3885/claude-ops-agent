@@ -1,17 +1,17 @@
 #!/bin/bash
-# claude-devex: 개발 워크플로우 스킬 설치 및 업데이트
+# claude-ops-agent: 개발 워크플로우 스킬 설치 및 업데이트
 #
 # 사용법:
-#   신규 설치:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh)
-#   버전 확인:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh) --check
-#   업데이트:   bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh) --update
-#   구독:      bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh) --subscribe
+#   신규 설치:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-ops-agent/main/setup.sh)
+#   버전 확인:  bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-ops-agent/main/setup.sh) --check
+#   업데이트:   bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-ops-agent/main/setup.sh) --update
+#   구독:      bash <(curl -sfL https://raw.githubusercontent.com/idean3885/claude-ops-agent/main/setup.sh) --subscribe
 #
 # 파일 다운로드는 GitHub API를 사용합니다 (CDN 캐싱 없음)
 
 set -e
 
-REPO="idean3885/claude-devex"
+REPO="idean3885/claude-ops-agent"
 BRANCH="main"
 API_BASE="https://api.github.com/repos/${REPO}/contents"
 
@@ -40,8 +40,8 @@ get_remote_version() {
 
 # 로컬 설치 버전 조회
 get_local_version() {
-  if [ -f ".claude/.devex-version" ]; then
-    cat ".claude/.devex-version"
+  if [ -f ".claude/.ops-agent-version" ]; then
+    cat ".claude/.ops-agent-version"
   else
     echo "미설치"
   fi
@@ -51,7 +51,7 @@ get_local_version() {
 save_version() {
   local version="$1"
   mkdir -p ".claude"
-  echo "$version" > ".claude/.devex-version"
+  echo "$version" > ".claude/.ops-agent-version"
 }
 
 # 업데이트 대상 파일 설치 (skills, README.md)
@@ -79,7 +79,7 @@ install_updatable() {
 
   # 버전 기록
   save_version "$version"
-  echo "[기록] .claude/.devex-version → ${version}"
+  echo "[기록] .claude/.ops-agent-version → ${version}"
 }
 
 # 프로젝트 보존 파일 설치 (최초 설치 시에만)
@@ -132,7 +132,7 @@ cmd_check() {
   local_ver=$(get_local_version)
   remote_ver=$(get_remote_version)
 
-  echo "=== claude-devex 버전 확인 ==="
+  echo "=== claude-ops-agent 버전 확인 ==="
   echo ""
   echo "  현재 설치: ${local_ver}"
   echo "  최신 버전: ${remote_ver}"
@@ -154,7 +154,7 @@ cmd_update() {
   local_ver=$(get_local_version)
   remote_ver=$(get_remote_version)
 
-  echo "=== claude-devex 업데이트 ==="
+  echo "=== claude-ops-agent 업데이트 ==="
   echo ""
   echo "  ${local_ver} → ${remote_ver}"
   echo ""
@@ -183,7 +183,7 @@ cmd_install() {
   local remote_ver
   remote_ver=$(get_remote_version)
 
-  echo "=== claude-devex 개발 워크플로우 설치 (v${remote_ver}) ==="
+  echo "=== claude-ops-agent 개발 워크플로우 설치 (v${remote_ver}) ==="
   echo ""
 
   install_updatable "$remote_ver"
@@ -211,18 +211,18 @@ cmd_install() {
 
 # --subscribe: 자동 업데이트 워크플로우 설치
 cmd_subscribe() {
-  echo "=== claude-devex 자동 업데이트 구독 ==="
+  echo "=== claude-ops-agent 자동 업데이트 구독 ==="
   echo ""
 
   mkdir -p ".github/workflows"
 
-  if [ -f ".github/workflows/claude-devex-update.yml" ]; then
-    echo "[덮어쓰기] .github/workflows/claude-devex-update.yml"
+  if [ -f ".github/workflows/claude-ops-agent-update.yml" ]; then
+    echo "[덮어쓰기] .github/workflows/claude-ops-agent-update.yml"
   else
-    echo "[설치] .github/workflows/claude-devex-update.yml"
+    echo "[설치] .github/workflows/claude-ops-agent-update.yml"
   fi
 
-  if ! fetch_raw "templates/workflows/claude-devex-update.yml" ".github/workflows/claude-devex-update.yml"; then
+  if ! fetch_raw "templates/workflows/claude-ops-agent-update.yml" ".github/workflows/claude-ops-agent-update.yml"; then
     echo "[오류] 워크플로우 파일을 다운로드할 수 없습니다." >&2
     exit 1
   fi
@@ -232,7 +232,7 @@ cmd_subscribe() {
   echo ""
   echo "자동 업데이트:"
   echo "  스케줄: 매일 09:00 KST 자동 확인"
-  echo "  수동:   GitHub Actions 탭 → claude-devex 자동 업데이트 확인 → Run workflow"
+  echo "  수동:   GitHub Actions 탭 → claude-ops-agent 자동 업데이트 확인 → Run workflow"
   echo ""
   echo "업데이트 감지 시 PR이 자동 생성됩니다."
 }

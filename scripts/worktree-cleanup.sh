@@ -6,7 +6,7 @@
 #
 # 사용법:
 #   ./worktree-cleanup.sh <state-file>              # 티켓 단위 정리 (기본)
-#     state-file: .devex/state/org-flow-{ticket}.json
+#     state-file: .ops-agent/state/org-flow-{ticket}.json
 #
 #   ./worktree-cleanup.sh --sweep-stale [--apply]   # stale state/고아 bare clone 정리
 #     --apply 없이 실행하면 dry-run (감지만 출력).
@@ -23,7 +23,7 @@ set -euo pipefail
 find_project_root() {
   local dir="$1"
   while [ "$dir" != "/" ]; do
-    [ -f "$dir/.devex/project.json" ] && echo "$dir" && return
+    [ -f "$dir/.ops-agent/project.json" ] && echo "$dir" && return
     dir="$(dirname "$dir")"
   done
   echo ""
@@ -36,7 +36,7 @@ if [ "${1:-}" = "--sweep-stale" ]; then
 
   PROJECT_ROOT="$(find_project_root "$(pwd)")"
   if [ -z "$PROJECT_ROOT" ]; then
-    echo '{"status": "error", "message": ".devex/project.json을 찾을 수 없음"}' >&2
+    echo '{"status": "error", "message": ".ops-agent/project.json을 찾을 수 없음"}' >&2
     exit 1
   fi
 
@@ -45,7 +45,7 @@ import json, os, subprocess, shutil
 
 project_root = os.environ["PROJECT_ROOT_ENV"]
 apply = os.environ["APPLY_FLAG"] == "true"
-state_dir = os.path.join(project_root, ".devex", "state")
+state_dir = os.path.join(project_root, ".ops-agent", "state")
 # 5.0.0 리네임. 구 .omc/state/ 가 있으면 fallback 지원 (사용자 미마이그레이션 자산).
 if not os.path.isdir(state_dir):
     legacy = os.path.join(project_root, ".omc", "state")
@@ -188,7 +188,7 @@ STATE_DIR="$(cd "$(dirname "$STATE_FILE")" && pwd)"
 PROJECT_ROOT="$(find_project_root "$STATE_DIR")"
 [ -z "$PROJECT_ROOT" ] && PROJECT_ROOT="$(find_project_root "$(pwd)")"
 if [ -z "$PROJECT_ROOT" ]; then
-  echo '{"status": "error", "message": ".devex/project.json을 찾을 수 없음"}' >&2
+  echo '{"status": "error", "message": ".ops-agent/project.json을 찾을 수 없음"}' >&2
   exit 1
 fi
 

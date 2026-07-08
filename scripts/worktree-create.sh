@@ -5,7 +5,7 @@
 # 레포가 없으면 bare clone → worktree 생성. 정리 시 bare clone도 삭제.
 #
 # 사용법: ./worktree-create.sh <state-file>
-#   state-file: .devex/state/org-flow-{ticket}.json
+#   state-file: .ops-agent/state/org-flow-{ticket}.json
 #
 # 입력 JSON 구조 (필수 필드):
 #   ticket, primaryRepo, repos.{name}.{branch, base, worktree}
@@ -14,11 +14,11 @@
 
 set -euo pipefail
 
-# 프로젝트 루트 감지: .devex/project.json이 있는 상위 디렉토리
+# 프로젝트 루트 감지: .ops-agent/project.json이 있는 상위 디렉토리
 find_project_root() {
   local dir="$1"
   while [ "$dir" != "/" ]; do
-    [ -f "$dir/.devex/project.json" ] && echo "$dir" && return
+    [ -f "$dir/.ops-agent/project.json" ] && echo "$dir" && return
     dir="$(dirname "$dir")"
   done
   echo ""
@@ -37,12 +37,12 @@ STATE_DIR="$(cd "$(dirname "$STATE_FILE")" && pwd)"
 PROJECT_ROOT="$(find_project_root "$STATE_DIR")"
 [ -z "$PROJECT_ROOT" ] && PROJECT_ROOT="$(find_project_root "$(pwd)")"
 if [ -z "$PROJECT_ROOT" ]; then
-  echo '{"status": "error", "message": ".devex/project.json을 찾을 수 없음"}' >&2
+  echo '{"status": "error", "message": ".ops-agent/project.json을 찾을 수 없음"}' >&2
   exit 1
 fi
 
 VCS_XML="$PROJECT_ROOT/.idea/vcs.xml"
-MANIFEST="$PROJECT_ROOT/.devex/project.json"
+MANIFEST="$PROJECT_ROOT/.ops-agent/project.json"
 
 RESULT=$(python3 << PYEOF
 import json, subprocess, os, sys
@@ -226,10 +226,10 @@ echo "$RESULT"
 
 # --- post-create hook 디렉토리 호출 ---
 # 외부 플러그인(toolkit 등)이 워크트리 생성 직후 동작을 후처리하기 위한 디렉토리 진입점.
-# 위치: ~/.claude/devex/hooks/post-worktree-create.d/*.sh (실행 가능 파일만)
+# 위치: ~/.claude/ops-agent/hooks/post-worktree-create.d/*.sh (실행 가능 파일만)
 # 호출 인자: state-file 절대 경로 (이 스크립트와 동일)
 # 실패해도 본 흐름은 진행 (silently report)
-HOOK_DIR="$HOME/.claude/devex/hooks/post-worktree-create.d"
+HOOK_DIR="$HOME/.claude/ops-agent/hooks/post-worktree-create.d"
 if [ -d "$HOOK_DIR" ]; then
   for hook in "$HOOK_DIR"/*.sh; do
     [ -x "$hook" ] || continue

@@ -30,7 +30,7 @@
 
 조직/레포별 대외비 용어는 사용자 로컬 설정에서 주입:
 
-- 경로: `~/.claude/devex/confidential-keywords.local.json`
+- 경로: `~/.claude/ops-agent/confidential-keywords.local.json`
 - 형식:
   ```json
   {
@@ -56,7 +56,7 @@
 
 ## 드라이런 모드
 
-환경변수 `DEVEX_CONFIDENTIAL_DRYRUN=1` 설정 시 차단 대신 경고만 출력. 키워드 리스트 배포 전 검증, 오탐 확인용.
+환경변수 `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` 설정 시 차단 대신 경고만 출력. 키워드 리스트 배포 전 검증, 오탐 확인용.
 
 ## 우선순위
 

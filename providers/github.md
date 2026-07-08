@@ -1,7 +1,7 @@
 # Provider: github
 
 GitHub Issues + Pull Requests 기반 이슈 플로우 provider.
-devex 기본 내장 provider입니다.
+ops-agent 기본 내장 provider입니다.
 
 ## Required
 
