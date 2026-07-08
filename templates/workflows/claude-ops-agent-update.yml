@@ -1,4 +1,4 @@
-name: claude-devex 자동 업데이트 확인
+name: claude-ops-agent 자동 업데이트 확인
 
 on:
   schedule:
@@ -18,8 +18,8 @@ jobs:
       - name: 버전 비교
         id: version
         run: |
-          REMOTE=$(curl -sfL https://raw.githubusercontent.com/idean3885/claude-devex/main/VERSION || echo "")
-          LOCAL=$(cat .claude/.devex-version 2>/dev/null || echo "unknown")
+          REMOTE=$(curl -sfL https://raw.githubusercontent.com/idean3885/claude-ops-agent/main/VERSION || echo "")
+          LOCAL=$(cat .claude/.ops-agent-version 2>/dev/null || echo "unknown")
           echo "remote=$REMOTE" >> "$GITHUB_OUTPUT"
           echo "local=$LOCAL" >> "$GITHUB_OUTPUT"
           if [ -z "$REMOTE" ]; then
@@ -36,19 +36,19 @@ jobs:
       - name: 업데이트 실행
         if: steps.version.outputs.updated == 'true'
         run: |
-          curl -sL https://raw.githubusercontent.com/idean3885/claude-devex/main/setup.sh | bash -s -- --update
+          curl -sL https://raw.githubusercontent.com/idean3885/claude-ops-agent/main/setup.sh | bash -s -- --update
 
       - name: PR 생성
         if: steps.version.outputs.updated == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: chore/devex-update-${{ steps.version.outputs.remote }}
-          title: "chore: claude-devex ${{ steps.version.outputs.local }} → ${{ steps.version.outputs.remote }}"
+          branch: chore/ops-agent-update-${{ steps.version.outputs.remote }}
+          title: "chore: claude-ops-agent ${{ steps.version.outputs.local }} → ${{ steps.version.outputs.remote }}"
           body: |
-            claude-devex 자동 업데이트
+            claude-ops-agent 자동 업데이트
 
             - **이전**: ${{ steps.version.outputs.local }}
             - **최신**: ${{ steps.version.outputs.remote }}
-            - **변경 내역**: https://github.com/idean3885/claude-devex/blob/main/CHANGELOG.md
-          commit-message: "chore: claude-devex ${{ steps.version.outputs.remote }} 업데이트"
+            - **변경 내역**: https://github.com/idean3885/claude-ops-agent/blob/main/CHANGELOG.md
+          commit-message: "chore: claude-ops-agent ${{ steps.version.outputs.remote }} 업데이트"
           labels: chore

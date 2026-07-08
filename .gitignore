@@ -5,8 +5,8 @@
 .DS_Store
 Thumbs.db
 
-# DevEx 런타임 상태
-.devex/
+# ops-agent 런타임 상태
+.ops-agent/
 
 # OMC 상태
 .omc/

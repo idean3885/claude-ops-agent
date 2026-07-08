@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.0.0] - 2026-07-08
+
+### Changed
+- devex → ops-agent 전면 개명 (breaking): plugin id·마켓플레이스명·repo·hook 미러 경로(~/.claude/ops-agent)·env 접두어(OPS_AGENT_)를 일괄 전환. 보조 개발도구(DevEx)에서 내가 주도해 고도화하는 개인 개발 운영 에이전트로 역할을 재정의(DevEx→ops 축).
+
 ## [5.11.0] - 2026-07-08
 
 ### Added

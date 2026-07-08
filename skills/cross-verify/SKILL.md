@@ -18,7 +18,7 @@ trigger: ["교차 검증", "크로스 체크", "cross verify"]
 
 ## 프로젝트 설정 연동
 
-devex 의 `config/cross-verify/profiles/` 디렉토리에서 프로젝트별 프로필을 자동 매칭한다.
+ops-agent 의 `config/cross-verify/profiles/` 디렉토리에서 프로젝트별 프로필을 자동 매칭한다.
 프로필은 유저 스코프(`~/.claude/cross-verify/profiles/`)에 보관된다. 플러그인 업데이트와 독립적으로 유지된다.
 
 ### 프로필 탐색 절차

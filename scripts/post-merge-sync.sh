@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# post-merge-sync.sh — devex 플러그인 머지 후 로컬 동기
+# post-merge-sync.sh — ops-agent 플러그인 머지 후 로컬 동기
 # PR 머지로 origin/main 에 반영된 새 버전을 로컬 캐시에 반영한다.
 # 마켓플레이스 업데이트 → 로컬 캐시 git 복원 → 활성 세션 경로 복원 → 검증
 #
@@ -12,8 +12,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PLUGIN_NAME="devex@claude-devex"
-REMOTE_URL="${DEVEX_REMOTE_URL:-https://github.com/idean3885/claude-devex.git}"
+PLUGIN_NAME="ops-agent@claude-ops-agent"
+REMOTE_URL="${OPS_AGENT_REMOTE_URL:-https://github.com/idean3885/claude-ops-agent.git}"
 
 # --- 머지된 버전 확인 (origin/main 기준) ---
 # 로컬 체크아웃 상태와 무관하게 원격 main 의 VERSION 을 동기 기준으로 삼는다.
@@ -68,7 +68,7 @@ done
 # --- Step 3: 검증 ---
 INSTALLED_VERSION=$(cat "$NEW_CACHE/VERSION" 2>/dev/null || echo "MISSING")
 if [ "$INSTALLED_VERSION" = "$NEW_VERSION" ]; then
-  echo "✅ 동기 완료: devex $NEW_VERSION"
+  echo "✅ 동기 완료: ops-agent $NEW_VERSION"
 else
   echo "✘ 버전 불일치 — 설치: $INSTALLED_VERSION, 기대: $NEW_VERSION"
   exit 1

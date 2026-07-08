@@ -5,7 +5,7 @@
 
 연계 스킬:
 - `toolkit:dooray-api` (Dooray 태스크 조회·생성·수정)
-- `devex:flow` / `devex:issue` (GitHub issue 흐름)
+- `ops-agent:flow` / `ops-agent:issue` (GitHub issue 흐름)
 
 ---
 

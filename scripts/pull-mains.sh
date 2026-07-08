@@ -7,10 +7,10 @@
 #
 # 사용법:
 #   ./pull-mains.sh [project-root]
-#   project-root 미지정 시 cwd 에서 .devex/project.json 위로 탐색
+#   project-root 미지정 시 cwd 에서 .ops-agent/project.json 위로 탐색
 #
 # 동작:
-#   - .devex/project.json 의 repos.* 순회
+#   - .ops-agent/project.json 의 repos.* 순회
 #   - 각 항목의 path 가 working tree(.git 디렉토리 보유) 인 경우만 처리
 #   - dirty: 자동 stash 금지, "dirty-skip" 보고
 #   - 현재 브랜치 ≠ base: git checkout base 후 ff-only pull
@@ -23,7 +23,7 @@ set -euo pipefail
 find_project_root() {
   local dir="$1"
   while [ "$dir" != "/" ]; do
-    [ -f "$dir/.devex/project.json" ] && echo "$dir" && return
+    [ -f "$dir/.ops-agent/project.json" ] && echo "$dir" && return
     dir="$(dirname "$dir")"
   done
   echo ""
@@ -34,15 +34,15 @@ if [ -z "$ROOT" ]; then
   ROOT="$(find_project_root "$(pwd)")"
 fi
 
-if [ -z "$ROOT" ] || [ ! -f "$ROOT/.devex/project.json" ]; then
-  echo '{"status":"error","message":".devex/project.json 탐색 실패"}' >&2
+if [ -z "$ROOT" ] || [ ! -f "$ROOT/.ops-agent/project.json" ]; then
+  echo '{"status":"error","message":".ops-agent/project.json 탐색 실패"}' >&2
   exit 1
 fi
 
 python3 - "$ROOT" <<'PY'
 import json, os, subprocess, sys
 root = sys.argv[1]
-manifest = json.load(open(os.path.join(root, ".devex/project.json")))
+manifest = json.load(open(os.path.join(root, ".ops-agent/project.json")))
 results = []
 for name, info in manifest.get("repos", {}).items():
     path = os.path.join(root, info.get("path", name))

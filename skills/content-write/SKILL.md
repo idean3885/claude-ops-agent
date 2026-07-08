@@ -8,7 +8,7 @@ description: 범용 콘텐츠 작성 엔진. 문서 성격 파악, 시리즈 구
 마크다운 콘텐츠를 체계적으로 작성하는 범용 엔진입니다.
 문서 성격 파악, 시리즈 구조 설계, 작성 원칙 적용, 인라인 검증까지 포괄합니다.
 
-> **플랫폼 발행은 이 스킬의 범위 밖입니다.** 오케스트레이터(`dooray-wiki-write`, `devex:content-publish` 등)가 이 스킬을 호출하여 콘텐츠를 받고, 자체 발행 로직을 수행합니다.
+> **플랫폼 발행은 이 스킬의 범위 밖입니다.** 오케스트레이터(`dooray-wiki-write`, `ops-agent:content-publish` 등)가 이 스킬을 호출하여 콘텐츠를 받고, 자체 발행 로직을 수행합니다.
 
 ## 금지 패턴 (HARD CONSTRAINTS)
 
@@ -21,7 +21,7 @@ description: 범용 콘텐츠 작성 엔진. 문서 성격 파악, 시리즈 구
 | 권위 용어 남발 ("패턴/표준/베스트 프랙티스") | 공신력 없는 개념에 붙이면 저자가 제정하는 것처럼 보임 (T11) | 공신력 참조 있을 때만 사용, 그 외엔 "방식/접근법/구조"로 대체 |
 | 짧은 부사절 뒤 관습적 쉼표 | 호흡 장식은 구두점 원칙이 아님 (PN1) | 끊어 읽어야 의미가 살 때만 쉼표 사용 |
 | 세미콜론(`;`) 사용 | 한국어에 전통 없음, 영문 잔재 (PN5) | 마침표 또는 접속사로 문장 연결 |
-| 리더빌리티·톤 자체 검증 | devex:content-verify가 단일 소스, 자체 수행 시 기준 분산 | devex:content-verify(inline) 위임 |
+| 리더빌리티·톤 자체 검증 | ops-agent:content-verify가 단일 소스, 자체 수행 시 기준 분산 | ops-agent:content-verify(inline) 위임 |
 
 ## 트리거
 
@@ -151,21 +151,21 @@ description: 범용 콘텐츠 작성 엔진. 문서 성격 파악, 시리즈 구
 | 메시지 반복 | 같은 주장이 3회 이상 단순 반복되는가 |
 | 분량 적절성 | 유형 대비 ±50% 이내인가 |
 
-#### 3-2. devex:content-verify 위임: 리더빌리티 + 톤 검증 (GATE)
+#### 3-2. ops-agent:content-verify 위임: 리더빌리티 + 톤 검증 (GATE)
 
-> **이 단계는 devex:content-verify(inline)에 위임한다. devex:content-write가 직접 검증하지 않는다.**
+> **이 단계는 ops-agent:content-verify(inline)에 위임한다. ops-agent:content-write가 직접 검증하지 않는다.**
 
-devex:content-verify가 수행하는 검증 (devex:content-write는 관여하지 않음):
+ops-agent:content-verify가 수행하는 검증 (ops-agent:content-write는 관여하지 않음):
 1. 리더빌리티 적용 (콘텐츠 유형별 필수/권장 구분)
 2. 저자 톤 검증 (합쇼체, 주어 생략, 감정어 최소화)
 3. 한국어 구두점 검증 (쉼표·콜론·세미콜론 규범, PN1-PN6)
 4. 위반 항목 즉시 교정
 
-devex:content-verify(inline)는 교정된 본문을 반환합니다.
+ops-agent:content-verify(inline)는 교정된 본문을 반환합니다.
 
 #### verify 결과 검증 (CHECKPOINT)
 
-devex:content-verify(inline) 완료 후 아래 항목을 확인합니다.
+ops-agent:content-verify(inline) 완료 후 아래 항목을 확인합니다.
 **하나라도 실패 시 본문을 반환하지 않습니다.**
 
 - [ ] 리더빌리티 필수(●) 규칙 위반 0건

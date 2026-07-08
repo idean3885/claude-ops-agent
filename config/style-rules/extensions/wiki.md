@@ -5,7 +5,7 @@
 
 사내 위키는 블로그 발행의 **원본 저장소**다.
 "내가 더 잘 이해하고 업무를 잘하기 위한 저장소" 라는 1차 목적을 가진다.
-대외비 제거·일반화는 위키 작성 시점이 아니라 블로그 발행 시점에 `devex:content-publish`가 처리한다.
+대외비 제거·일반화는 위키 작성 시점이 아니라 블로그 발행 시점에 `ops-agent:content-publish`가 처리한다.
 
 ---
 
@@ -39,7 +39,7 @@
 이유:
 - 작성 시점 대외비 제거는 인지 부하 증가
 - 사내 맥락 손실 시 실무 참조 가치 하락
-- 발행 단계에서 `~/.claude/devex/confidential-keywords.local.json` 기반 자동 마스킹
+- 발행 단계에서 `~/.claude/ops-agent/confidential-keywords.local.json` 기반 자동 마스킹
 
 ---
 
@@ -130,4 +130,4 @@ Dooray 위키는 `subject` 필드가 페이지 제목으로 표시된다.
 ## 합격선
 
 - 위키 원본은 블로그 합격선보다 느슨하다 (작성 빈도 우선)
-- B 등급 이상이면 발행 후보. 발행 시점에 `devex:content-publish`가 A 등급으로 가공
+- B 등급 이상이면 발행 후보. 발행 시점에 `ops-agent:content-publish`가 A 등급으로 가공

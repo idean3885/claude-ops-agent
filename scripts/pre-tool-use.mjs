@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * devex PreToolUse hook
+ * ops-agent PreToolUse hook
  *
  * 1. 세션 컨텍스트 주입 (기존 기능)
  * 2. 대외비 가드 (GATE 0): 공개 표면 쓰기 명령(gh issue/pr/release, git commit)의
@@ -12,9 +12,9 @@
  *    - 타겟이 `internalHosts` 에 포함되면 `externalOnly` 키워드/패턴은 허용
  *    - `keywords` / `patterns` (루트) 는 타겟 무관 항상 차단 (예: 위키)
  *
- * 키워드 소스: ~/.claude/devex/confidential-keywords.local.json
- * 드라이런: DEVEX_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
- * 비활성: DEVEX_CONFIDENTIAL_DISABLE=1 설정 시 가드 전체 스킵
+ * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
+ * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
+ * 비활성: OPS_AGENT_CONFIDENTIAL_DISABLE=1 설정 시 가드 전체 스킵
  */
 import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
@@ -27,15 +27,15 @@ process.stdin.setEncoding('utf8');
 for await (const chunk of process.stdin) { input += chunk; }
 
 // ─── 세션 컨텍스트 (기존) ───
-const cachePath = join(homedir(), '.claude', 'devex', '.cache', 'session-context.txt');
+const cachePath = join(homedir(), '.claude', 'ops-agent', '.cache', 'session-context.txt');
 const sessionContext = existsSync(cachePath) ? readFileSync(cachePath, 'utf8') : '';
 
 // ─── 대외비 가드 ───
-const DISABLE = process.env.DEVEX_CONFIDENTIAL_DISABLE === '1';
-const DRYRUN = process.env.DEVEX_CONFIDENTIAL_DRYRUN === '1';
+const DISABLE = process.env.OPS_AGENT_CONFIDENTIAL_DISABLE === '1';
+const DRYRUN = process.env.OPS_AGENT_CONFIDENTIAL_DRYRUN === '1';
 
-const WHAT_GUARD_DISABLE = process.env.DEVEX_WHAT_GUARD_DISABLE === '1';
-const WHAT_GUARD_DRYRUN = process.env.DEVEX_WHAT_GUARD_DRYRUN === '1';
+const WHAT_GUARD_DISABLE = process.env.OPS_AGENT_WHAT_GUARD_DISABLE === '1';
+const WHAT_GUARD_DRYRUN = process.env.OPS_AGENT_WHAT_GUARD_DRYRUN === '1';
 
 if (!DISABLE) {
   try {
@@ -45,7 +45,7 @@ if (!DISABLE) {
       const cwd = hookInput.cwd || process.cwd();
       const result = runConfidentialGuard(command, cwd);
       if (result.blocked) {
-        const header = DRYRUN ? '[DEVEX 대외비 가드 · 드라이런]' : '[DEVEX 대외비 가드 · 차단]';
+        const header = DRYRUN ? '[ops-agent 대외비 가드 · 드라이런]' : '[ops-agent 대외비 가드 · 차단]';
         const hitLines = result.hits.map(h =>
           `  - "${h.keyword}" (${h.source}): ${h.context}`).join('\n');
         const targetInfo = result.target
@@ -53,7 +53,7 @@ if (!DISABLE) {
           : '';
         const msg = `${header} 공개 표면 쓰기 명령에서 대외비 히트:${targetInfo}\n${hitLines}\n\n` +
           `해결: 본문/제목/메시지에서 해당 키워드 제거 후 재시도.\n` +
-          `허용 리스트 조정: ~/.claude/devex/confidential-keywords.local.json`;
+          `허용 리스트 조정: ~/.claude/ops-agent/confidential-keywords.local.json`;
         if (DRYRUN) {
           process.stderr.write(msg + '\n');
           respondContinue(sessionContext);
@@ -75,15 +75,15 @@ if (!DISABLE) {
         const whatResult = runWhatAbstractionGuard(command);
         if (whatResult.blocked) {
           const header = WHAT_GUARD_DRYRUN
-            ? '[DEVEX What 추상화 가드 · 드라이런]'
-            : '[DEVEX What 추상화 가드 · 차단]';
+            ? '[ops-agent What 추상화 가드 · 드라이런]'
+            : '[ops-agent What 추상화 가드 · 차단]';
           const hitLines = whatResult.hits
             .map(h => `  - [${h.rule}] "${h.match}": ${h.context}`).join('\n');
           const msg = `${header} 본문에 구현 세부가 노출되어 있습니다.\n${hitLines}\n\n` +
             `해결: 도메인 행위·사용자 가치만 기술하세요. 클래스명·메서드명·어노테이션·헥사고날 어휘·yaml 키·산출물 카운트 모두 제거.\n` +
             `흐름은 mermaid flowchart/sequenceDiagram 사용.\n` +
-            `가이드: ~/.claude/plugins/cache/claude-devex/devex/*/skills/flow/guides/commit.md 의 "도메인 What 추상화" 섹션\n` +
-            `비활성: DEVEX_WHAT_GUARD_DISABLE=1 (예외 상황만)`;
+            `가이드: ~/.claude/plugins/cache/claude-ops-agent/ops-agent/*/skills/flow/guides/commit.md 의 "도메인 What 추상화" 섹션\n` +
+            `비활성: OPS_AGENT_WHAT_GUARD_DISABLE=1 (예외 상황만)`;
           if (WHAT_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
@@ -265,8 +265,8 @@ function resolveTarget(command, cwd, internalHosts) {
 }
 
 function loadConfig() {
-  const cfgPath = process.env.DEVEX_CONFIDENTIAL_CONFIG_PATH
-    || join(homedir(), '.claude', 'devex', 'confidential-keywords.local.json');
+  const cfgPath = process.env.OPS_AGENT_CONFIDENTIAL_CONFIG_PATH
+    || join(homedir(), '.claude', 'ops-agent', 'confidential-keywords.local.json');
   const empty = {
     keywords: [], patterns: [],
     externalOnly: { keywords: [], patterns: [] },

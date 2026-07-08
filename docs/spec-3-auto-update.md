@@ -4,9 +4,9 @@ Issue: #3
 
 ## 1. 개요
 
-다운스트림 레포가 claude-devex 업데이트를 자동으로 감지하고 PR을 생성하는 체계.
+다운스트림 레포가 claude-ops-agent 업데이트를 자동으로 감지하고 PR을 생성하는 체계.
 
-- **발행**: claude-devex는 기존대로 VERSION 파일만 관리 (추가 액션 불필요)
+- **발행**: claude-ops-agent는 기존대로 VERSION 파일만 관리 (추가 액션 불필요)
 - **구독**: 다운스트림이 스케줄 워크플로우로 자율 확인
 
 ## 2. 워크플로우
@@ -14,7 +14,7 @@ Issue: #3
 ```mermaid
 sequenceDiagram
     participant Dev as 개발자
-    participant CDX as claude-devex (main)
+    participant CDX as claude-ops-agent (main)
     participant GHA as GitHub Actions (다운스트림)
     participant DS as 다운스트림 레포
 
@@ -22,7 +22,7 @@ sequenceDiagram
 
     Note over GHA: 스케줄 (매일 09:00 KST)
     GHA->>CDX: VERSION 조회 (curl)
-    GHA->>DS: .devex-version 비교
+    GHA->>DS: .ops-agent-version 비교
 
     alt 버전 불일치
         GHA->>DS: setup.sh --update 실행
@@ -41,14 +41,14 @@ sequenceDiagram
 | 업데이트 실행 | `setup.sh --update` 수동 | GitHub Action이 자동 실행 + PR 생성 |
 | 수동 업데이트 | `setup.sh --update` | 그대로 유지 (병행) |
 | 다운스트림 설정 | 없음 | `setup.sh --subscribe`로 워크플로우 설치 |
-| claude-devex 변경 | - | 없음 (VERSION 파일만으로 충분) |
+| claude-ops-agent 변경 | - | 없음 (VERSION 파일만으로 충분) |
 
 ## 4. 구현 상세
 
 ### 4.1 다운스트림 워크플로우 템플릿
 
-원격 위치: `templates/workflows/claude-devex-update.yml` (본 레포)
-설치 위치: `.github/workflows/claude-devex-update.yml` (다운스트림)
+원격 위치: `templates/workflows/claude-ops-agent-update.yml` (본 레포)
+설치 위치: `.github/workflows/claude-ops-agent-update.yml` (다운스트림)
 
 > 본 레포 `.github/workflows/`에 두면 본 레포 자기 자신에서도 cron이 동작하여 자기 업데이트를 시도하므로, 템플릿은 `templates/workflows/` 하위에 보관하고 `setup.sh --subscribe`가 다운스트림의 `.github/workflows/`로 배치한다.
 
@@ -62,11 +62,11 @@ sequenceDiagram
 - 다운스트림 워크플로우 템플릿을 `.github/workflows/`에 설치
 - 기존 `--check`, `--update`와 동일한 패턴
 
-### 4.3 claude-devex 측 변경
+### 4.3 claude-ops-agent 측 변경
 
 | 항목 | 변경 |
 |------|------|
-| `templates/workflows/claude-devex-update.yml` | 다운스트림이 다운로드할 워크플로우 템플릿 (본 레포의 `.github/workflows/`에는 두지 않음) |
+| `templates/workflows/claude-ops-agent-update.yml` | 다운스트림이 다운로드할 워크플로우 템플릿 (본 레포의 `.github/workflows/`에는 두지 않음) |
 | `setup.sh` | `--subscribe` 옵션 추가 |
 | `README.md` | 자동 업데이트 구독 사용법 추가 |
 
@@ -82,7 +82,7 @@ sequenceDiagram
 
 | 파일 | 동작 |
 |------|------|
-| `.github/workflows/claude-devex-update.yml` (다운스트림) | `--subscribe` 시 `templates/workflows/`에서 fetch하여 신규 생성 |
+| `.github/workflows/claude-ops-agent-update.yml` (다운스트림) | `--subscribe` 시 `templates/workflows/`에서 fetch하여 신규 생성 |
 | `.claude/skills/*` | `--update`에 의해 갱신 (기존과 동일) |
 | `.claude/project-profile.md` | 보존 (기존과 동일) |
 | `CLAUDE.md` | 보존 (기존과 동일) |

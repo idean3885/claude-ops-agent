@@ -41,8 +41,8 @@ Issue → Spec → Implement → Commit → PR
 |------|------|
 | `providers/github.md` | 기본 내장 provider (GitHub) |
 | `providers/PROVIDER.md` | 커스텀 provider 작성 템플릿 |
-| `~/.claude/devex/providers/` | 로컬 전용 커스텀 provider |
-| `~/.claude/devex/overlays/` | host별 오버레이 설정 |
+| `~/.claude/ops-agent/providers/` | 로컬 전용 커스텀 provider |
+| `~/.claude/ops-agent/overlays/` | host별 오버레이 설정 |
 
 provider는 SessionStart 훅에서 git remote host 기반으로 자동 감지됩니다.
 
@@ -118,7 +118,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 |------|------|------|
 | 워크트리 생성 | `scripts/worktree-create.sh <state-file>` | clone-on-demand + 워크트리 일괄 생성 + vcs.xml 매핑 |
 | 워크트리 정리 | `scripts/worktree-cleanup.sh` | bare clone 포함 정리 |
-| state 파일 포맷 | `.devex/state/org-flow-{ticket}.json` | 경로 컨벤션 (이름 잔재, 리네임은 별 이슈) |
+| state 파일 포맷 | `.ops-agent/state/org-flow-{ticket}.json` | 경로 컨벤션 (이름 잔재, 리네임은 별 이슈) |
 | 하네스 자체 워크트리 | Claude Code `Agent` 도구의 `isolation: "worktree"` | 단발 isolation 작업용 — 위 스크립트와 무관 |
 
 분기 판단:
@@ -126,13 +126,13 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 - 같은 레포의 여러 PR 병렬 검토 → `scripts/worktree-create.sh`
 - 단발 isolation (실험·임시 빌드) → `Agent` 도구 isolation
 
-`.devex/state/` 경로명은 이전 자산 호환을 위해 유지한다. 추후 `.devex/state/` 로 리네임할 가능성이 있으며 별 이슈로 추적한다.
+`.ops-agent/state/` 경로명은 이전 자산 호환을 위해 유지한다. 추후 `.ops-agent/state/` 로 리네임할 가능성이 있으며 별 이슈로 추적한다.
 
 ---
 
-## 이 프로젝트 (claude-devex)
+## 이 프로젝트 (claude-ops-agent)
 
-이슈 플로우 워크플로우를 제공하는 DevEx 플러그인입니다.
+이슈 플로우 워크플로우를 제공하는 ops-agent 플러그인입니다.
 
 ### 버전 관리
 
