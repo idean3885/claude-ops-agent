@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.1.0] - 2026-07-13
+
+### Fixed
+- feat: 운영 클러스터 쓰기 가드 추가 — mutating kube/argocd/helm 명령 세션 명시 허용 전 차단
+
 ## [6.0.0] - 2026-07-08
 
 ### Changed
