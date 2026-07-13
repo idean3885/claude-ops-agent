@@ -12,6 +12,11 @@
  *    - 타겟이 `internalHosts` 에 포함되면 `externalOnly` 키워드/패턴은 허용
  *    - `keywords` / `patterns` (루트) 는 타겟 무관 항상 차단 (예: 위키)
  *
+ * 3. 도메인 What 추상화 가드: 커밋·PR·이슈 본문의 구현 세부(클래스명·어노테이션·yaml 키 등) 차단.
+ * 4. 운영 클러스터 쓰기 가드: mutating kube/argocd/helm 명령을 세션 명시 허용 전까지 차단.
+ *    세션 허용: OPS_AGENT_CLUSTER_WRITE_ALLOW=1 또는 cluster-write-allow.sh on 마커.
+ *    드라이런 OPS_AGENT_CLUSTER_GUARD_DRYRUN=1 · 비활성 OPS_AGENT_CLUSTER_GUARD_DISABLE=1.
+ *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
  * 비활성: OPS_AGENT_CONFIDENTIAL_DISABLE=1 설정 시 가드 전체 스킵
@@ -36,6 +41,28 @@ const DRYRUN = process.env.OPS_AGENT_CONFIDENTIAL_DRYRUN === '1';
 
 const WHAT_GUARD_DISABLE = process.env.OPS_AGENT_WHAT_GUARD_DISABLE === '1';
 const WHAT_GUARD_DRYRUN = process.env.OPS_AGENT_WHAT_GUARD_DRYRUN === '1';
+
+const CLUSTER_GUARD_DISABLE = process.env.OPS_AGENT_CLUSTER_GUARD_DISABLE === '1';
+const CLUSTER_GUARD_DRYRUN = process.env.OPS_AGENT_CLUSTER_GUARD_DRYRUN === '1';
+
+// 운영 클러스터 쓰기 가드 — mutating verb / 값 취하는 플래그 세트.
+// (가드 호출이 최상위 await 컨텍스트라 const 초기화가 먼저 끝나도록 상단에 선언 — TDZ 회피)
+const KUBECTL_WRITE = new Set([
+  'apply', 'patch', 'replace', 'delete', 'edit', 'scale', 'annotate', 'label',
+  'set', 'cordon', 'drain', 'uncordon', 'taint', 'rollout', 'create', 'expose',
+  'autoscale', 'run', 'exec', 'cp', 'attach', 'certificate',
+]);
+const ARGOCD_WRITE = new Set([
+  'create', 'delete', 'set', 'unset', 'sync', 'rollback', 'patch', 'add', 'rm',
+  'terminate-op', 'actions', 'update-password',
+]);
+const HELM_WRITE = new Set(['install', 'upgrade', 'uninstall', 'delete', 'rollback']);
+const VALUE_FLAGS = new Set([
+  '-n', '--namespace', '--context', '--cluster', '--user', '--kubeconfig',
+  '-o', '--output', '-l', '--selector', '--field-selector', '-f', '--filename',
+  '--server', '--token', '--as', '--as-group', '--cache-dir', '--request-timeout',
+  '--grpc-web-root-path',
+]);
 
 if (!DISABLE) {
   try {
@@ -98,8 +125,38 @@ if (!DISABLE) {
           }
         }
       }
+
+      // 운영 클러스터 쓰기 가드: mutating kube/argocd/helm 명령은 세션 명시 허용 없으면 차단
+      if (!CLUSTER_GUARD_DISABLE) {
+        const clusterResult = runClusterWriteGuard(command, hookInput.session_id);
+        if (clusterResult.blocked) {
+          const header = CLUSTER_GUARD_DRYRUN
+            ? '[ops-agent 클러스터 쓰기 가드 · 드라이런]'
+            : '[ops-agent 클러스터 쓰기 가드 · 차단]';
+          const opLines = clusterResult.ops.map(o => `  - ${o.tool} ${o.verb}`).join('\n');
+          const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '<plugin-root>';
+          const msg = `${header} 운영 대상일 수 있는 상태변경(mutating) 명령을 감지했습니다:\n${opLines}\n\n` +
+            `분석 세션에서는 조회만 수행하세요. read-only(get/describe/logs/diff/top/list 등)는 통과합니다.\n` +
+            `이 명령이 의도된 것이면 사용자 승인 후 세션 허용을 켜세요:\n` +
+            `  bash "${pluginRoot}/scripts/cluster-write-allow.sh" on\n` +
+            `해제: cluster-write-allow.sh off · 파이프라인 비활성: OPS_AGENT_CLUSTER_GUARD_DISABLE=1`;
+          if (CLUSTER_GUARD_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: {
+                hookEventName: 'PreToolUse',
+                permissionDecision: 'deny',
+                permissionDecisionReason: msg,
+              },
+            }));
+            process.exit(0);
+          }
+        }
+      }
     }
-  } catch {
+  } catch (e) {
+    if (process.env.OPS_AGENT_HOOK_DEBUG === '1') process.stderr.write('HOOKERR: ' + (e && e.stack || e) + '\n');
     // 입력 파싱 실패 시 가드는 생략하고 기본 응답 (훅이 통신을 망치지 않도록)
   }
 }
@@ -455,4 +512,73 @@ function runWhatAbstractionGuard(command) {
   }
 
   return { blocked: hits.length > 0, hits };
+}
+
+// ─── 운영 클러스터 쓰기 가드 ───
+// mutating kube/argocd/helm 명령을 감지해 세션 명시 허용 전까지 차단한다.
+// 목적: 조회 목적 세션에서 운영/QA 클러스터 상태가 확인 없이 바뀌는 사고 방지.
+// 세션 허용: OPS_AGENT_CLUSTER_WRITE_ALLOW=1 (부모 프로세스 env) 또는
+//   ~/.claude/ops-agent/.cache/cluster-write-allow.json 마커(TTL·선택적 session 바인딩).
+// 한계: `bash deploy.sh` 처럼 스크립트 내부에서 실행되는 명령은 최상위 명령만 보므로 탐지 못 함
+//   (의도된 배포 스크립트 경로는 sanctioned 로 간주). 직접 타이핑하는 ad-hoc 명령을 막는 안전망.
+// verb 세트/플래그 세트는 파일 상단(가드 호출보다 먼저 초기화되어야 함)에 선언.
+function runClusterWriteGuard(command, sessionId) {
+  if (clusterWriteAllowed(sessionId)) return { blocked: false, ops: [] };
+  const ops = detectClusterMutations(command);
+  return { blocked: ops.length > 0, ops };
+}
+
+function clusterWriteAllowed(sessionId) {
+  if (process.env.OPS_AGENT_CLUSTER_WRITE_ALLOW === '1') return true;
+  const markerPath = join(homedir(), '.claude', 'ops-agent', '.cache', 'cluster-write-allow.json');
+  if (!existsSync(markerPath)) return false;
+  try {
+    const m = JSON.parse(readFileSync(markerPath, 'utf8'));
+    if (m.sessionId && sessionId && m.sessionId !== sessionId) return false;
+    if (m.expiresAt && Date.now() > m.expiresAt) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function detectClusterMutations(command) {
+  const ops = [];
+  // 체인 명령 세그먼트 각각 검사 (&&, ||, ;, |, 개행)
+  const segments = command.split(/&&|\|\||;|\n|\|/);
+  for (const rawSeg of segments) {
+    // 선행 env 할당(VAR=val) 과 sudo 제거
+    const seg = rawSeg
+      .trim()
+      .replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)*/, '')
+      .replace(/^sudo\s+/, '');
+
+    let m;
+    if ((m = seg.match(/^(?:\S*\/)?kubectl\s+(.*)$/s))) {
+      const verb = firstPositional(m[1]);
+      if (verb && KUBECTL_WRITE.has(verb)) ops.push({ tool: 'kubectl', verb });
+    } else if ((m = seg.match(/^(?:\S*\/)?argocd\s+(app|proj|repo|cluster|account|admin)\s+(.*)$/s))) {
+      const verb = firstPositional(m[2]);
+      if (verb && ARGOCD_WRITE.has(verb)) ops.push({ tool: `argocd ${m[1]}`, verb });
+    } else if ((m = seg.match(/^(?:\S*\/)?helm\s+(.*)$/s))) {
+      const verb = firstPositional(m[1]);
+      if (verb && HELM_WRITE.has(verb)) ops.push({ tool: 'helm', verb });
+    }
+  }
+  return ops;
+}
+
+// 명령 뒤 토큰들에서 첫 positional(=서브커맨드/verb) 을 찾는다.
+// 플래그(-x)와 값 취하는 플래그의 값 토큰은 건너뛴다. --flag=val 형태는 자체 완결.
+function firstPositional(rest) {
+  const tokens = rest.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    const tk = tokens[i];
+    if (tk.startsWith('-')) {
+      if (VALUE_FLAGS.has(tk)) i++;
+      continue;
+    }
+    return tk;
+  }
+  return null;
 }
