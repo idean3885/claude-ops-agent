@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.2.0] - 2026-07-13
+
+### Fixed
+- feat: 클러스터 쓰기 가드를 액션 게이트로 일반화 — PR 머지·릴리즈·force push·리소스 삭제까지 세션 승인 전 차단
+
 ## [6.1.0] - 2026-07-13
 
 ### Fixed
