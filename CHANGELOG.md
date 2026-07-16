@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.3.1] - 2026-07-16
+
+### Fixed
+- feat: content-verify 명사 연속 나열(P9)·개념 병렬 '+' (T16) 탐지 규칙 추가
+
 ## [6.3.0] - 2026-07-16
 
 ### Fixed
