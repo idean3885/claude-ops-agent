@@ -13,7 +13,7 @@ for await (const chunk of process.stdin) {
 
 const data = JSON.parse(input);
 const cwd = data.cwd || process.cwd();
-const ops-agentGlobal = join(homedir(), '.claude', 'ops-agent');
+const opsAgentGlobal = join(homedir(), '.claude', 'ops-agent');
 
 // Resolve plugin root from script location
 const scriptDir = new URL('.', import.meta.url).pathname;
@@ -57,7 +57,7 @@ function findProvider(host) {
   if (!host) return { name: 'github', source: 'default' };
 
   // Local providers first (~/.claude/ops-agent/providers/)
-  const localProviders = join(ops-agentGlobal, 'providers');
+  const localProviders = join(opsAgentGlobal, 'providers');
   if (existsSync(localProviders)) {
     for (const file of readdirSync(localProviders).filter(f => f.endsWith('.md'))) {
       try {
@@ -89,7 +89,7 @@ function findProvider(host) {
 
 function loadOverlay(host) {
   if (!host) return null;
-  const overlayPath = join(ops-agentGlobal, 'overlays', `${host}.json`);
+  const overlayPath = join(opsAgentGlobal, 'overlays', `${host}.json`);
   if (existsSync(overlayPath)) {
     try { return JSON.parse(readFileSync(overlayPath, 'utf8')); }
     catch { /* skip */ }
@@ -101,7 +101,7 @@ function loadOverlay(host) {
 function detectGitIdentity(provider, host) {
   let providerPath;
   if (provider.source === 'local') {
-    providerPath = join(ops-agentGlobal, 'providers', `${provider.name}.md`);
+    providerPath = join(opsAgentGlobal, 'providers', `${provider.name}.md`);
   } else {
     providerPath = join(pluginRoot, 'providers', `${provider.name}.md`);
   }
@@ -133,7 +133,7 @@ function buildSkillContext(provider) {
 
   let providerPath = join(pluginRoot, 'providers', 'github.md');
   if (provider.source === 'local') {
-    const localPath = join(ops-agentGlobal, 'providers', `${provider.name}.md`);
+    const localPath = join(opsAgentGlobal, 'providers', `${provider.name}.md`);
     if (existsSync(localPath)) providerPath = localPath;
   } else if (provider.source === 'builtin') {
     const builtinPath = join(pluginRoot, 'providers', `${provider.name}.md`);
@@ -165,7 +165,7 @@ function syncPluginVersion() {
     if (!existsSync(installedPath)) return;
 
     const installed = JSON.parse(readFileSync(installedPath, 'utf8'));
-    const entry = installed.plugins?.['ops-agent@claude-ops-agent']?.[0];
+    const entry = installed.plugins?.['ops-agent@ops-agent']?.[0];
     if (!entry || entry.version === currentVersion) return; // already in sync
 
     entry.version = currentVersion;
@@ -240,7 +240,7 @@ function mirrorStyleRules() {
   try {
     const src = join(pluginRoot, 'config', 'style-rules');
     if (!existsSync(src)) return;
-    const dst = join(ops-agentGlobal, 'style-rules');
+    const dst = join(opsAgentGlobal, 'style-rules');
     execSync(`mkdir -p "${dst}/base" "${dst}/extensions"`, { timeout: 1000, stdio: 'ignore' });
 
     for (const sub of ['base', 'extensions']) {
@@ -392,7 +392,7 @@ const context = parts.join('\n');
 
 // Write context to cache file for PreToolUse hook to read
 try {
-  const cacheDir = join(ops-agentGlobal, '.cache');
+  const cacheDir = join(opsAgentGlobal, '.cache');
   if (!existsSync(cacheDir)) {
     execSync(`mkdir -p "${cacheDir}"`, { timeout: 1000, stdio: 'ignore' });
   }

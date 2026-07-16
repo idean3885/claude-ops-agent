@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PLUGIN_NAME="ops-agent@claude-ops-agent"
+PLUGIN_NAME="ops-agent@ops-agent"
 REMOTE_URL="${OPS_AGENT_REMOTE_URL:-https://github.com/idean3885/claude-ops-agent.git}"
 
 # --- 머지된 버전 확인 (origin/main 기준) ---
