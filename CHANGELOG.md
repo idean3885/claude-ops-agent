@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.3.3] - 2026-07-17
+
+### Fixed
+- docs: 액션 게이트 통과 프로토콜(GATE 3)을 flow SKILL에 명문화
+
 ## [6.3.2] - 2026-07-17
 
 ### Fixed
