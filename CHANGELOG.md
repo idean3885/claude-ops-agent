@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.3.0] - 2026-07-16
+
+### Fixed
+- feat: 블로그 본문 메타 어필 표현 검출 룰 신설 (tone T15, blog B9)
+
 ## [6.2.0] - 2026-07-13
 
 ### Fixed
