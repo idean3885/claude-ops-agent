@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.3.4] - 2026-07-19
+
+### Fixed
+- chore: 외부 어댑터 스킬 참조 네임스페이스 현행화 (toolkit → ops-agent-vault) + 제네릭 명칭 중립화
+
 ## [6.3.3] - 2026-07-17
 
 ### Fixed

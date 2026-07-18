@@ -4,7 +4,7 @@
 > **Adds**: 사내 이슈(Dooray 태스크·GitHub issue) 작성 특화 규칙
 
 연계 스킬:
-- `toolkit:dooray-api` (Dooray 태스크 조회·생성·수정)
+- `ops-agent-vault:dooray-api` (Dooray 태스크 조회·생성·수정)
 - `ops-agent:flow` / `ops-agent:issue` (GitHub issue 흐름)
 
 ---
@@ -51,7 +51,7 @@ PR 머지 시 CI 워크플로 시작 안 됨 (main 브랜치 한정)
 
 ## ISS3. 우선순위·라벨
 
-조직 컨벤션에 따라 우선순위를 부여한다. 사내 Dooray 는 `toolkit:dooray-api` 의 우선순위 코드 참조.
+조직 컨벤션에 따라 우선순위를 부여한다. 사내 Dooray 는 `ops-agent-vault:dooray-api` 의 우선순위 코드 참조.
 
 라벨 사용 시 다음 카테고리만 권장:
 - `bug` / `feat` / `chore` / `docs` / `refactor` / `test`
