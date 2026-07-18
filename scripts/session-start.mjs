@@ -234,7 +234,7 @@ function migrateOmcStateToOpsAgent() {
 
 // --- Mirror style-rules SSOT to ~/.claude/ops-agent/style-rules/ ---
 // ops-agent 의 base/extensions 룰을 사용자 스코프로 미러링한다.
-// toolkit 등 외부 소비자는 이 경로를 참조한다 (ops-agent 캐시 버전 디렉토리는 갱신 시 바뀌므로).
+// 외부 어댑터 등 소비자는 이 경로를 참조한다 (ops-agent 캐시 버전 디렉토리는 갱신 시 바뀌므로).
 // *.local.* 파일은 사용자 추가 룰이므로 덮어쓰지 않는다.
 function mirrorStyleRules() {
   try {

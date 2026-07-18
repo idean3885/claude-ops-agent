@@ -4,7 +4,7 @@
 > **Adds**: 연말 성과평가 작성 특화 규칙
 
 연계 스킬:
-- `toolkit:work-review` (데일리로그 기반 성과 정리)
+- `ops-agent-vault:work-review` (데일리로그 기반 성과 정리)
 
 ---
 

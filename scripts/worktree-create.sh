@@ -225,7 +225,7 @@ PYEOF
 echo "$RESULT"
 
 # --- post-create hook 디렉토리 호출 ---
-# 외부 플러그인(toolkit 등)이 워크트리 생성 직후 동작을 후처리하기 위한 디렉토리 진입점.
+# 외부 어댑터 플러그인 등이 워크트리 생성 직후 동작을 후처리하기 위한 디렉토리 진입점.
 # 위치: ~/.claude/ops-agent/hooks/post-worktree-create.d/*.sh (실행 가능 파일만)
 # 호출 인자: state-file 절대 경로 (이 스크립트와 동일)
 # 실패해도 본 흐름은 진행 (silently report)

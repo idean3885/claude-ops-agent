@@ -4,7 +4,7 @@
 > **Adds**: 데일리로그 특화 규칙 (사실 기록 위주, 짧은 호흡)
 
 연계 스킬:
-- `toolkit:dooray-dailylog` (Dooray 데일리로그 조회·생성·수정)
+- `ops-agent-vault:dooray-dailylog` (Dooray 데일리로그 조회·생성·수정)
 
 ---
 
@@ -63,7 +63,7 @@ PR #234 머지. 4개 파일 충돌 해결 (auth/middleware.ts 등). 약 1.5h 소
 
 ## DL5. 비공개 항목 분리
 
-대외비·인사 사항은 별도 항목으로 표시하거나 생략한다. 발행 시점에 `toolkit:wiki-publish` 가 마스킹할 수 있지만, 데일리로그 단계에서도 필요 시 분리.
+대외비·인사 사항은 별도 항목으로 표시하거나 생략한다. 발행 시점에 `ops-agent-vault:wiki-publish` 가 마스킹할 수 있지만, 데일리로그 단계에서도 필요 시 분리.
 
 ---
 
