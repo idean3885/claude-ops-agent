@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.3.5] - 2026-07-20
+
+### Fixed
+- feat: 블로그 익스텐션 B10 추가 — 글 분할 단위를 독자의 문제(검색 의도) 기준으로 명문화, content-write/verify 반영 (#148)
+
 ## [6.3.4] - 2026-07-19
 
 ### Fixed
