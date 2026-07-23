@@ -4,6 +4,11 @@
 
 형식: [Semantic Versioning](https://semver.org/)
 
+## [6.3.6] - 2026-07-21
+
+### Fixed
+- fix: PR 본문 표준 정합 — provider 템플릿을 이슈링크 최상단·What/Why·How 최하단 구조로 교체(자가검증 표 제거), pr.md에 How 최하단·so-what 명문화 (#150)
+
 ## [6.3.5] - 2026-07-20
 
 ### Fixed
