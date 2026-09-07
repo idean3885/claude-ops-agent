@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Added
+* 시범 적용(trials) 규칙을 SessionStart 가 `~/.claude/ops-agent/trials.local.json` 에서 읽어 세션마다 주입한다. 디렉토리 무관·상시형. 예시는 `config/trials.example.json` (#442)
+
 ## [8.16.0] - 2026-09-07
 
 ### Added

@@ -474,6 +474,34 @@ function buildForbiddenWordsContext() {
   }
 }
 
+// --- Trials: 시범 적용 규칙 주입 (세션 1회, 디렉토리 무관) ---
+// 외부 규범·도구를 정식 등재 전에 기간을 두고 써 보는 상태를 세션마다 올린다.
+// 파일이 사용자 스코프(~/.claude/ops-agent/)에 있어 작업 디렉토리가 바뀌어도 풀리지 않는다.
+// 메모리는 프로젝트 디렉토리별이라 운반체로 쓰지 않는다 (#442).
+// 시범이라도 호출형이 아니라 상시형이다. 사용자가 「확인」을 부르지 않는다.
+function buildTrialsContext() {
+  try {
+    const path = join(opsAgentGlobal, 'trials.local.json');
+    if (!existsSync(path)) return '';
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    const active = (parsed.trials || []).filter(t => t && t.name && !t.ended);
+    if (active.length === 0) return '';
+    const lines = [
+      '',
+      '[시범 적용 중 — 자연어 항시 적용. 사용자가 확인을 부르지 않는다. 판정은 검토 조건 충족 시]',
+    ];
+    for (const t of active) {
+      lines.push(`- ${t.name}${t.title ? ` · ${t.title}` : ''}${t.started ? ` (${t.started}~)` : ''}`);
+      for (const r of t.rules || []) lines.push(`  규칙: ${r}`);
+      if (t.review) lines.push(`  검토 조건: ${t.review}`);
+      lines.push(`  산출물·관찰은 ${path} 의 log 에 한 줄씩 더한다`);
+    }
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
 // --- Sync marketplace metadata to latest remote (prevents stale version path) ---
 function syncMarketplace() {
   try {
@@ -540,6 +568,7 @@ if (identity) {
 
 parts.push(buildSkillContext(provider));
 parts.push(buildForbiddenWordsContext());
+parts.push(buildTrialsContext());
 
 const context = parts.filter(Boolean).join('\n');
 
