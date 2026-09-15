@@ -38,6 +38,14 @@ const CASES = [
   ['조회 뒤 릴리즈', 'gh release list\ngh release create v1 -n x', 'deny'],
   ['조회 뒤 클러스터 삭제', 'kubectl get pods\nkubectl delete pod x', 'deny'],
   ['파이프 뒤 머지', 'echo y | gh pr merge 386 --merge', 'deny'],
+  // 따옴표 안 구분자는 명령 경계가 아니다 (#473). 검색 패턴·인용문의 행위 문구가 세그먼트로 떨어져 오탐했다.
+  ["따옴표 안 행위 문구를 검색하는 읽기 명령", "grep -n '웹 머지\\|머지는 사용자가\\|gh pr merge' skills/flow/SKILL.md | head -12", "pass"],
+  ["따옴표 안 행위 문구 echo", "echo 'gh pr merge 1 --merge'", "pass"],
+  ["큰따옴표 안 구분자와 행위 문구", "echo \"x; gh pr merge 1 --merge\"", "pass"],
+  ["따옴표 밖 구분자 뒤 머지", "echo x; gh pr merge 1 --merge", "deny"],
+  ["닫힌 따옴표 뒤 실제 체인", "echo 'x'; gh pr merge 1 --merge", "deny"],
+  ["따옴표 안 문구 조회 뒤 실제 머지", "git log --grep='gh pr merge' -1\ngh pr merge 1 --merge", "deny"],
+  ["닫히지 않은 따옴표는 종전 분할로 폴백", "echo 'x; gh pr merge 1 --merge", "deny"],
 ];
 
 // 개방 안내가 「잃는 갈래」만 알리는지. prev → new 로 다시 열 때 사라지는 갈래가 없으면

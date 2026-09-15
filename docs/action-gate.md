@@ -96,7 +96,7 @@
 | 클러스터 | `argocd app/proj/repo/cluster/account/admin` | `create` `delete` `set` `unset` `sync` `rollback` `patch` `add` `rm` `terminate-op` `actions` `update-password` |
 | 클러스터 | `helm` | `install` `upgrade` `uninstall` `delete` `rollback` |
 
-명령은 체인 세그먼트(`&&` `||` `;` `|` 개행)로 나눠 각각 판정하고, 앞에 붙은 환경 변수 할당과 `sudo` 는 떼고 봅니다.
+명령은 체인 세그먼트(`&&` `||` `;` `|` 개행)로 나눠 각각 판정하고, 앞에 붙은 환경 변수 할당과 `sudo` 는 떼고 봅니다. 따옴표 안의 구분자는 경계로 보지 않습니다. 따옴표가 닫히지 않은 명령은 종전대로 나눕니다.
 
 ### 개방 절차
 

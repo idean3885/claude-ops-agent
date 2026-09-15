@@ -853,11 +853,41 @@ function detectGatedActions(command, hookCwd) {
 }
 
 // 명령을 체인 세그먼트로 분리하고 선행 env 할당·sudo 를 제거해 각 세그먼트 앞부분을 돌려준다.
+// 따옴표 안의 구분자는 명령 경계가 아니다 (#473). 검색 패턴·인용문에 담긴 행위 문구가
+// 세그먼트로 떨어져 나와 앵커 정규식에 걸렸다. 따옴표가 닫히지 않은 입력은 종전대로 나눈다.
+// 형식이 깨진 명령에서는 덜 나누는 쪽이 아니라 더 나누는 쪽이 차단에 안전하다.
 function gateSegments(command) {
-  return command.split(/&&|\|\||;|\n|\|/).map(raw => raw
+  const raws = splitOutsideQuotes(command) ?? command.split(/&&|\|\||;|\n|\|/);
+  return raws.map(raw => raw
     .trim()
     .replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)*/, '')
     .replace(/^sudo\s+/, ''));
+}
+
+// 셸 인용 규칙만 본다: 작은따옴표 안은 그대로, 큰따옴표 안은 백슬래시 이스케이프,
+// 따옴표 밖 백슬래시는 다음 한 글자를 구분자에서 제외한다. 닫히지 않으면 null.
+function splitOutsideQuotes(s) {
+  const out = [];
+  let cur = '';
+  let q = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) {
+      cur += c;
+      if (q === '"' && c === '\\' && i + 1 < s.length) { cur += s[++i]; continue; }
+      if (c === q) q = null;
+      continue;
+    }
+    if (c === '\\' && i + 1 < s.length) { cur += c + s[++i]; continue; }
+    if (c === "'" || c === '"') { q = c; cur += c; continue; }
+    if (c === '\n' || c === ';') { out.push(cur); cur = ''; continue; }
+    if (c === '&' && s[i + 1] === '&') { out.push(cur); cur = ''; i++; continue; }
+    if (c === '|') { out.push(cur); cur = ''; if (s[i + 1] === '|') i++; continue; }
+    cur += c;
+  }
+  if (q) return null;
+  out.push(cur);
+  return out;
 }
 
 function detectClusterMutations(command) {
