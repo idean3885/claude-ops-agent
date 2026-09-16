@@ -17,6 +17,7 @@ trigger: ["전문가", "기획 검토", "설계 검토", "의견 듣자"]
 | 기획 | 문제 정의·범위·성공 지표가 검증 가능한가 | [`experts/planner.md`](../../experts/planner.md) |
 | 아키텍트 | 경계와 책임 분리, 기각한 대안의 이유 | [`experts/architect.md`](../../experts/architect.md) |
 | 인프라 | 용량·비용·첫 병목·철거 | [`experts/infra.md`](../../experts/infra.md) |
+| 보안 | 접근 범위·자격·노출 경계·폐기 경로 | [`experts/security.md`](../../experts/security.md) |
 
 목록에 없는 분야를 물으면 그 사실을 말하고 멈춘다. 없는 전문가의 의견을 지어내지 않는다.
 

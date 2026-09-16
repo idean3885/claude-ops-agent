@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Added
+* 보안 전문가 추가. infra-lab·cluster-check 이 외부에 맡기던 구성 보안 자리를 내부 전문가로 잇는다 (#479)
+
 ## [9.1.0] - 2026-09-16
 
 ### Added
