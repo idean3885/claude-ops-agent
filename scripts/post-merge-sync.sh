@@ -109,9 +109,17 @@ done
 [ "$RESTORED" -eq 0 ] && echo "ℹ 정렬할 옛 버전 경로 없음"
 
 # --- Step 3: 검증 ---
+# 판정 기준은 캐시의 VERSION 과 origin/main 의 VERSION 이 같은가다. 이 비교는 버전이
+# 올라갔을 때만 무언가를 말한다. 버전을 끊지 않은 머지는 캐시에 반영되지 않는데도 두 값이
+# 같아서 통과한다. 그래서 이번 실행이 무언가를 받았는지 함께 적는다. 받은 것이 없으면
+# 통과 표시를 반영으로 읽게 된다.
 INSTALLED_VERSION=$(cat "$NEW_CACHE/VERSION" 2>/dev/null || echo "MISSING")
 if [ "$INSTALLED_VERSION" = "$NEW_VERSION" ]; then
-  echo "✅ 동기 완료: ops-agent $NEW_VERSION"
+  if printf '%s\n' "$BEFORE_VERSIONS" | grep -qx "$NEW_VERSION"; then
+    echo "ℹ 받은 것 없음 — 캐시가 이미 $NEW_VERSION 이었습니다"
+    echo "  버전을 끊지 않은 머지는 캐시에 반영되지 않습니다. bump-version.sh release <버전> 뒤 다시 실행하세요"
+  fi
+  echo "✅ 동기 완료: ops-agent $NEW_VERSION (origin/main VERSION 기준)"
 else
   echo "✘ 버전 불일치 — 설치: $INSTALLED_VERSION, 기대: $NEW_VERSION"
   exit 1
