@@ -28,8 +28,6 @@ PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install puppeteer-core --no-save
 
 ## 프로파일
 
-탐색 순서는 advisor 와 같다.
-
 ```bash
 # 1. 유저 스코프 (플러그인 업데이트와 무관하게 유지)
 ~/.claude/job-crawler/profiles/<name>.json
