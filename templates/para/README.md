@@ -1,6 +1,6 @@
 # PARA 스켈레톤
 
-advisor 엔진이 참조하는 방법론 골격이다. **구조와 규칙(사상)만 여기 두고, 실제 데이터는 소비 프로젝트가 자기 스코프에 채운다.** 방법론을 새로 만드는 게 아니라 PARA(Projects/Areas/Resources/Archives)를 엔진 템플릿으로 제공한다.
+레슨런과 지식 자산을 배치하는 방법론 골격이다. **구조와 규칙(사상)만 여기 두고, 실제 데이터는 소비 프로젝트가 자기 스코프에 채운다.** 방법론을 새로 만드는 게 아니라 PARA(Projects/Areas/Resources/Archives)를 엔진 템플릿으로 제공한다.
 
 ## 네 버킷
 
@@ -36,7 +36,3 @@ advisor 엔진이 참조하는 방법론 골격이다. **구조와 규칙(사상
 
 규약·수집 시점·재발 분석은 [레슨런 자산화](../../docs/lessons.md) 가 정본이다.
 
-## advisor 연동
-
-- advise 모드: 방향(direction) 대비 현재 Projects·Areas의 정렬을 보고 다음 액션을 제안한다.
-- review 모드: 산출물을 lenses로 비판할 때, 관련 Area의 기준·Resource 근거를 참조한다.

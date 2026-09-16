@@ -52,7 +52,6 @@ AI 에게 코드를 맡기면서 제 역할이 "코드 작성"에서 "의사결�
 | provider 감지 (git remote host → 이슈 트래커 정의) | 트래커별 API 방식 추측 |
 | git identity 자동 설정 (provider 기준) | 다른 계정으로 커밋 |
 | 스타일 SSOT 미러 (`config/style-rules/` → `~/.claude/ops-agent/style-rules/`) | 작성 규칙이 레포마다 제각각 |
-| 유저 스코프 자원 자리 만들기 (`~/.claude/advisor/profiles/` 등) | 스킬이 자기 계약의 전제를 못 갖춰 첫 사용이 매치 실패로 끝남 |
 | 버전 동기화 + git 자동 복원 | 캐시 디렉토리 버전 불일치 |
 
 **hook**: 매 편집·매 응답에 규칙을 겁니다.
@@ -64,7 +63,7 @@ AI 에게 코드를 맡기면서 제 역할이 "코드 작성"에서 "의사결�
 | `lint-posttool.sh` | PostToolUse (Edit/Write) | 문서 편집 후 자가 점검 유도 (마커 opt-in, `_posts/` 는 무조건) |
 | `pre-tool-use.mjs` | PreToolUse | 퍼블릭 표면으로 가는 대외비 키워드 하드 차단 |
 
-**스킬**: 워크플로우 순서를 강제합니다. `flow`(이슈 → spec → 구현 → commit → PR), `write → lint → publish`, `cross-verify`(멈추고 네 관점 확인). 직접 호출하지 않고 자연어 트리거로 이어지므로, 순서를 사람이 기억하지 않아도 됩니다.
+**스킬**: 워크플로우 순서를 강제합니다. `flow`(이슈 → spec → 구현 → commit → PR), `write → lint → publish`, `expert`(결정 전에 분야 전문가와 토론). 직접 호출하지 않고 자연어 트리거로 이어지므로, 순서를 사람이 기억하지 않아도 됩니다.
 
 ## 결정 3. 표현 가드: 차단 대신 자가 대조
 
