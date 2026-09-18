@@ -125,7 +125,7 @@ node ~/.claude/ops-agent/current/scripts/resolve-manifest.mjs
 식별자 prefix 컨벤션:
 
 - 외부 어댑터 플러그인 측: 해당 어댑터의 네임스페이스 prefix (예: `<adapter>-<service>`)
-- ops-agent 내장 / 퍼블릭 어댑터: `github`, `slack` 등
+- ops-agent 내장: 이슈 provider 인 `github` 하나다. 발송 어댑터 내장은 없고, 발송처를 두려면 소비자가 어댑터를 정의한다
 
 어댑터 호출 규약: `<adapter-id>` 를 키로 외부 플러그인의 동명 스킬 또는 스크립트에 위임. 위임 인터페이스는 외부 플러그인 측 가이드에서 정의한다.
 
