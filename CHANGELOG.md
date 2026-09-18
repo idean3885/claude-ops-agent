@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Added
+* 기획 전문가에 Figma 조회 절차(MCP 우선, 한도 시 Chrome DevTools MCP) 추가 (#503)
+
 ## [9.3.0] - 2026-09-16
 
 ### Added
