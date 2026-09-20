@@ -340,6 +340,13 @@ function mirrorStyleRules() {
       }
     }
 
+    // 파일별 역할 색인(README.md)도 함께 미러한다. 미러만 보는 소비자가 어느 파일이
+    // 무엇을 다루는지 찾을 자리가 없으면 base/extensions 를 전수로 열게 된다.
+    for (const file of readdirSync(src)) {
+      if (!file.endsWith('.md') || file.includes('.local.')) continue;
+      writeFileSync(join(dst, file), readFileSync(join(src, file), 'utf8'));
+    }
+
     // 미러가 어느 버전의 규칙인지 남긴다. 소스에 VERSION 이 없으면 낡은 값이 남지 않게 쓰지 않는다.
     const versionSrc = join(pluginRoot, 'VERSION');
     if (existsSync(versionSrc)) {
