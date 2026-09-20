@@ -1,0 +1,15 @@
+# 제출 시점에 코드 변경분을 보는 판정 주체.
+# 대상은 코드 모양의 산출물만, 시점은 준비 완료 전환 1회, 권한은 의견까지다.
+# 무엇을 지시할지(path_instructions)와 무엇을 막을지(pre_merge_checks)는
+# 실제로 어떤 지적이 오는지 본 뒤에 더한다. 짐작으로 미리 적지 않는다.
+language: ko-KR
+
+reviews:
+  profile: chill
+  auto_review:
+    enabled: true
+    drafts: false                   # 초안은 건너뛴다. 작성자가 먼저 읽는 구간이다
+    auto_incremental_review: false  # 전환 시 1회. 이후 푸시는 재검토하지 않는다
+  path_filters:
+    - "!**/*.lock"
+    - "!**/node_modules/**"
