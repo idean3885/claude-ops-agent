@@ -146,6 +146,12 @@
       "replacement": "다이어그램",
       "reason": "diagram 의 억지 한글화. 정착한 외래어를 순화어로 바꾼 사례(T23). 도식화도 함께 걸린다",
       "taxonomyId": "tone.md T23"
+    },
+    {
+      "pattern": "층위",
+      "replacement": "레이어/레벨 (가리키는 실물: 노드 레이어·수집 레이어 등)",
+      "reason": "layer 를 한자어로 바꾼 표기. 개발자는 구두로 레이어라고 말하고 층위라고 말하지 않아 독자가 「레이어인가」를 되묻는다(T23)",
+      "taxonomyId": "tone.md T23"
     }
   ]
 }
