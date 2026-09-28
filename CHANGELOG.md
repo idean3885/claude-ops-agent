@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Changed
+* PR 에 「열다」 대신 「생성하다」를 쓴다. T17 도메인 동사 쌍에 등재하고 flow · org-flow · github provider 표현을 교체한다 (#544)
+
 ## [9.7.0] - 2026-09-28
 
 ### Added
