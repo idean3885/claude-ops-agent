@@ -96,7 +96,7 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 | 우선순위 | 판단 기준 | 실행 | 가이드 |
 |---------|----------|------|--------|
 | 1 | PR merged (`gh pr view --json state` → MERGED) | 정리: 브랜치 삭제 + base 전환 | `guides/issue.md` (complete) |
-| 2 | PR 있음, 초안 (`gh pr view --json isDraft` → true) | 작성자 검토 대기. URL 만 전달하고, 전환 요청을 받으면 준비 완료로 바꾼다 | `guides/pr.md` (초안으로 열고 작성자가 먼저 본다) |
+| 2 | PR 있음, 초안 (`gh pr view --json isDraft` → true) | 작성자 검토 대기. URL 만 전달하고, 전환 요청을 받으면 준비 완료로 바꾼다 | `guides/pr.md` (초안으로 생성하고 작성자가 먼저 본다) |
 | 3 | PR 있음, 리뷰 변경요청/대기 | 리뷰 대응 | `guides/pr.md` (resolve) |
 | 4 | PR 있음, approved, 미머지 | 웹 머지 안내 (자동 머지 안 함). 사용자가 머지를 승인했으면 GATE 3 으로 들어간다 | - |
 | 5 | 커밋 있음, PR 없음 | 커밋 리뷰 + 초안 PR 생성 | `guides/commit.md` → `guides/pr.md` |
