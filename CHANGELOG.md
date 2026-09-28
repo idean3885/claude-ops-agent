@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.6.1] - 2026-09-28
+
 ### Fixed
 * transcribe 기본 옵션을 -mc 0 으로 바꾸고 효과 없는 --prompt 권장 제거 (#532)
 
