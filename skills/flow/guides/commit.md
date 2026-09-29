@@ -32,6 +32,23 @@
 4. **커밋 메시지 제안**: CLAUDE.md 커밋 컨벤션에 따라 작성
 5. **사용자 확인 후 커밋**: 승인 시에만 `git add` + `git commit` 실행
 
+## 커밋 단위
+
+**커밋은 논리적 변경 하나다. 공유 전의 수정 이력은 남기지 않고, 최종본을 리뷰 · 롤백 · 추적의 단위로 둔다.**
+
+- **커밋 지점**: 리뷰어가 그 커밋만 보고 판단할 수 있고, 그 커밋에서 빌드 · 실행이 되는 변경 하나
+- **스쿼시는 하나로 합치는 일이 아니다.** 커밋 지점에 맞추는 일이라 합치기도 하고 나누기도 한다. 교정 중 늘어난 커밋은 공유 전에 이 단위로 정리한다
+- **세 용도**: 리뷰는 최종본만 읽는다 · 롤백은 커밋 하나를 되돌리면 기능 하나가 빠진다 · 추적은 `git bisect` · `git blame` 이 커밋 단위로 읽는다
+- **경계는 공유다.** push 한 커밋은 다시 쓰지 않는다. 공유 브랜치에 push 하는 순간이 공유이고, 그 뒤의 재작성은 force push 게이트 대상이다
+
+| 근거 | 원문 |
+|------|------|
+| Pro Git 2판 「Contributing to a Project」 | *try to make each commit a logically separate changeset* |
+| Pro Git 「Rewriting History」 | *Don't push your work until you're happy with it* |
+| Git `Documentation/SubmittingPatches` | *Make separate commits for logically separate changes* |
+| Linux kernel 「Submitting patches」 | *Separate each logical change into a separate patch* · 각 패치 뒤에도 빌드 · 실행 (bisect) |
+| Google Engineering Practices 「Small CLs」 | *one self-contained change* · *easier to roll back* |
+
 ## 커밋 메시지 형식
 
 ```
