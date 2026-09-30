@@ -102,6 +102,7 @@ flowchart LR
 | 찾는 것 | 정본 |
 |---------|------|
 | 커밋 단계 규칙 | [skills/flow/guides/commit.md](../skills/flow/guides/commit.md) |
+| PR 네 단계와 머지 전 최종 점검 | [skills/flow/guides/pr.md](../skills/flow/guides/pr.md) 「네 단계」 · 「머지 전 최종 점검」 |
 | 선언 위치·해석 순서 | [conventions-slot.md](conventions-slot.md) |
 | 이 결정의 배경과 기각한 대안 | [adr/0002-convention-scope-and-ownership.md](adr/0002-convention-scope-and-ownership.md) |
 | 작업 강도·컨텍스트 예산 | [effort-policy.md](effort-policy.md) |
