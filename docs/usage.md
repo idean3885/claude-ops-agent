@@ -140,6 +140,7 @@ bash ~/.claude/ops-agent/current/scripts/action-gate-allow.sh status
 | `providers/github.md` | 기본 내장 provider |
 | `~/.claude/ops-agent/providers/` | 로컬 전용 커스텀 provider |
 | `~/.claude/ops-agent/overlays/` | host별 오버레이 설정 |
+| `~/.claude/ops-agent/experts/` | 로컬 전용 전문가. expert 로스터에 합쳐진다 |
 | `templates/` | 소비 프로젝트용 CLAUDE.md·프로파일·워크플로우 템플릿 |
 
 여러 레포에 걸친 변경은 `/org-flow` 가 통일 브랜치명·레포별 provider·git identity·워크트리를 한 흐름으로 맞춥니다.
