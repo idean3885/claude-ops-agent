@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.8.0] - 2026-10-01
+
 ### Added
 * expert 스킬이 로컬 오버레이(~/.claude/ops-agent/experts/)의 전문가를 로스터에 합친다 (#567)
 
