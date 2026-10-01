@@ -50,7 +50,7 @@ Issue → Spec → Implement → Commit → PR
 | `providers/PROVIDER.md` | 커스텀 provider 작성 템플릿 |
 | `~/.claude/ops-agent/providers/` | 로컬 전용 커스텀 provider |
 | `~/.claude/ops-agent/overlays/` | host별 오버레이 설정 |
-| `~/.claude/ops-agent/experts/` | 로컬 전용 전문가. expert 로스터에 합쳐진다 |
+| `~/.claude/ops-agent/experts/` | 로컬 전용 전문가. expert 로스터에 합쳐지고, 파일명이 겹치면 내장보다 먼저 열린다 |
 
 provider는 SessionStart 훅에서 git remote host 기반으로 자동 감지됩니다.
 
