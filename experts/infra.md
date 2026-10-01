@@ -28,4 +28,5 @@
 |------|------|
 | 경계와 책임 분리 | 아키텍트 |
 | 접근 범위·자격·노출 경계 | 보안 |
+| 인덱스·제약·DDL 적용 비용 | DBA |
 | 구성을 만들고 부하를 올리는 실행 | [`infra-lab`](../skills/infra-lab/SKILL.md) 과 `infra-lab-operator` |
