@@ -18,6 +18,7 @@ trigger: ["전문가", "기획 검토", "설계 검토", "의견 듣자"]
 | 아키텍트 | 경계와 책임 분리, 기각한 대안의 이유, 결정을 문서로 옮길 때 무엇이 들어가는가 | [`experts/architect.md`](../../experts/architect.md) |
 | 인프라 | 용량·비용·첫 병목·철거 | [`experts/infra.md`](../../experts/infra.md) |
 | 보안 | 접근 범위·자격·노출 경계·폐기 경로 | [`experts/security.md`](../../experts/security.md) |
+| DBA | 스키마 DDL 이 조회·쓰기 패턴을 감당하는가, 무결성을 제약이 지키는가, 운영 중 적용 비용 | [`experts/dba.md`](../../experts/dba.md) |
 
 목록에 없는 분야를 물으면 그 사실을 말하고 멈춘다. 없는 전문가의 의견을 지어내지 않는다.
 
