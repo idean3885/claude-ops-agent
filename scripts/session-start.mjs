@@ -421,45 +421,6 @@ function assembleGlobalClaudeMd() {
   } catch { /* non-critical */ }
 }
 
-// --- Forbidden-word rules: session-scoped injection ---
-// 룰 목록은 세션 중 바뀌지 않으므로 SessionStart 에서 1회만 주입한다.
-// UserPromptSubmit 훅은 직전 응답 위반 통지만 담당한다 (hooks/forbidden-words-prompt.sh).
-function buildForbiddenWordsContext() {
-  try {
-    const rules = [];
-    let endingClass = '';
-    const sources = [
-      join(pluginRoot, 'config', 'forbidden-words.json'),
-      join(homedir(), '.claude', 'forbidden-words.local.json'),
-    ];
-    for (const path of sources) {
-      if (!existsSync(path)) continue;
-      try {
-        const parsed = JSON.parse(readFileSync(path, 'utf8'));
-        if (!endingClass && parsed._endingClass) endingClass = parsed._endingClass;
-        if (Array.isArray(parsed.rules)) rules.push(...parsed.rules);
-      } catch { /* 손상된 로컬 룰은 무시 */ }
-    }
-    // %E% 는 어미 묶음 참조다. 주입 문구에도 펼쳐 넣는다. 어시스턴트가 자가 대조하는 것은
-    // 이 문자열이므로, 참조 기호가 남아 있으면 대조할 대상이 실제 패턴과 달라진다.
-    const expand = p => (p || '').replace(/%E%/g, endingClass);
-    if (rules.length === 0) return '';
-
-    const lines = [
-      '',
-      '[금지 표현 — 어시스턴트 응답에 포함하지 않는다]',
-      '이 룰은 세션 시작 시 1회 주입된다. 출력 직전 패턴 자가 대조는 어시스턴트가 수행한다.',
-      '훅은 응답을 막거나 재작성하지 않으며, 위반이 검출되면 다음 턴에 해당 항목만 통지한다.',
-    ];
-    for (const rule of rules) {
-      lines.push(`  - 패턴 \`${expand(rule.pattern)}\` → 대체 \`${rule.replacement || ''}\` (${rule.reason || ''})`);
-    }
-    return lines.join('\n');
-  } catch {
-    return '';
-  }
-}
-
 // --- Trials: 시범 적용 규칙 주입 (세션 1회, 디렉토리 무관) ---
 // 외부 규범·도구를 정식 등재 전에 기간을 두고 써 보는 상태를 세션마다 올린다.
 // 파일이 사용자 스코프(~/.claude/ops-agent/)에 있어 작업 디렉토리가 바뀌어도 풀리지 않는다.
@@ -552,7 +513,6 @@ if (identity) {
 }
 
 parts.push(buildSkillContext(provider));
-parts.push(buildForbiddenWordsContext());
 parts.push(buildTrialsContext());
 
 const context = parts.filter(Boolean).join('\n');

@@ -105,7 +105,7 @@ Good:
 
 긍정형으로 못 쓰는 하드 가드에만 금지형을 남기고, 그때도 목표 동작을 함께 적는다.
 
-> 이 레포의 `config/forbidden-words.json` 은 금지형 목록이지만 성격이 다르다. 사전 주입 + 사후 통지 구조라 출력을 막지 않고, 룰마다 `대체` 필드로 긍정형 처방을 함께 싣는다. 판단 배경은 [`docs/design-philosophy.md`](../../../docs/design-philosophy.md) 결정 3 참조.
+> 이 레포의 `config/style-rules/forbidden-words.json` 은 금지형 목록이지만 성격이 다르다. 컨텍스트에 주입하지 않고 교정 단계 대조 + 사후 통지로만 쓰여 출력을 막지 않고, 룰마다 `대체` 필드로 긍정형 처방을 함께 싣는다. 판단 배경은 [`docs/design-philosophy.md`](../../../docs/design-philosophy.md) 결정 3 참조.
 
 ---
 

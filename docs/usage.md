@@ -35,7 +35,6 @@ claude plugin update ops-agent@ops-agent
 | SessionStart | provider 감지 (git remote host → 트래커 정의) | 자동 적용 |
 | SessionStart | git identity 를 provider 기준으로 설정 | 자동 적용 |
 | SessionStart | 작성 규칙을 `~/.claude/ops-agent/style-rules/` 로 미러 | 자동 적용 |
-| SessionStart | 표현 규칙 목록 주입 (세션 1회) | 자동 적용 |
 | SessionStart | 시범 적용 규칙 주입 (`~/.claude/ops-agent/trials.local.json`, 세션 1회, 디렉토리 무관) | 자동 적용 |
 | PreToolUse | 대외비 키워드가 공개 표면으로 전송되는 명령 | **실행 전 차단** |
 | PreToolUse | 커밋·PR·이슈 본문의 구현 세부 서술 | **실행 전 차단** |
@@ -43,7 +42,7 @@ claude plugin update ops-agent@ops-agent
 | PreToolUse | 기본 브랜치 직접 push, `reset --hard`·`clean -f`·`branch -D`·`restore` | **사용자가 세션 허용을 켤 때까지 차단** |
 | PostToolUse | 문서 편집 후 표현·구조 위반 위치와 수치 | 알림 (마커 파일 있을 때만) |
 | PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU6) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
-| Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 알림 |
+| Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 교정 요청 |
 | Stop | 사용자 발화의 교정 신호를 레슨런 후보로 적립 | 기록만 (승격은 `/learn`) |
 
 구조 검출은 문단 길이·산문 연속·시각 요소 주기·목록 항목 수·테이블 열 수·헤딩 레벨·코드 언어를 셉니다. 정규식은 어휘만 보므로 산문이 몇 문단 쌓였는지는 따로 세야 알 수 있습니다.

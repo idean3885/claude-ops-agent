@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Changed
+* 금지 표현 룰을 세션 주입에서 빼고 교정 스킬로 옮긴다. 룰 파일은 config/style-rules/forbidden-words.json 이고 교정 스킬이 tells_count.py 로 대조한다. 대화 응답은 위반이 검출된 턴에만 교정을 요청한다. 매 세션 약 5천 토큰이 빠진다 (#564)
+
 ## [9.7.2] - 2026-09-30
 
 ### Added

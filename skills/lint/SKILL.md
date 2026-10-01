@@ -201,6 +201,7 @@ LN1(채움 섹션)은 필수(●), LN2(밀도)는 권장(○). 밀도가 높아 
 AI 티 검증 ([ai-tells.md](../../config/style-rules/base/ai-tells.md) A~K):
 1. A~K 패턴을 span 단위로 탐지하고 S1/S2/S3 로 분류한다
 2. S1 건수와 S2 빈도를 집계한다. **정확도 우선** 요청 시 `python3 config/style-rules/metrics/tells_count.py <파일>` 로 이중피동·이중조사·대명사밀도·light verb·연결어미 쉼표·대칭 대구(C-10)·em dash(T1)를 객관 수치로 확보해 눈대중 카운트를 대체한다
+   - **금지 표현 룰은 요청과 무관하게 매번 대조한다.** 룰 목록은 컨텍스트에 주입되지 않으므로(#564) 기억으로 대조할 수 없다. 같은 명령 출력의 `forbidden_words` 가 위반 줄·매칭어·대체어를 준다. 룰은 [forbidden-words.json](../../config/style-rules/forbidden-words.json) 과 개인 룰 `~/.claude/forbidden-words.local.json` 이다. 위반은 S1 로 세고 대체어로 교정한다
    - `em_dash_count` 는 합격선 0 이다. T1 에 위치 조건이 없으므로 산문뿐 아니라 목록 항목 구분자·표 셀·인용에 쓰인 것도 위반이다. 눈으로 훑으면 참고 링크 목록의 구분자 자리가 잘 남는다. 대체는 괄호·쉼표·줄바꿈
 3. S1 0건·S2 ≤2건 → 등급 A, S1 0건·S2 ≤4건 → B, S1 1~2건 → C, S1 3건+ → D (ai-tells.md 기준 재사용)
 4. C-10 대칭 대구는 정규식 오탐이 있을 수 있으므로 카운트를 참고치로 보고 문맥으로 최종 판정한다

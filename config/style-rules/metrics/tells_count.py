@@ -28,6 +28,7 @@
     em_dash_count                     → T1 em dash (S1, 합격선 0)
     physical_verb_count               → T8 물리 조작 동사 (진단 앵커, 절대치 판정 금지)
     absolutist_count                  → D-17 근거보다 절대적인 양화 (진단 앵커, 절대치 판정 금지)
+    forbidden_words                   → forbidden-words.json 룰 매칭 (위치·대체어, 개인 룰 머지)
 
 한국어 처리 근사:
     - 어절: 공백 기준 분리 후 양끝 구두점 제거
@@ -45,6 +46,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import os
 import re
 import sys
 from typing import Any
@@ -440,6 +442,47 @@ def absolutist_count(text: str) -> int:
     return len(_ABSOLUTIST_RE.findall(text))
 
 
+_RULE_FILES = (
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "forbidden-words.json"),
+    os.path.expanduser("~/.claude/forbidden-words.local.json"),
+)
+
+
+def forbidden_words(text: str) -> list[dict[str, Any]]:
+    """금지 표현 룰(기본 + 개인)을 대조해 위반을 줄 번호·매칭어·대체어로 돌려준다.
+
+    %E% 는 기본 룰 파일의 _endingClass 로 펼친다 (stop hook 과 같은 규칙).
+    손상되었거나 없는 룰 파일은 건너뛴다.
+    """
+    rules: list[dict[str, Any]] = []
+    endings = ""
+    for path in _RULE_FILES:
+        try:
+            with open(path, encoding="utf-8") as f:
+                conf = json.load(f)
+        except (OSError, ValueError):
+            continue
+        endings = endings or conf.get("_endingClass", "")
+        rules.extend(conf.get("rules", []))
+    lines = text.split("\n")
+    hits = []
+    for rule in rules:
+        pat = re.compile(rule["pattern"].replace("%E%", endings))
+        found = [
+            {"line": i, "match": m.group(0)}
+            for i, line in enumerate(lines, 1)
+            for m in pat.finditer(line)
+        ]
+        if found:
+            hits.append({
+                "pattern": rule["pattern"],
+                "replacement": rule.get("replacement", ""),
+                "taxonomyId": rule.get("taxonomyId", ""),
+                "hits": found,
+            })
+    return hits
+
+
 # ---------------------------------------------------------------------------
 # 집계
 # ---------------------------------------------------------------------------
@@ -470,6 +513,7 @@ def compute_all(text: str, strip_code_blocks: bool = True) -> dict[str, Any]:
             "physical_verb_count": physical_verb_count(scan),            # T8
             "absolutist_count": absolutist_count(scan),                  # D-17
         },
+        "forbidden_words": forbidden_words(scan),
         "covers": [
             "A-4", "A-9", "A-6", "A-7", "C-5", "C-6", "C-10", "T1", "T8", "D-17",
         ],

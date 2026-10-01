@@ -4,23 +4,22 @@
 
 ## 표현 가드 룰
 
-금지 표현(과장형 형용사·보고서체·근거 없는 단언·번역투 등)을 응답 출력 직전에 막거나 자동으로 고쳐 쓰지 않습니다. 출력 직전 패턴 자가 대조는 어시스턴트가 수행하고, hook 은 사전 가이드와 사후 통지를 맡습니다.
+금지 표현(과장형 형용사·보고서체·근거 없는 단언·번역투 등)을 응답 출력 직전에 막거나 자동으로 고쳐 쓰지 않습니다.
 
-주입 주기는 데이터 성격에 맞춥니다. 룰 목록은 세션 중 바뀌지 않으므로 SessionStart 에서 1회만 싣고, 턴마다 달라지는 위반 내역만 UserPromptSubmit 이 통지합니다.
+룰 목록은 컨텍스트에 주입하지 않습니다. 25룰이 매 세션 약 5천 토큰을 차지했기 때문입니다 (#564). 글은 교정 스킬이 `config/style-rules/metrics/tells_count.py` 로 대조하고, 대화 응답은 위반이 검출된 턴에만 UserPromptSubmit 이 교정을 요청합니다.
 
 | hook | 시점 | 싣는 것 |
 |------|------|---------|
-| SessionStart (`scripts/session-start.mjs`) | 세션 1회 | 룰 목록 전체 (플러그인 기본 + 사용자 추가 머지) |
 | Stop (`hooks/forbidden-words-stop.sh`) | 응답 종료 시 | 직전 응답 스캔 → 위반을 `.forbidden-violations-pending` 에 기록 |
-| UserPromptSubmit (`hooks/forbidden-words-prompt.sh`) | 위반이 있는 턴만 | pending 내역 통지 후 파일 삭제. 위반이 없으면 무출력 종료 |
+| UserPromptSubmit (`hooks/forbidden-words-prompt.sh`) | 위반이 있는 턴만 | pending 내역으로 교정 요청 후 파일 삭제. 위반이 없으면 무출력 종료 |
 
-세션 컨텍스트(provider·git identity·스킬 트리거)도 같은 경로로 SessionStart 에서 1회 전달됩니다. PreToolUse 는 가드 판정만 담당하며 컨텍스트를 싣지 않습니다.
+세션 컨텍스트(provider·git identity·스킬 트리거)는 SessionStart 에서 1회 전달됩니다. PreToolUse 는 가드 판정만 담당하며 컨텍스트를 싣지 않습니다.
 
 룰은 `config/style-rules/base/ai-tells.md` 의 카테고리 ID(`taxonomyId`)와 1:1 매핑되어, 패턴이 왜 존재하는지 역추적됩니다.
 
 | 위치 | 역할 |
 |------|------|
-| `config/forbidden-words.json` | 기본 룰 (표현 가드 패턴) |
+| `config/style-rules/forbidden-words.json` | 기본 룰 (표현 가드 패턴) |
 | `~/.claude/forbidden-words.local.json` | 사용자 추가 룰 (선택, 머지됨) |
 
 룰 추가는 JSON 에 객체 하나만 더하면 즉시 반영됩니다(Python 정규식).

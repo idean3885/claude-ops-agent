@@ -2,12 +2,12 @@
 # Stop hook: 직전 어시스턴트 응답을 transcript에서 추출해 금지 표현 검출.
 # 위반 발견 시 .pending 파일에 기록 (다음 UserPromptSubmit hook이 주입 후 삭제).
 #
-# 룰 머지: 플러그인 기본(${CLAUDE_PLUGIN_ROOT}/config/forbidden-words.json)
+# 룰 머지: 플러그인 기본(${CLAUDE_PLUGIN_ROOT}/config/style-rules/forbidden-words.json)
 #         + 개인(~/.claude/forbidden-words.local.json)
 set -euo pipefail
 
 INPUT=$(cat)
-PLUGIN_RULES="${CLAUDE_PLUGIN_ROOT}/config/forbidden-words.json"
+PLUGIN_RULES="${CLAUDE_PLUGIN_ROOT}/config/style-rules/forbidden-words.json"
 LOCAL_RULES="$HOME/.claude/forbidden-words.local.json"
 PENDING_FILE="$HOME/.claude/.forbidden-violations-pending"
 
