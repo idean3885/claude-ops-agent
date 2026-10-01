@@ -18,4 +18,4 @@
 
 `base/authoring.md` 만 읽는 쪽이 모델이다. 나머지는 사람이 읽는 한국어 산문을 다룬다. `SKILL.md` 처럼 양쪽이 읽는 문서는 두 묶음을 함께 적용하고, 충돌하면 그 문서가 존재하는 이유 쪽인 `authoring` 을 따른다.
 
-표현 가드 훅(`config/forbidden-words.json`)은 이 규칙과 별개로 어휘 패턴만 본다. 동작은 `docs/hooks-config.md`.
+금지 표현 룰(`forbidden-words.json`)은 어휘 패턴만 본다. 글은 교정 스킬이 `metrics/tells_count.py` 로 대조하고, 대화 응답은 표현 가드 훅이 위반 턴에만 교정을 요청한다. 동작은 `docs/hooks-config.md`.

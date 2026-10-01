@@ -46,7 +46,8 @@ AI 가 쓴 글의 흔적("AI 티")을 식별·차단·교정하기 위한 분류
 문서 유형별 추가 규약은 `../extensions/{blog,wiki,poc,info,knowledge,issue,dailylog,peer-review,work-review}.md` 에서 base 를 import 한 뒤 얹는다.
 
 소비자:
-- `ops-agent/hooks/forbidden-words-{prompt,stop}.sh`: `forbidden-words.json` 의 S1 패턴을 사전 가이드로 주입하고 직전 응답 위반을 사후 통지 (출력 차단은 하지 않음)
+- `ops-agent/hooks/forbidden-words-{prompt,stop}.sh`: `forbidden-words.json` 의 S1 패턴으로 직전 응답 위반을 검출해 다음 턴에 교정을 요청 (룰 목록은 주입하지 않고 출력 차단도 하지 않음)
+- `metrics/tells_count.py`: 교정 시 같은 룰을 대조해 위반 줄·매칭어·대체어를 `forbidden_words` 로 보고
 - `ops-agent:write` / `ops-agent:lint` / `ops-agent:publish`: 작성·검증·발행 시 base + extension 로드
 - 사내 어댑터의 `content-write` · `wiki-publish`: 위키 어댑터. `~/.claude/ops-agent/style-rules/` 미러 경로를 참조
 
@@ -226,7 +227,7 @@ AI 모델이 결론·도입·강조에 반복적으로 동원하는 어구.
 | D-16 | 추상 차원 명사 `축` (`크기 축`, `세 축`, `측정 축`) | **S1** | 가리키는 실물로 교체 (`조건`, `구성`, `지표`, `측정 대상`, `구간`) |
 | D-17 | 근거보다 절대적인 양화 (`모든`, `전부`, `항상`, `절대`, `언제나`, `전혀`, `결코`) | S2 | 확인한 범위로 좁힌다 (`측정한 세 건에서는`, `이 조건에서는`). 범위를 좁힐 수 없으면 근거를 함께 적는다 |
 
-D-6~D-11 과 D-16 은 `forbidden-words.json` 에 hook 패턴으로 등록되어 사전 가이드로 주입되고 위반 시 사후 통지된다.
+D-6~D-11 과 D-16 은 `forbidden-words.json` 에 hook 패턴으로 등록되어 교정 시 대조되고 대화 응답 위반은 사후 통지된다.
 
 D-17 은 G 계열의 반대 방향이다. 근거가 불확실한데 단언하면 과장이다. 확실한데 완곡하면 회피다. 둘을 함께 두지 않으면 한쪽 처방이 다른 쪽 위반을 만든다. 절대 양화가 늘 위반인 것은 아니다. 전수를 확인했으면 `모든` 이 정확하다. 판정은 그 범위를 실제로 확인했는지다.
 
@@ -471,7 +472,7 @@ K-4 는 `tone.md` T8(구어체·감정체 동사 금지) 물리 조작 계열의
 
 ## forbidden-words.json 매핑 표
 
-`forbidden-words.json` 의 룰은 위 분류 체계의 S1 패턴 중 출력 직전 자가 대조로 즉시 교정할 가치가 있는 것들이다. 근거로 심각도가 S2 로 내려간 패턴은 hook 에서 뺀다(예: A-1 `통해`: ADR 0001). 저자 개인 선호는 `~/.claude/forbidden-words.local.json` 에 둔다. 카테고리 ID 대응:
+`forbidden-words.json` 의 룰은 위 분류 체계의 S1 패턴 중 정규식 대조로 즉시 교정할 가치가 있는 것들이다. 근거로 심각도가 S2 로 내려간 패턴은 hook 에서 뺀다(예: A-1 `통해`: ADR 0001). 저자 개인 선호는 `~/.claude/forbidden-words.local.json` 에 둔다. 카테고리 ID 대응:
 
 | forbidden-words 패턴 | 카테고리 ID | reason |
 |--------------------|----------|--------|

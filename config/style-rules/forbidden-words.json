@@ -1,5 +1,5 @@
 {
-  "_comment": "기본 금지 표현 룰. 어시스턴트 응답에서 이 패턴이 등장하면 stop hook이 검출하여 다음 턴 사용자에게 알림. 개인 추가 룰은 ~/.claude/forbidden-words.local.json에 작성하면 머지됨. taxonomyId는 config/style-rules/base/ai-tells.md (또는 tone.md) 의 카테고리 ID 참조 — SSOT 와의 추적 키.",
+  "_comment": "기본 금지 표현 룰. 교정 스킬(lint)이 metrics/tells_count.py 로 대조하고, 어시스턴트 응답에서 등장하면 stop hook 이 검출해 다음 턴에 교정을 요청한다. 컨텍스트에는 주입하지 않는다. 개인 추가 룰은 ~/.claude/forbidden-words.local.json에 작성하면 머지됨. taxonomyId는 config/style-rules/base/ai-tells.md (또는 tone.md) 의 카테고리 ID 참조 — SSOT 와의 추적 키.",
   "_endingClass": "(?:다|다는|는다|는|니다|습니다|고|게|서|며|면|지|기|은|을|었|았|였|여|아|어|져|진|도록|므로|자|던)",
   "_endingComment": "한국어 활용 어미 묶음. 패턴에서 %E% 로 참조한다. 활용형을 항목마다 손으로 열거하면 계열마다 다시 빠뜨린다 (#285 · #304 가 같은 형태로 두 번 나왔다). 어간만 적고 어미는 여기서 온다.",
   "rules": [
