@@ -108,9 +108,9 @@
     bash ~/.claude/ops-agent/current/scripts/action-gate-allow.sh status
     ```
 
-1. 어시스턴트는 멈추고, 어떤 행위를 왜 하는지 플랜으로 제시한다
+    같은 때 계획에 든 갈래의 하네스 허용 규칙이 `~/.claude/settings.json` 에 있는지 읽는다. 없으면 3단계 개방 명령과 함께 첫 요청에 싣는다. 아래 「하네스 허용 규칙」
 
-    대상 행위마다 행위 · 대상 · 범위를 이름으로 댄다(예: `feat/577` PR 과 릴리즈 PR 을 `main` 에 머지, 이번 작업 동안 상시). 하네스의 오토 모드 분류기는 마커를 읽지 않고, 행위와 대상을 이름으로 댄 사용자의 승인을 읽는다. 「일괄 승인」처럼 이름이 없는 승인으로는 창이 열려 있어도 분류기가 막는다 ([ADR-0017](adr/0017-gate-plan-names-actions.md))
+1. 어시스턴트는 멈추고, 어떤 행위를 왜 하는지 플랜으로 제시한다
 
 2. 사용자가 플랜을 검토하고 승인한다
 3. 사용자가 직접 실행한다. 어시스턴트가 **감지된 갈래를 담은 명령**을 제시한다
@@ -123,6 +123,25 @@
 5. 마무리할 때 사용자가 `off` (선택)
 
 어시스턴트가 개방·해제를 직접 실행하면 자기 수정으로 차단됩니다. 정상 동작이며 우회하지 않습니다. `status` 는 상태를 읽기만 하므로 차단되지 않습니다.
+
+#### 하네스 허용 규칙
+
+승인 채널은 게이트 하나다 ([ADR-0018](adr/0018-gate-is-the-only-approval-channel.md)). 어시스턴트는 대화 속 승인 문장을 요청하지 않는다.
+
+하네스(Claude Code)에도 판정자가 있다. 게이트 대상 명령이 하네스 허용 규칙에 없으면 창이 열려 있어도 오토 모드 분류기가 막을 수 있다. 규칙에 맞으면 분류기를 거치지 않고 게이트 훅만 판정한다. 평가 순서는 공식 문서 [Permission modes](https://code.claude.com/docs/en/permission-modes) 가 정본이다.
+
+묶은 명령은 하위 명령마다 규칙에 맞아야 한다 ([Configure permissions](https://code.claude.com/docs/en/permissions) 「Compound commands」). 머지 앞에 물리는 검사 스크립트도 규칙에 둔다.
+
+| 갈래 | 허용 규칙 |
+|------|-----------|
+| `repo-merge` | `Bash(gh pr merge *)` · `Bash(./scripts/pre-merge-check.sh *)` |
+| `repo-release` | `Bash(gh release *)` |
+| `git-force` | `Bash(git push origin --delete *)` · `Bash(git push --force-with-lease *)` |
+| `worktree-destructive` | `Bash(git branch -D *)` · `Bash(git reset --hard *)` · `Bash(git clean *)` · `Bash(git restore *)` |
+
+`cluster-write` · `repo-delete` · `git-default-push` 는 규칙에 두지 않는다. 운영에 닿는 민감 작업은 사용자가 `!` 로 직접 실행하고, 기본 브랜치 직접 push 는 금지다.
+
+규칙은 사용자가 넣는다. 규칙에 맞는 명령은 분류기의 다른 검사도 거치지 않는다는 대가가 있다.
 
 #### 0단계를 앞세운 이유
 

@@ -1,6 +1,6 @@
 # ADR-0017: 게이트 계획은 대상 행위를 이름으로 댄다
 
-- 상태: accepted
+- 상태: superseded by [ADR-0018](0018-gate-is-the-only-approval-channel.md)
 - 일시: 2026-10-01
 - 관련: 이슈 #577, #141(게이트 개방 프로토콜), ADR-0016(공식 문서가 기본값)
 
