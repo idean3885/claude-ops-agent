@@ -23,6 +23,6 @@ ops-agent `config/style-rules/` 가 모든 한국어 문서 규칙의 원천이�
 
 ## ops-agent 개발 룰
 
-- 워킹 카피 `~/git-project/idean3885/claude-ops-agent/`. `.git` 이 없으면 SessionStart 훅이 복원한다
+- 워킹 카피 `~/git-project/idean3885/claude-ops-agent/`
 - 반영 경로: 이슈 → 워크트리 → PR → 웹 머지. main 직접 push 금지, 수동 버전 범프 금지(레포의 범프 스크립트)
 - 브랜치 · 버전 · 머지 후 동기 절차는 레포 `CLAUDE.md`

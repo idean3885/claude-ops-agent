@@ -10,7 +10,7 @@
 - 실행한 명령 (출력은 버린다. 명령이 있으면 출력은 다시 만들어진다)
 - 쓰거나 고친 파일 경로
 
-PostCompact 가 이 파일 경로를 컴팩트 직후 컨텍스트에 넣는다.
+컴팩트 뒤 SessionStart(matcher compact) 훅이 이 파일 경로를 컴팩트 직후 컨텍스트에 넣는다.
 """
 import json
 import os
