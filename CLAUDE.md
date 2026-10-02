@@ -22,14 +22,7 @@ spec(Markdown) → implement(AI) → review → commit → PR → merge
 
 브랜치와 베이스는 착수 시점에 정해진다. 커밋 단계에서 확인하면 이미 그 위에 커밋이 쌓여 있어 고치는 값이 커진다.
 
-- [ ] **브랜치 접두를 레포 이력에서 확인**: `git log --oneline -80 | grep -o "from [^/]*/[a-z]*/"` 로 실제 쓰인 접두를 본다. provider 의 라벨 매핑과 다를 수 있다
-- [ ] **베이스가 origin 최신인지 확인**: 직전 머지를 당기지 않고 브랜치를 따면 머지에서 충돌하거나 릴리즈 섹션이 중복된다
 - [ ] **지울 것이 있으면 다른 소비자를 먼저 찾는다**: `grep -rn` 으로 참조를 전수 확인한다. 한 기능과 함께 들어온 파일이 다른 기능의 원천일 수 있다
-
-### 커밋 전 필수 확인
-
-- [ ] 변경 파일 목록 확인
-- [ ] 커밋 메시지 사용자 승인
 
 ## 이슈 플로우 (Issue Flow)
 
@@ -52,8 +45,6 @@ Issue → Spec → Implement → Commit → PR
 | `~/.claude/ops-agent/overlays/` | host별 오버레이 설정 |
 | `~/.claude/ops-agent/experts/` | 로컬 전용 전문가. expert 로스터에 합쳐지고, 파일명이 겹치면 내장보다 먼저 열린다 |
 
-provider는 SessionStart 훅에서 git remote host 기반으로 자동 감지됩니다.
-
 ### 스킬 목록
 
 `skills/` 하위 디렉토리와 각 `SKILL.md` 의 `description` 이 정본이다.
@@ -63,8 +54,7 @@ issue · spec · implement · commit · pr 은 별도 스킬이 아니라 `/flow
 ## 핵심 규칙
 
 1. **명세 우선**: 코드 작성 전 명세 문서 먼저
-2. **사용자 승인**: 커밋/푸시는 사용자 요청 시에만
-3. **동기화 유지**: 문서와 코드는 항상 일치
+2. **동기화 유지**: 문서와 코드는 항상 일치
 
 ## 검증
 
@@ -91,12 +81,6 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 `/flow` 의 commit 단계에서 커밋 컨벤션이 자동 적용됩니다.
 
-타입 기본값: `feat`, `fix`, `docs`, `refactor`, `chore`, `ci`, `perf`, `style`, `test`, `build`
-
-커밋 타입은 체인지로그 분류와 버전 증분을 결정합니다: `feat`→`Added`/MINOR, `fix`→`Fixed`/PATCH, 그 외→`Changed`/PATCH, `!` 또는 `BREAKING CHANGE:`→`Changed`/MAJOR. 상세는 commit 단계 가이드 참조.
-
-표기(타입 어휘·제목 형식·분류 이름)는 레포·org 가 선언하면 그 선언이 기본값을 대체합니다. 선언 위치와 해석 순서는 [docs/conventions-slot.md](docs/conventions-slot.md) 참조.
-
 ## 워크트리 분기
 
 분기 판단:
@@ -118,8 +102,6 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 **변경은 `Unreleased` 에 쌓고, 버전은 사용자가 끊을 때 올린다.** PR 하나마다 올리지 않는다.
 
-커밋마다 올리면 버전 번호가 변경 덩어리를 가리키지 못한다. 실제로 67일 동안 208번 올렸고 하루 19번인 날이 있었다. 「8.7.0 에서 8.7.2 로 올리면 무엇이 달라지나」에 답할 수 없으면 번호만 늘어난 것이다 (#409).
-
 체인지로그는 [Keep a Changelog 1.1.0](https://keepachangelog.com/ko/1.1.0/) 을 따른다. 그 규격이 `Unreleased` 를 권하는 근거는 릴리즈 시점의 작성 부담 제거, 다음 버전 예고, 몰아 쓰지 않기, 워크플로 편입 넷이다.
 
 항목은 사용자에게 보이는 영향이 있을 때만 적는다. `refactor` 와 `chore` 는 기본 제외이고, 영향이 있으면 카테고리를 직접 지정해 넣는다. `docs` 는 통과다. 이 레포는 규칙 문서 자체가 제품이다.
@@ -135,11 +117,6 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 ./scripts/bump-version.sh release <version>                    # 사용자가 끊을 때
 ```
 
-| 서브커맨드 | 하는 일 |
-|---|---|
-| `add` | `CHANGELOG.md` 의 `Unreleased` 에 항목만 쌓는다. 버전 파일은 건드리지 않는다 |
-| `release` | `Unreleased` 를 버전 섹션으로 끊고 아래 4곳을 함께 갱신한다 |
-
 `release` 가 갱신하는 4곳이다. 수동 편집하면 어긋나 캐시 경로 해석이 깨진다.
 
 - `VERSION`
@@ -147,9 +124,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 - `.claude-plugin/plugin.json` → `version`
 - `.claude-plugin/marketplace.json` → `plugins[0].version`
 
-`add` 는 넷을 거부한다. em dash, 이슈 번호 없음, `refactor`·`chore` 무지정, 카테고리를 유도할 수 없는 항목이다. `category` 를 생략하면 타입 접두에서 유도하고 본문에서 그 접두를 걷는다. 분류 헤딩이 이미 접두의 역할을 하기 때문이다.
-
-`release` 는 `Unreleased` 가 비어 있으면 멈춘다. CHANGELOG 삽입 지점은 헤더의 앵커 주석이며, 앵커가 사라지면 스크립트가 멈춘다.
+`category` 를 생략하면 타입 접두에서 유도하고 본문에서 그 접두를 걷는다. 분류 헤딩이 이미 접두의 역할을 하기 때문이다.
 
 ### 산출물 특성
 
@@ -193,7 +168,7 @@ main ────────────────●─────
 | 확인 | 판정 |
 |------|------|
 | 맞는가 | 이슈의 What 과 diff 가 같은가. 관심사가 둘이면 뗀다 |
-| 제대로인가 | 자체 점검이 통과하는가. 훅이면 모든 호출 경로의 비용(IO · 시간)을 봤는가. 발동 조건이 레포 모양으로 가둬졌는가 |
+| 제대로인가 | 자체 점검은 작성자의 사례로 만든 것이라 사각지대를 못 본다. 입력을 받는 코드는 입력 계약(도구 문서 · 문법)에서 반례를 찾는다. 훅이면 모든 호출 경로의 비용(IO · 시간)을 봤는가. 발동 조건이 레포 모양으로 가둬졌는가 |
 | 과한가 | 도구 특화 · 니치인가. 더 작은 층(가이드 한 줄)으로 되는가. 모든 작업에 단계를 더하는가 |
 | 문서가 따라왔는가 | CLAUDE.md 체크리스트 · usage 표 · hooks-config · README 가 같은 것을 말하는가 |
 
@@ -202,7 +177,6 @@ main ────────────────●─────
 ### 변경 시 검증 체크리스트
 
 - [ ] **`Unreleased` 적립**: `bump-version.sh add` 로 항목을 쌓았는지 확인. PR 에서 버전은 올리지 않는다
-- [ ] **릴리즈 시**: `bump-version.sh release` 로 VERSION, CHANGELOG.md, plugin.json, marketplace.json 4곳 갱신 확인
 - [ ] 스킬 파일 존재 확인 (`skills/` 전체 + `skills/flow/guides/`)
 - [ ] 다이어그램 확인. README 는 아스키 플로우만 쓴다 (mermaid 0장). `docs/usage.md` 의 mermaid 1장은 렌더 확인
 - [ ] **`config/style-rules/` 를 고쳤으면 절 번호와 배치 순서가 맞는지 확인** (규칙을 번호로 참조하므로 순서가 어긋나면 새 규칙을 넣을 자리가 정해지지 않는다)
@@ -271,7 +245,6 @@ main ────────────────●─────
 | 상황 | 판단 |
 |------|------|
 | 몇 번의 도구 호출로 끝나는 일 | 직접 처리 |
-| 자기 결과 검증·재확인 | 위임하지 않음. 검증 목적 위임은 비용만 늘린다 |
 | 하나로 되는 일 | 하나만. 여럿 띄우지 않는다 |
 | 넓은 다중 파일 조사 등 실제로 독립적이고 규모 있는 작업 | 위임 |
 
@@ -285,4 +258,3 @@ main ────────────────●─────
 
 - 스킬 변경 시 적용 사례 레포에도 동기화
 - 범용성 유지: 특정 프로젝트에 종속되는 내용 금지
-- `/spec` 단계에서 스킬 변경 명세를 먼저 작성

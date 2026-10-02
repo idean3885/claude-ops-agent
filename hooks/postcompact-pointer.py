@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """컴팩트 직후, 보존 파일 경로를 새 컨텍스트에 넣는다.
 
-PreCompact 가 파일을 남겨도 그 존재를 모르면 쓰이지 않는다. 경로가 요약에 남는
+PreCompact 가 파일을 남겨도 그 존재를 모르면 쓰이지 않는다. PostCompact 이벤트는
+컨텍스트를 돌려주는 출력이 없어, 컴팩트 뒤에 발동하는 SessionStart(matcher compact)에 건다. 경로가 요약에 남는
 경우도 있으나 그건 우연이고, 이 훅은 그것을 확정한다. 근거는 ADR-0013.
 
 파일 본문을 넣지 않는다 — 본문을 넣으면 다음 컴팩트에서 다시 요약된다. 경로만
@@ -30,7 +31,7 @@ def main():
     print(json.dumps({
         "suppressOutput": True,
         "hookSpecificOutput": {
-            "hookEventName": "PostCompact",
+            "hookEventName": "SessionStart",
             "additionalContext": (
                 f"[컴팩트 재료] 이 세션은 {n}회 컴팩트됐다. 요약이 버린 명령·사용자 발화가 "
                 f"`{f}` 에 남아 있다.\n"

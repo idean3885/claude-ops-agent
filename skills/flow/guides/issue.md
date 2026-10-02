@@ -2,29 +2,15 @@
 
 이슈 생애주기 관리 - 생성, 시작, 완료
 
-## 트리거
-
-- "이슈", "issue"
-
 ## Provider 참조
 
 provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보존 규칙이 정의되어 있다. API 호출 전에 읽고 그 정의를 따른다. 추측한 인증 헤더나 endpoint 로 호출하면 트래커마다 실패 양상이 달라 원인 추적이 어려워진다.
 
-탐색 순서는 다음과 같다.
-
-1. 로컬 provider: `~/.claude/ops-agent/providers/` 에서 현재 host와 매칭되는 `.md` 파일
-2. 내장 provider: 플러그인 `providers/` 디렉토리
-3. 기본값: `providers/github.md`
+경로는 세션 시작 훅이 `Provider:` 줄로 넣는다.
 
 ## 대외비 가드 (GATE 0)
 
 이슈 관련 모든 텍스트(제목, 본문, 코멘트)는 공개 API로 전송되기 **직전** [../references/confidential-guard.md](../references/confidential-guard.md)의 검증 절차를 통과해야 한다.
-
-검증 시점:
-- `/issue create` 본문 작성 직후, API 호출 직전
-- `/issue start` 시작 일시 코멘트 작성 직후, 기록 전
-- `/issue complete` 결과 요약·완료 코멘트 작성 직후, 기록 전
-- 모든 `gh issue edit` / `gh issue comment` 직전
 
 히트 시 하드 차단하고 사용자에게 정정 요청. 훅(`scripts/pre-tool-use.mjs`)이 최종 방어선이지만, 가이드 단계에서 미리 키워드를 피해 작성하여 훅 단계까지 끌고 가지 않는다.
 
@@ -211,12 +197,5 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 
 ## 규칙
 
-- provider 파일을 읽고 API 를 호출한다
-- **공개 표면으로 가는 모든 텍스트는 GATE 0 검증 후 송신** ([../references/confidential-guard.md](../references/confidential-guard.md))
-- 레슨런 인덱스 로드는 결과 문구를 남긴다. 로드된 건수, 0건, 버킷 미정의, 로드 실패를 각각 다른 문구로 적는다
-- 작업 단위와 브랜치명은 인덱스 대조 결과를 적은 뒤에 확정한다
 - 이슈 생성/상태 변경은 사용자 승인 후에만
-- 브랜치 생성은 코드 작업 이슈에서만 (사용자 확인)
 - provider 정의에 라벨 자동 생성이 있으면 실행
-- 완료 시 소요 시간은 정수 올림 (8h 초과 허용)
-- 본문 업데이트 시 기존 cc, 태그, 본문 내용을 보존한다. PUT 은 전체 치환이라 누락분이 사라진다

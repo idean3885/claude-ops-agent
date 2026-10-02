@@ -36,7 +36,7 @@ const multilineScript = join(bundled, 'storage', 'adapter', 'build.gradle.kts');
 const multilineContent = 'dependencies {\n  implementation(\n    "org.example:existing:1.0"\n  )\n}\n';
 writeFileSync(multilineScript, multilineContent);
 
-// want: 'pass' = 통과해야 한다, 'deny' = 차단되어야 한다
+// want: 'pass' = 조용해야 한다, 'deny' = 알려야 한다
 const CASES = [
   ['모듈 스크립트에 라이브러리 좌표 (Edit)', 'Edit', {
     file_path: moduleScript, old_string: "  implementation project(':storage-api')\n",
@@ -115,11 +115,11 @@ let failed = 0;
 for (const [name, toolName, toolInput, want] of CASES) {
   const res = spawnSync('node', [hook], {
     input: JSON.stringify({ tool_name: toolName, tool_input: toolInput, cwd: bundled, session_id: 'selftest' }),
-    env: { ...process.env, OPS_AGENT_BUILD_GUARD_DISABLE: '', OPS_AGENT_BUILD_GUARD_DRYRUN: '' },
+    env: { ...process.env, OPS_AGENT_BUILD_GUARD_DISABLE: '' },
     encoding: 'utf8',
   });
   const out = res.stdout || '';
-  const denied = out.includes('"permissionDecision":"deny"') && out.includes('빌드 스크립트 가드');
+  const denied = out.includes('"additionalContext"') && out.includes('빌드 스크립트 가드');
   const ran = !res.error && res.status === 0 && !res.signal;
   const ok = want === 'deny' ? denied : (ran && !denied);
   if (!ok) {
