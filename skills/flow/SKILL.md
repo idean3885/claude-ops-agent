@@ -100,14 +100,14 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 | 3 | PR 있음, 리뷰 변경요청/대기 | 리뷰 대응 | `guides/pr.md` (resolve) |
 | 4 | PR 있음, approved, 미머지 | 웹 머지 안내 (자동 머지 안 함). 사용자가 머지를 승인했으면 GATE 3 으로 들어간다 | - |
 | 5 | 커밋 있음, PR 없음 | 커밋 리뷰 + 초안 PR 생성 | `guides/commit.md` → `guides/pr.md` |
-| 6 | 브랜치 dirty | 구현 계속 안내 | - |
-| 7 | 브랜치 clean, base와 diff 없음 | 구현 시작 (implement 가이드 로딩) | 프로젝트별 implement |
+| 6 | 브랜치 dirty | 구현 계속 안내 | `guides/implement.md` |
+| 7 | 브랜치 clean, base와 diff 없음 | 구현 시작 | `guides/implement.md` (변경 영역 분류) → 프로젝트별 구현 규칙 |
 | 8 | feature/ 브랜치 아님 | 이슈 탐색/생성 + 브랜치 생성 | `guides/issue.md` (start) |
 
 ## 확인 게이트
 
 - **GATE 0 (대외비 가드, 필수)**: 퍼블릭 리모트 대상 텍스트(이슈·PR 본문/제목/코멘트, 커밋 메시지, 릴리즈 노트) 생성 직전 [references/confidential-guard.md](references/confidential-guard.md) 적용. 히트 시 하드 차단. 가이드 단계에서 키워드를 피해 작성하고, `scripts/pre-tool-use.mjs` 훅이 최종 재검증한다.
-- **GATE 1 (플랜 승인)**: 우선순위 6-7에서 플랜 작성 후 사용자 승인 대기
+- **GATE 1 (플랜 승인)**: 우선순위 6-7에서 플랜 작성 후 사용자 승인 대기. 플랜은 변경 영역(공통 · 모듈)을 가른 뒤 쓴다 ([guides/implement.md](guides/implement.md))
 - **GATE 2 (커밋 승인)**: 우선순위 4에서 커밋 메시지 확인 후 사용자 승인 대기
 - **GATE 3 (한시 권한 개방)**: 되돌리기 어려운 행위(PR 머지·릴리즈·force push·리소스 삭제 등)는 `scripts/pre-tool-use.mjs` 가 막는다. 어시스턴트가 권한을 스스로 열지 않는다. 판정 주체는 항상 사람이다.
   0. **대상 행위가 계획에 들어오면 착수 전에 상태를 조회한다.** 차단을 만나기를 기다리지 않는다: `bash ~/.claude/ops-agent/current/scripts/action-gate-allow.sh status`

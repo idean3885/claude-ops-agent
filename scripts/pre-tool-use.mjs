@@ -35,6 +35,7 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
+import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 // 규칙 로딩·공개 여부 판정은 confidential-scan.mjs 와 공유한다.
 // 복제하면 가드와 스캐너의 판정이 갈라진다.
 import {
@@ -88,6 +89,9 @@ const DRYRUN = process.env.OPS_AGENT_CONFIDENTIAL_DRYRUN === '1';
 const WHAT_GUARD_DISABLE = process.env.OPS_AGENT_WHAT_GUARD_DISABLE === '1';
 const WHAT_GUARD_DRYRUN = process.env.OPS_AGENT_WHAT_GUARD_DRYRUN === '1';
 
+const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
+const BUILD_GUARD_DRYRUN = process.env.OPS_AGENT_BUILD_GUARD_DRYRUN === '1';
+
 // 한시 권한 플래그 (레거시 OPS_AGENT_CLUSTER_GUARD_* 도 계속 인식)
 const GATE_DISABLE = process.env.OPS_AGENT_ACTION_GATE_DISABLE === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DISABLE === '1';
 const GATE_DRYRUN = process.env.OPS_AGENT_ACTION_GATE_DRYRUN === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DRYRUN === '1';
@@ -132,6 +136,37 @@ let truncationNotice = '';
 if (!DISABLE) {
   try {
     const hookInput = JSON.parse(input);
+    // 빌드 스크립트 가드: 번들을 쓰는 레포의 모듈 빌드 스크립트에 라이브러리 좌표가 더해지면 막는다.
+    // 모듈 하나의 한 줄이 전 모듈의 구성 전제를 깨뜨리는데, 컴파일이 되니 리뷰 전까지 드러나지 않는다 (#574).
+    if (!BUILD_GUARD_DISABLE && /^(?:Write|Edit|MultiEdit)$/.test(hookInput.tool_name || '')) {
+      for (const change of changesOf(hookInput.tool_name, hookInput.tool_input)) {
+        const buildResult = scanBuildScriptChange(change);
+        if (!buildResult.blocked) continue;
+        const header = BUILD_GUARD_DRYRUN
+          ? '[ops-agent 빌드 스크립트 가드 · 드라이런]'
+          : '[ops-agent 빌드 스크립트 가드 · 차단]';
+        const hitLines = buildResult.hits.map(h => `  - ${h}`).join('\n');
+        const msg = `${header} 모듈 빌드 스크립트에 라이브러리 좌표가 더해집니다:\n${hitLines}\n` +
+          `파일: ${change.filePath}\n\n` +
+          `이 레포는 빌드 설정을 계층 스크립트(gradle/*.gradle)로 묶습니다. 모듈 스크립트에는 계층 적용과 모듈 간 의존만 둡니다.\n` +
+          `한 모듈의 한 줄이 전 모듈의 구성 전제를 바꾸는 공통 변경입니다.\n` +
+          `해결: 이미 번들이 올리는 라이브러리인지 먼저 확인하고, 아니면 번들(gradle/lib/*.gradle)에 두고 모듈이 적용합니다.\n` +
+          `가이드: ~/.claude/ops-agent/current/skills/flow/guides/implement.md\n` +
+          `비활성: OPS_AGENT_BUILD_GUARD_DISABLE=1 (예외 상황만)`;
+        if (BUILD_GUARD_DRYRUN) {
+          process.stderr.write(msg + '\n');
+        } else {
+          process.stdout.write(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: msg,
+            },
+          }));
+          process.exit(0);
+        }
+      }
+    }
     if ((hookInput.tool_name || '') === 'Bash') {
       const command = (hookInput.tool_input && hookInput.tool_input.command) || '';
       const cwd = hookInput.cwd || process.cwd();

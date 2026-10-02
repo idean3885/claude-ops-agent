@@ -111,7 +111,7 @@ claude plugin install ops-agent@ops-agent
 | [docs/action-gate.md](docs/action-gate.md) | 차단 규칙 |
 | [docs/lessons.md](docs/lessons.md) | 레슨런 수집·자산화, 재발 분석 |
 | [docs/adr/](docs/adr/) | 개별 결정 기록 |
-| [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | 이 레포의 작업 규칙과 반영 경로 |
+| [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | 이 레포의 작업 규칙, 수정 플로우(이슈 전 갭 확인 · 컨펌 전 재검사), 반영 경로 |
 
 만든 배경은 [블로그](https://idean3885.github.io/posts/ai-changed-my-workflow/)와 [후속 글](https://idean3885.github.io/posts/from-coding-to-thinking/)에 적었습니다.
 
