@@ -15,11 +15,14 @@ git worktree add ../claude-ops-agent-{타입}-{번호} -b {타입}/{번호} orig
 
 이슈 하나당 PR 하나로 나눕니다. `/flow` 를 부르면 이슈 생성부터 PR 까지 단계별로 진행합니다.
 
+이슈를 올리기 전에 갭인지 확인하고, 컨펌을 요청하기 전에 다시 검사합니다. 두 자리의 확인 표는 [CLAUDE.md](CLAUDE.md) 수정 플로우 절에 있습니다.
+
 ## 알아둘 것
 
 | 항목 | 정본 |
 |------|------|
 | 버전 기준, 커밋 타입 선언, 체인지로그 분류 | [CLAUDE.md](CLAUDE.md) 버전 관리 절 |
+| 수정 플로우 (이슈 전 갭 확인, 컨펌 전 재검사) | [CLAUDE.md](CLAUDE.md) 수정 플로우 절 |
 | 변경 시 검증 체크리스트 | [CLAUDE.md](CLAUDE.md) 변경 시 검증 체크리스트 절 |
 | 워크트리 분기 판단, state 파일 포맷 | [docs/worktree.md](docs/worktree.md) |
 | 스킬 변경 규칙 | [CLAUDE.md](CLAUDE.md) 스킬 변경 규칙 절 |

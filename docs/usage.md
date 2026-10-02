@@ -100,6 +100,7 @@ flowchart LR
 
 | 찾는 것 | 정본 |
 |---------|------|
+| 구현 단계 규칙 (변경 영역 분류, 빌드 스크립트) | [skills/flow/guides/implement.md](../skills/flow/guides/implement.md) |
 | 커밋 단계 규칙 | [skills/flow/guides/commit.md](../skills/flow/guides/commit.md) |
 | 선언 위치·해석 순서 | [conventions-slot.md](conventions-slot.md) |
 | 이 결정의 배경과 기각한 대안 | [adr/0002-convention-scope-and-ownership.md](adr/0002-convention-scope-and-ownership.md) |
@@ -117,6 +118,7 @@ flowchart LR
 | `scripts/action-gate-allow.sh` | 되돌리기 어려운 행위의 세션 허용 토글 | [action-gate.md](action-gate.md) |
 | `scripts/pre-merge-check.sh` | 머지 전 버전·CHANGELOG 대조 (검출 시 종료 코드 1) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-action-gate.mjs` | 한시 권한 판정·개방 안내 자체 점검 (22건) | [action-gate.md](action-gate.md) |
+| `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 (9건) | [hooks-config.md](hooks-config.md) |
 | `scripts/resolve-manifest.mjs` | 소유자 식별과 org·repo 매니페스트 발견 | [conventions-slot.md](conventions-slot.md) |
 | `config/style-rules/metrics/tells_count.py` | AI 티 지표 측정 | [지표 정의](../config/style-rules/metrics/metrics-spec.md) |
 | `config/style-rules/metrics/length_stats.py` | 유형별 분량 기준값(행) 측정 | [분량 SSOT](../config/style-rules/base/length.md) |

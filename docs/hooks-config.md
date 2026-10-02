@@ -119,6 +119,19 @@ hook 이 내보내는 검출은 두 종류입니다.
 | 명령 상한 | 구간당 최근 120건. 단독 `cd`·`ls`·`echo` 류는 제외하되 체인이 있으면 남긴다 |
 | 네트워크 | 없음. 트랜스크립트를 읽고 로컬 파일만 쓴다 |
 
+## 빌드 스크립트 가드
+
+번들을 쓰는 레포(`<root>/gradle/` 아래 `.gradle` 파일이 있음)에서 모듈 `build.gradle` 에 라이브러리 좌표(`group:artifact`)가 더해지는 `Write` · `Edit` · `MultiEdit` 를 막는다. 모듈 간 의존(`project(':x')`)과 번들 적용(`apply from`)은 통과한다. 루트 `build.gradle` 과 `gradle/` 아래 번들은 대상이 아니다.
+
+근거와 해결은 [flow 구현 가이드](../skills/flow/guides/implement.md) 「모듈 빌드 스크립트에 라이브러리를 더하지 않는다」에 있다.
+
+| 항목 | 값 |
+|------|-----|
+| 판정 | `scripts/build-guard-rules.mjs` (순수 함수) |
+| 자체 점검 | `node scripts/selftest-build-guard.mjs` |
+| 드라이런 | `OPS_AGENT_BUILD_GUARD_DRYRUN=1` (stderr 로만 알린다) |
+| 비활성 | `OPS_AGENT_BUILD_GUARD_DISABLE=1` |
+
 ## 훅 실행 예산
 
 훅이 하네스 타임아웃에 잘리면 그 호출의 검사는 성립하지 않는다. 잘렸다는 사실도 남지 않아, 가드가 걸려야 할 자리에서 조용히 빠진다.
