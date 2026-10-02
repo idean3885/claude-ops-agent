@@ -48,13 +48,13 @@
 ## 결정은 사람이, 의견은 전문가가, 실행은 실무자가 합니다
 
 - 역할은 책임 할당 매트릭스(RACI)의 세 칸을 따릅니다. 알림(Informed) 칸은 대응을 검토 중이라 아직 두지 않습니다
-- 전문가는 자기 판정 기준으로 의견을 내고 개발자가 반박합니다. 같은 반박이 두 번 나오면 그 기준을 고칩니다
+- 전문가는 표준 근거와 실무 노하우로 설계 · 운영 전반에 의견을 내고 개발자가 반박합니다. 같은 반박이 두 번 나오면 그 기준을 고치고, 확정된 실무 케이스는 노하우로 쌓습니다
 - 실무자는 위탁받은 산출물을 만들고, 그것이 옳은지는 판정하지 않습니다. 자기 산출물을 자기가 승인하지 않기 위해서입니다
 
 | 역할 | RACI | 하는 일 | 하지 않는 일 | 자리 |
 |------|------|---------|--------------|------|
 | 결정자 | Accountable | 계획 승인, 최종 확인. 작업마다 한 명 | 초고 작성, 실행 | 사용자 |
-| 전문가 | Consulted | 판정 기준으로 의견을 내고 반박받기 | 결정, 산출물 작성 | `experts/*.md` |
+| 전문가 | Consulted | 표준 근거와 실무 노하우로 조언하고 반박받기 | 결정, 산출물 작성, 실행 | `experts/*.md` |
 | 실무자 | Responsible | 위탁받은 산출물 만들기 | 옳은지 판정, 자기 승인 | `agents/*-operator.md` |
 
 전문가 명부는 [전문가 토론](skills/expert/SKILL.md) 이 정본입니다.
@@ -111,7 +111,7 @@ claude plugin install ops-agent@ops-agent
 | [docs/action-gate.md](docs/action-gate.md) | 차단 규칙 |
 | [docs/lessons.md](docs/lessons.md) | 레슨런 수집·자산화, 재발 분석 |
 | [docs/adr/](docs/adr/) | 개별 결정 기록 |
-| [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | 이 레포의 작업 규칙과 반영 경로 |
+| [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | 이 레포의 작업 규칙, 수정 플로우(이슈 전 갭 확인 · 컨펌 전 재검사), 반영 경로 |
 
 만든 배경은 [블로그](https://idean3885.github.io/posts/ai-changed-my-workflow/)와 [후속 글](https://idean3885.github.io/posts/from-coding-to-thinking/)에 적었습니다.
 

@@ -35,6 +35,7 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
+import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 // 규칙 로딩·공개 여부 판정은 confidential-scan.mjs 와 공유한다.
 // 복제하면 가드와 스캐너의 판정이 갈라진다.
 import {
@@ -88,6 +89,8 @@ const DRYRUN = process.env.OPS_AGENT_CONFIDENTIAL_DRYRUN === '1';
 const WHAT_GUARD_DISABLE = process.env.OPS_AGENT_WHAT_GUARD_DISABLE === '1';
 const WHAT_GUARD_DRYRUN = process.env.OPS_AGENT_WHAT_GUARD_DRYRUN === '1';
 
+const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
+
 // 한시 권한 플래그 (레거시 OPS_AGENT_CLUSTER_GUARD_* 도 계속 인식)
 const GATE_DISABLE = process.env.OPS_AGENT_ACTION_GATE_DISABLE === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DISABLE === '1';
 const GATE_DRYRUN = process.env.OPS_AGENT_ACTION_GATE_DRYRUN === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DRYRUN === '1';
@@ -132,6 +135,26 @@ let truncationNotice = '';
 if (!DISABLE) {
   try {
     const hookInput = JSON.parse(input);
+    // 빌드 스크립트 가드: 번들을 쓰는 레포의 모듈 빌드 스크립트에 라이브러리 좌표가 더해지면 알린다.
+    // 편집은 되돌릴 수 있어 막지 않는다 (README 「되돌릴 수 없는 것만 막는다」). 컴파일이 되니 알리지 않으면 리뷰 전까지 드러나지 않는다 (#574).
+    if (!BUILD_GUARD_DISABLE && /^(?:Write|Edit|MultiEdit)$/.test(hookInput.tool_name || '')) {
+      const notices = [];
+      for (const change of changesOf(hookInput.tool_name, hookInput.tool_input)) {
+        const buildResult = scanBuildScriptChange(change);
+        if (!buildResult.blocked) continue;
+        const hitLines = buildResult.hits.map(h => `  - ${h}`).join('\n');
+        notices.push(`[ops-agent 빌드 스크립트 가드 · 알림] 모듈 빌드 스크립트에 라이브러리 좌표가 더해집니다:\n${hitLines}\n` +
+          `파일: ${change.filePath}\n` +
+          `모듈 스크립트에는 계층 적용과 모듈 간 의존만 둡니다. 번들이 이미 올리는 라이브러리인지 확인하고, 아니면 번들(gradle/lib/*.gradle)로 옮깁니다.\n` +
+          `가이드: ~/.claude/ops-agent/current/skills/flow/guides/implement.md`);
+      }
+      if (notices.length) {
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: notices.join('\n\n') },
+        }));
+        process.exit(0);
+      }
+    }
     if ((hookInput.tool_name || '') === 'Bash') {
       const command = (hookInput.tool_input && hookInput.tool_input.command) || '';
       const cwd = hookInput.cwd || process.cwd();
@@ -158,6 +181,7 @@ if (!DISABLE) {
           : `${header} ${what}:${targetInfo}\n${hitLines}\n\n`
             + `해결: 본문·제목·메시지 또는 커밋 대상 파일에서 해당 키워드 제거 후 재시도.\n`
             + `커밋 대상 diff 는 추가된 줄만 검사한다. 키워드를 정당하게 다루는 경로는 설정의 allowPaths 로 제외.\n`
+            + `가드는 호출 전체를 한 표면으로 본다(heredoc 본문 포함). 사내 명령과 공개 명령은 호출을 나누고, 본문 파일은 Write 로 쓴다.\n`
             + (scope === 'internal'
               ? `개인 인프라·부트스트랩 세부는 본인 공간에만 남긴다. 규칙 목록: 설정의 personalDevOnly\n`
               : `비공개 저장소면 표면이 private 로 잡혀야 한다. 잘못 잡혔으면 캐시를 확인한다:\n`

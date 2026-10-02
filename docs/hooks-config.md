@@ -75,30 +75,6 @@ hook 이 내보내는 검출은 두 종류입니다.
 
 카운터가 커버하는 항목과 일부러 빼놓은 항목은 `config/style-rules/base/readability.md` 의 검증 표에 있습니다.
 
-## 레슨런 도구 경계 주입
-
-재발이 잦은 레슨런의 조치 한 줄을 발동 지점에서 주입한다. 근거와 하지 않는 것은 [lessons.md](lessons.md) 에 있다.
-
-선언이 없으면 훅은 조용히 종료한다. 자산을 갖지 않은 프로젝트에 문구가 뜨지 않는다.
-
-| 위치 | 범위 |
-|------|------|
-| `~/.claude/ops-agent/lesson-boundaries.json` | 유저 |
-| `<프로젝트 루트>/.ops-agent/lesson-boundaries.json` | 프로젝트. 유저 선언과 합쳐진다 |
-
-```json
-{
-  "boundaries": {
-    "Write|Edit": ["규모 기준을 먼저 정한다 — knowledge/areas/lessons/scale.md"],
-    "AskUserQuestion": ["묻기 전에 조사로 나오는지 본다 — knowledge/areas/lessons/ask.md"]
-  }
-}
-```
-
-키는 도구 이름 정규식이고 값은 주입할 줄의 배열이다. 한 줄에 조치와 자산 경로를 함께 적는다. 본문은 필요할 때 그 경로로 연다.
-
-훅이 반응하는 도구는 `Write` · `Edit` · `MultiEdit` · `NotebookEdit` · `AskUserQuestion` 이다. 그 밖의 도구는 선언해도 걸리지 않는다. **자리를 늘리는 것이 이 장치의 실패 방식이므로 목록을 늘릴 때는 재발 이력을 먼저 본다.**
-
 ## 컴팩트 재료 보존
 
 컴팩트 요약은 결론과 파일 경로를 남기고 **그 결론을 만든 명령을 버린다.** 결론이 근거보다 오래 살면 「이미 확인함」으로 읽혀 재확인이 일어나지 않는다. 측정과 결정은 [ADR-0013](adr/0013-compact-preserves-conclusion-not-evidence.md).
@@ -106,7 +82,7 @@ hook 이 내보내는 검출은 두 종류입니다.
 | hook | 시점 | 하는 일 |
 |------|------|--------|
 | PreCompact (`hooks/precompact-state.py`) | 컴팩트 직전 | 그 구간의 사용자 발화·실행한 명령·고친 파일을 `~/.claude/state/compact/<세션ID>.md` 에 덧붙인다 |
-| PostCompact (`hooks/postcompact-pointer.py`) | 컴팩트 직후 | 그 파일 **경로**를 컨텍스트에 주입한다 |
+| SessionStart · matcher `compact` (`hooks/postcompact-pointer.py`) | 컴팩트 직후 | 그 파일 **경로**를 컨텍스트에 주입한다 |
 
 기록 기준은 하나다. **다시 만들 수 있는 것은 남기지 않는다.** 도구 출력은 명령이 있으면 다시 만들어지므로 버리고, 사용자 발화는 다시 만들 수 없으므로 원문으로 남긴다.
 
@@ -118,6 +94,18 @@ hook 이 내보내는 검출은 두 종류입니다.
 | 커서 | 같은 디렉토리의 `<세션ID>.cursor` — 이미 기록한 줄 번호 |
 | 명령 상한 | 구간당 최근 120건. 단독 `cd`·`ls`·`echo` 류는 제외하되 체인이 있으면 남긴다 |
 | 네트워크 | 없음. 트랜스크립트를 읽고 로컬 파일만 쓴다 |
+
+## 빌드 스크립트 가드
+
+번들을 쓰는 레포(`<root>/gradle/` 아래 `.gradle` 파일이 있음)에서 모듈 `build.gradle` 에 라이브러리 좌표(`group:artifact`)가 더해지는 `Write` · `Edit` · `MultiEdit` 를 편집 직전에 알린다. 편집은 되돌릴 수 있어 막지 않는다. 모듈 간 의존(`project(':x')`)과 번들 적용(`apply from`)은 통과한다. 루트 `build.gradle` 과 `gradle/` 아래 번들은 대상이 아니다.
+
+근거와 해결은 [flow 구현 가이드](../skills/flow/guides/implement.md) 「모듈 빌드 스크립트에 라이브러리를 더하지 않는다」에 있다.
+
+| 항목 | 값 |
+|------|-----|
+| 판정 | `scripts/build-guard-rules.mjs` (순수 함수) |
+| 자체 점검 | `node scripts/selftest-build-guard.mjs` |
+| 비활성 | `OPS_AGENT_BUILD_GUARD_DISABLE=1` |
 
 ## 훅 실행 예산
 
