@@ -8,6 +8,7 @@
   P2 문단 2-4문장 · P4 산문 사이 단문 문단 · P7 산문 5문단 연속
   V2 시각 요소 없이 15-20문장 · L1 목록 3-7항목 · L4 테이블 열 5 이하
   H1 단일 H1 · H2 레벨 건너뛰기 · C1 코드 언어 명시
+  PN7 서술 문장 종결 부호 (정본은 `base/punctuation.md`)
 
 미커버 (`부분`·`불가`): P1 P3 P5 P8 P10 P11 H4 L2 L3 C2 V1 V3 CJ3
   기계가 의도를 읽어야 하는 항목이다. 구현하면 과검출로 신뢰가 떨어진다.
@@ -30,6 +31,16 @@ MAX_TABLE_COLS = 5         # L4
 # 한국어 합쇼체·해요체 종결과 ASCII 문장부호를 문장 경계로 본다.
 SENT = re.compile(r"(?:다|요)\.(?=\s|$)|[.!?](?=\s|$)")
 LIST_ITEM = re.compile(r"^(?:[-*]\s|\d+\.\s)")
+# PN7: 인라인 코드 · 「」 인용 · 링크 주소를 지운 뒤 서술어로 끝나는 조각을 본다.
+UNQUOTE = re.compile(r"`[^`]*`|「[^」]*」|\]\([^)]*\)")
+PREDICATE_END = re.compile(r"[가-힣](?:(?<!과)다|니까)\**(?:\s*\([^()]*\))?$")
+BR = re.compile(r"<br\s*/?>")
+
+
+def unterminated(text):
+    """`<br>` 로 나눈 조각 중 서술어로 끝나는데 종결 부호가 없는 개수."""
+    parts = BR.split(UNQUOTE.sub("", text))
+    return sum(1 for p in parts if PREDICATE_END.search(p.strip()))
 
 
 def blocks(text):
@@ -91,6 +102,12 @@ def check(path):
             prev_level, prose_run, since_visual = level, 0, 0
             continue
 
+        if kind in ("prose", "list"):
+            for off, b in enumerate(body):
+                if unterminated(b):
+                    hint = "개조식으로 닫거나(L7) 문장 단락으로 옮긴다" if LIST_ITEM.match(b.strip()) else "종결 부호를 붙인다"
+                    hits.append((line + off, "PN7", f"서술어로 끝나는데 종결 부호 없음. {hint}"))
+
         if kind == "prose":
             n = len(SENT.findall(" ".join(b.strip() for b in body)))
             prose_run += 1
@@ -118,6 +135,10 @@ def check(path):
                 hits.append((line, "L1", f"목록 {len(items)}항목 (상한 {MAX_LIST_ITEMS})"))
         elif kind == "table":
             cols = len(body[0].strip().strip("|").split("|"))
+            for off, row in enumerate(body[2:], 2):
+                n = sum(unterminated(c) for c in UNQUOTE.sub("", row).strip().strip("|").split("|"))
+                if n:
+                    hits.append((line + off, "PN7", f"표 셀 {n}곳이 서술어로 끝나는데 종결 부호 없음"))
             if cols > MAX_TABLE_COLS:
                 hits.append((line, "L4", f"테이블 열 {cols}개 (상한 {MAX_TABLE_COLS})"))
         elif kind == "code" and not lang:

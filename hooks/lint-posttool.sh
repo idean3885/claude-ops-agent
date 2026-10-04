@@ -206,7 +206,7 @@ msg="${msg}SSOT: ~/.claude/ops-agent/style-rules/. 위반은 즉시 교정, 사�
 if [ -n "$struct" ]; then
   count=$(printf '%s\n' "$struct" | grep -c . || true)
   msg="${msg} [구조 검출 ${count}건] $(printf '%s' "$struct" | tr '\n' ' ')"
-  msg="${msg} 표·목록으로 바꿀지 먼저 판단하라. 규칙 정본: readability.md."
+  msg="${msg} 표·목록으로 바꿀지 먼저 판단하라. PN7 은 부호를 붙이되 불릿이면 개조식으로 고친다. 규칙 정본: readability.md · punctuation.md."
 fi
 
 jq -cn --arg ctx "$msg" \
