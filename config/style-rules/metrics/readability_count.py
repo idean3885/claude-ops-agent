@@ -37,10 +37,11 @@ PREDICATE_END = re.compile(r"[가-힣](?:(?<!과)다|니까)\**(?:\s*\([^()]*\))
 BR = re.compile(r"<br\s*/?>")
 
 
-def unterminated(text):
+def unterminated(text, cell=False):
     """`<br>` 로 나눈 조각 중 서술어로 끝나는데 종결 부호가 없는 개수."""
     parts = BR.split(UNQUOTE.sub("", text))
-    return sum(1 for p in parts if PREDICATE_END.search(p.strip()))
+    # why: 표의 공백 없는 한 낱말 셀(「검증한다」 같은 판정 · 이름)은 문장이 아니다
+    return sum(1 for p in map(str.strip, parts) if (" " in p or not cell) and PREDICATE_END.search(p))
 
 
 def blocks(text):
@@ -135,8 +136,12 @@ def check(path):
                 hits.append((line, "L1", f"목록 {len(items)}항목 (상한 {MAX_LIST_ITEMS})"))
         elif kind == "table":
             cols = len(body[0].strip().strip("|").split("|"))
-            for off, row in enumerate(body[2:], 2):
-                n = sum(unterminated(c) for c in UNQUOTE.sub("", row).strip().strip("|").split("|"))
+            sep = re.compile(r"^\s*\|[\s:|-]+\|?\s*$")
+            for off, row in enumerate(body):
+                # why: 문단에 끊겨 이어진 표는 머리행 없이 시작하므로 앞 두 줄을 건너뛰면 본문 행을 놓친다
+                if sep.match(row) or (off == 0 and len(body) > 1 and sep.match(body[1])):
+                    continue
+                n = sum(unterminated(c, cell=True) for c in UNQUOTE.sub("", row).strip().strip("|").split("|"))
                 if n:
                     hits.append((line + off, "PN7", f"표 셀 {n}곳이 서술어로 끝나는데 종결 부호 없음"))
             if cols > MAX_TABLE_COLS:
