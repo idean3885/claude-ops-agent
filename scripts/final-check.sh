@@ -2,9 +2,9 @@
 # final-check.sh: 머지 직전 최종 점검 (#612).
 #
 # 점검이 LLM 의 기억에 달려 있으면 게이트가 열린 순간 점검 없이 머지된다. 이 스크립트가
-# 결정적 점검을 돌리고, 통과하면 **머지할 커밋(HEAD)에 묶인 영수증**을 남긴다.
-# pre-tool-use.mjs 가 `gh pr merge` 직전에 이 영수증을 확인한다. 푸시로 HEAD 가 바뀌면
-# 영수증은 무효가 되므로 다시 돌린다.
+# 결정적 점검을 돌리고, 통과하면 **머지할 커밋(HEAD)에 묶인 통과 기록**을 남긴다.
+# pre-tool-use.mjs 가 `gh pr merge` 직전에 이 통과 기록을 확인한다. 푸시로 HEAD 가 바뀌면
+# 통과 기록은 무효가 되므로 다시 돌린다.
 #
 # 사용: final-check.sh <PR번호> --notes <파일>
 #   notes  판단 점검 노트. 아래 세 절이 있고 각 본문이 비어 있지 않아야 한다.
@@ -21,13 +21,13 @@
 #   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) 검출. 기존 줄의 PN7 과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
 #   f. 노트의 세 절 중 없거나 비어 있는 것
 #
-# 통과하면 노트를 PR 댓글로 올리고 영수증을 기록한다.
-#   영수증: ~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json
+# 통과하면 노트를 PR 댓글로 올리고 통과 기록을 남긴다.
+#   통과 기록: ~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json
 #   지표:   ~/.claude/ops-agent/metrics/final-check.jsonl (매 실행 한 줄)
 set -uo pipefail
 
 START_MS=$(python3 -c 'import time; print(int(time.time()*1000))')
-# 검증 실행이 실제 영수증 · 지표를 오염시키지 않도록 기록 위치만 바꿀 수 있다 (gh 인증은 HOME 그대로 쓴다).
+# 검증 실행이 실제 통과 기록 · 지표를 오염시키지 않도록 기록 위치만 바꿀 수 있다 (gh 인증은 HOME 그대로 쓴다).
 HOME_DIR="${FINAL_CHECK_HOME:-${HOME:?}}"
 CACHE_DIR="$HOME_DIR/.claude/ops-agent/.cache/final-check"
 METRICS_FILE="$HOME_DIR/.claude/ops-agent/metrics/final-check.jsonl"
@@ -170,7 +170,7 @@ mkdir -p "$CACHE_DIR"
 jq -nc --argjson pr "$PR" --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$REPO" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{pr:$pr,head:$head,branch:$branch,repo:$repo,at:$at}' >"$CACHE_DIR/${REPO/\//__}__${PR}.json"
 record pass
-echo "최종 점검 통과 (PR $PR, HEAD ${HEAD_SHA:0:7}). 영수증을 남겼다."
+echo "최종 점검 통과 (PR $PR, HEAD ${HEAD_SHA:0:7}). 통과 기록을 남겼다."
 # why: 훅은 로컬 추적 브랜치로만 비교하므로, 원격에 다른 푸시가 있으면 서버 쪽 대조로 막는다
 echo "머지: gh pr merge $PR --merge --match-head-commit $HEAD_SHA"
 echo "이슈가 끝나면 세션 종료 또는 /clear"

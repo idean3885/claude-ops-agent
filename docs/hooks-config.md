@@ -135,9 +135,9 @@ hook 이 내보내는 검출은 두 종류입니다.
 | 자체 점검 | `node scripts/selftest-build-guard.mjs` |
 | 비활성 | `OPS_AGENT_BUILD_GUARD_DISABLE=1` |
 
-## 최종 점검 영수증
+## 최종 점검 통과 기록
 
-`pre-tool-use.mjs` 가 `gh pr merge` 를 잡으면 `scripts/final-check.sh` 가 남긴 영수증을 로컬에서 확인해, 없거나 head 가 어긋나면 막습니다. 점검 항목과 영수증 형식은 [action-gate.md](action-gate.md) 「최종 점검 영수증」에 있고, 비활성은 `OPS_AGENT_FINAL_CHECK_DISABLE=1` 입니다.
+`pre-tool-use.mjs` 가 `gh pr merge` 를 잡으면 `scripts/final-check.sh` 가 남긴 통과 기록을 로컬에서 확인해, 없거나 head 가 어긋나면 막습니다. 점검 항목과 통과 기록 형식은 [action-gate.md](action-gate.md) 「최종 점검 통과 기록」에 있고, 비활성은 `OPS_AGENT_FINAL_CHECK_DISABLE=1` 입니다.
 
 ## 세션 범위
 
