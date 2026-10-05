@@ -426,6 +426,36 @@ function assembleGlobalClaudeMd() {
 // 파일이 사용자 스코프(~/.claude/ops-agent/)에 있어 작업 디렉토리가 바뀌어도 풀리지 않는다.
 // 메모리는 프로젝트 디렉토리별이라 운반체로 쓰지 않는다 (#442).
 // 시범이라도 호출형이 아니라 상시형이다. 사용자가 「확인」을 부르지 않는다.
+// 지표: jsonl 의 groupBy 필드 값별 줄 수. since 가 없으면 trial 의 started 이후 ts 만 센다.
+// 파일 없음 · 형식 오류는 조용히 건너뛴다 (세션 시작을 막지 않는다).
+const METRIC_MAX_BYTES = 5 * 1024 * 1024;
+function buildMetricText(m, started) {
+  try {
+    if (!m || !m.source || !m.groupBy) return '';
+    const label = m.name || m.groupBy;
+    const src = String(m.source).replace(/^~(?=\/|$)/, homedir());
+    if (!existsSync(src) || lstatSync(src).size > METRIC_MAX_BYTES) return `${label} 기록 없음`;
+    const from = Date.parse(m.since || started || '');
+    const counts = new Map();
+    for (const line of readFileSync(src, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      let row;
+      try { row = JSON.parse(line); } catch { continue; }
+      if (!row || typeof row !== 'object') continue;
+      if (!Number.isNaN(from)) {
+        const ts = Date.parse(row.ts);
+        if (Number.isNaN(ts) || ts < from) continue;
+      }
+      const key = String(row[m.groupBy] ?? '(없음)');
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    if (counts.size === 0) return `${label} 기록 없음`;
+    return `${label} ${[...counts].map(([k, n]) => `${k} ${n}`).join(' · ')}`;
+  } catch {
+    return '';
+  }
+}
+
 function buildTrialsContext() {
   try {
     const path = join(opsAgentGlobal, 'trials.local.json');
@@ -441,6 +471,18 @@ function buildTrialsContext() {
       lines.push(`- ${t.name}${t.title ? ` · ${t.title}` : ''}${t.started ? ` (${t.started}~)` : ''}`);
       for (const r of t.rules || []) lines.push(`  규칙: ${r}`);
       if (t.review) lines.push(`  검토 조건: ${t.review}`);
+      // 지표 · 기준 · 판정일: trial 당 최대 4줄
+      const metricTexts = (Array.isArray(t.metrics) ? t.metrics : []).map(m => buildMetricText(m, t.started)).filter(Boolean);
+      if (metricTexts.length) lines.push(`  지표: ${metricTexts.join(' / ')}`);
+      const criteria = (Array.isArray(t.criteria) ? t.criteria : []).filter(c => typeof c === 'string' && c);
+      if (criteria.length) lines.push(`  기준: ${criteria.join(' / ')}`);
+      if (typeof t.reviewAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.reviewAt)) {
+        lines.push(`  판정일: ${t.reviewAt}`);
+        // why: 판정일은 사용자 달력 기준이다. UTC 로 비교하면 한국 자정 직후 9시간 동안 하루 늦게 잡힌다
+        if (new Date().toLocaleDateString('sv-SE') >= t.reviewAt) {
+          lines.push('  판정일 도래: 기준과 지표를 대조해 정식 도입 · 폐기 · 재검토를 사용자에게 묻는다');
+        }
+      }
       lines.push(`  산출물·관찰은 ${path} 의 log 에 한 줄씩 더한다`);
     }
     return lines.join('\n');
