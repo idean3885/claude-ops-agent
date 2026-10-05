@@ -24,13 +24,16 @@
  *    세션 허용: OPS_AGENT_ACTION_GATE_ALLOW=1 또는 action-gate-allow.sh on 마커.
  *    드라이런 OPS_AGENT_ACTION_GATE_DRYRUN=1 · 비활성 OPS_AGENT_ACTION_GATE_DISABLE=1.
  *    (레거시 OPS_AGENT_CLUSTER_WRITE_ALLOW / _GUARD_* · cluster-write-allow.json 도 계속 인식)
+ * 4. 최종 점검 영수증 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
+ *    영수증이 있어야 통과한다. 판정은 로컬만이다. 영수증 head 와 origin 추적 브랜치를 비교한다.
+ *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
  * 비활성: OPS_AGENT_CONFIDENTIAL_DISABLE=1 설정 시 가드 전체 스킵
  */
 import { execSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
@@ -94,6 +97,12 @@ const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
 // 한시 권한 플래그 (레거시 OPS_AGENT_CLUSTER_GUARD_* 도 계속 인식)
 const GATE_DISABLE = process.env.OPS_AGENT_ACTION_GATE_DISABLE === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DISABLE === '1';
 const GATE_DRYRUN = process.env.OPS_AGENT_ACTION_GATE_DRYRUN === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DRYRUN === '1';
+
+// 최종 점검 영수증 (#612). 게이트 플래그와 독립이다. 게이트가 열려 있어도 영수증은 따로 본다.
+const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
+const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
+// `gh pr merge` 가 값을 취하는 플래그. 값이 PR 번호 자리로 읽히지 않게 먼저 걷어낸다.
+const MERGE_VALUE_FLAG = /(?:^|\s)(?:-[btFAR]|--(?:body|body-file|subject|match-head-commit|author-email|repo))(?:\s+|=)(?:"[^"]*"|'[^']*'|\S+)/g;
 
 // 운영 클러스터 쓰기 가드 — mutating verb / 값 취하는 플래그 세트.
 // (가드 호출이 최상위 await 컨텍스트라 const 초기화가 먼저 끝나도록 상단에 선언 — TDZ 회피)
@@ -329,6 +338,31 @@ if (!DISABLE) {
               process.exit(0);
             }
           }
+        }
+      }
+
+      // 최종 점검 영수증: 게이트 개방 여부와 별개로 머지 직전 점검 기록을 요구한다 (#612).
+      // 점검이 기억에 달려 있으면 게이트가 열린 순간 점검 없이 머지된다.
+      if (!FINAL_CHECK_DISABLE && remainingMs() > 0) {
+        const miss = checkFinalReceipt(command, hookInput.cwd);
+        if (miss) {
+          appendFinalCheckMetric({ repo: miss.repo, pr: miss.pr, result: 'blocked', reason: miss.reason });
+          const prArg = miss.pr || '<PR번호>';
+          const msg = `[ops-agent 최종 점검 · 차단] 머지할 커밋의 최종 점검 영수증이 없습니다: ${miss.reason}\n\n` +
+            `아래를 실행해 점검을 통과한 뒤 머지하세요:\n` +
+            `  bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" ${prArg} --notes <파일>\n\n` +
+            `노트 파일에는 다음 세 절이 있고 각 본문이 비어 있지 않아야 합니다 (「해당 없음」 한 줄은 허용):\n` +
+            `  ## 설계 반영\n  ## 서브 에이전트 산출물\n  ## 교정\n` +
+            `푸시로 HEAD 가 바뀌면 영수증은 무효가 되므로 다시 실행합니다.\n` +
+            `전체 절차: docs/action-gate.md 「최종 점검 영수증」 · 해제: OPS_AGENT_FINAL_CHECK_DISABLE=1`;
+          process.stdout.write(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: msg,
+            },
+          }));
+          process.exit(0);
         }
       }
     }
@@ -950,6 +984,70 @@ function detectRepoActions(command) {
     }
   }
   return ops;
+}
+
+// ─── 최종 점검 영수증 (#612) ───
+// final-check.sh 가 통과 시 남기는 영수증을 로컬에서만 확인한다. 네트워크 호출은 없다.
+// 영수증의 head 와 로컬 추적 브랜치(refs/remotes/origin/<branch>)를 비교하므로, 푸시로 HEAD 가
+// 바뀌면 값이 어긋나 영수증이 무효가 된다. 영수증이 없거나 어긋나면 사유를 돌려주고, 통과면 null.
+function appendFinalCheckMetric(rec) {
+  try {
+    const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'final-check.jsonl');
+    mkdirSync(dirname(file), { recursive: true });
+    appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), ...rec }) + '\n');
+  } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
+}
+
+function checkFinalReceipt(command, hookCwd) {
+  const mergeSegs = gateSegments(command).filter(s => /^(?:\S*\/)?gh\s+pr\s+merge\b/.test(s));
+  if (!mergeSegs.length) return null;
+
+  const dir = extractCwdFromCommand(command, hookCwd);
+  const runGit = args => {
+    try {
+      return execSync(`git ${args}`, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: budgeted(800) }).trim();
+    } catch {
+      return null;
+    }
+  };
+
+  // repo 는 명령 cwd 의 origin 에서 얻는다. 영수증 파일명은 <owner>__<repo>__<PR> 이다.
+  const parsed = parseRemote(runGit('remote get-url origin') || '');
+  const parts = parsed ? parsed.slug.split('/') : [];
+  if (parts.length < 3) return { repo: '', pr: '', reason: 'origin 에서 레포를 알 수 없음' };
+  const repo = parts.slice(-2).join('/');
+  const key = parts.slice(-2).join('__');
+
+  const rest = mergeSegs[0].replace(/^.*?\bpr\s+merge\b/, '').replace(MERGE_VALUE_FLAG, ' ');
+  const arg = firstPositional(rest);
+  let pr = '';
+  let branch = '';
+  if (arg && /^\d+$/.test(arg)) pr = arg;
+  else if (arg && /\/pull\/(\d+)/.test(arg)) pr = arg.match(/\/pull\/(\d+)/)[1];
+  else branch = arg || runGit('rev-parse --abbrev-ref HEAD') || '';
+
+  let receipt = null;
+  try {
+    if (pr) {
+      receipt = JSON.parse(readFileSync(join(finalCheckDir(), `${key}__${pr}.json`), 'utf8'));
+    } else {
+      // 번호가 없으면 브랜치명으로 찾는다. 같은 브랜치의 영수증이 여럿이면 가장 늦은 것을 쓴다.
+      const found = readdirSync(finalCheckDir())
+        .filter(f => f.startsWith(`${key}__`) && f.endsWith('.json'))
+        .map(f => { try { return JSON.parse(readFileSync(join(finalCheckDir(), f), 'utf8')); } catch { return null; } })
+        .filter(r => r && r.branch === branch)
+        .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      receipt = found[0] || null;
+      if (receipt) pr = String(receipt.pr);
+    }
+  } catch { receipt = null; }
+  if (!receipt) return { repo, pr, reason: `영수증 없음 (${repo}${pr ? ` #${pr}` : ` 브랜치 ${branch || '?'}`})` };
+
+  const originHead = runGit(`rev-parse refs/remotes/origin/${receipt.branch}`);
+  if (!originHead || originHead !== receipt.head) {
+    return { repo, pr, reason: `영수증 head(${String(receipt.head).slice(0, 7)})가 origin/${receipt.branch}(${originHead ? originHead.slice(0, 7) : '없음'})와 다름` };
+  }
+  return null;
 }
 
 // 명령 뒤 토큰들에서 첫 positional(=서브커맨드/verb) 을 찾는다.
