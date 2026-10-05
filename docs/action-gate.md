@@ -1,6 +1,6 @@
 # 차단 규칙 레퍼런스
 
-`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 세 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
+`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 네 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
 
 이 hook 은 판정만 합니다. 세션 컨텍스트 주입은 `scripts/session-start.mjs` 가 맡습니다.
 
@@ -9,6 +9,7 @@
 | 대외비 가드 | 공개 표면에 노출되는 대외비 키워드·패턴 | 본문 수정 (해제 플래그는 오탐 조정용) |
 | 도메인 What 가드 | 커밋·PR·이슈 본문의 구현 세부 | 본문 수정 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
+| 최종 점검 영수증 | 영수증 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
 
 ---
 
@@ -208,11 +209,72 @@ node scripts/selftest-action-gate.mjs
 
 훅 판정 13건과 개방 안내 9건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 돌립니다. 동거 검사는 창이 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다.
 
+영수증 판정은 임시 HOME 과 임시 레포의 origin 추적 브랜치로 6건을 봅니다(없음 · 일치 · head 불일치 · 다른 PR · 브랜치명 · 값 플래그). 동거 검사 케이스는 영수증 검사를 끄고(`OPS_AGENT_FINAL_CHECK_DISABLE=1`) 돌립니다.
+
 개방 안내는 마커를 만들지 않도록 함수만 불러 씁니다(`OPS_AGENT_GATE_LIB=1`). 점검이 사용자의 열린 창을 덮어쓰면 안 됩니다.
 
 ### 한계
 
 최상위 명령만 봅니다. `bash deploy.sh` 처럼 스크립트 내부에서 실행되는 명령은 탐지하지 못합니다. 의도된 배포 스크립트 경로는 승인된 것으로 간주하고, 직접 타이핑하는 일회성 명령을 막는 안전망으로 둡니다.
+
+---
+
+## 최종 점검 영수증
+
+머지 직전 점검이 어시스턴트의 기억에 달려 있으면, 게이트가 열린 순간 점검 없이 머지됩니다. 그래서 `gh pr merge` 는 게이트 개방과 별개로 **머지할 커밋에 묶인 영수증**을 요구합니다 (#612).
+
+| 층 | 수단 |
+|----|------|
+| 트리거 | PreToolUse 가 `gh pr merge` 를 잡으면 영수증을 확인합니다. 머지 호출에서만 동작합니다. |
+| 결정적 점검 | `scripts/final-check.sh <PR번호> --notes <파일>` |
+| 판단 점검 | 노트의 세 절을 어시스턴트가 채웁니다. 스크립트는 절이 비었는지만 봅니다. |
+| 무효화 | 푸시로 HEAD 가 바뀌면 영수증의 head 가 어긋나 무효가 됩니다. |
+
+### 점검 항목
+
+하나라도 걸리면 실패 목록을 출력하고 종료 코드 1 입니다.
+
+| 항목 | 실패 조건 |
+|------|-----------|
+| a. 체크 | 실패 · 취소 · 대기 중인 체크가 있습니다. |
+| b. 리뷰 스레드 | 미해결 스레드가 있습니다. |
+| c. 리뷰 봇 | `.coderabbit.yaml` 이 있고 CodeRabbit 마지막 리뷰의 `commit_id` 가 HEAD 가 아닌데 노트의 `## 자체 검증` 이 비어 있습니다. |
+| d. 레포 체크리스트 | `.ops-agent/final-check.sh` 가 있고 종료 코드가 0 이 아닙니다. |
+| e. 변경 문서 | PR 이 **추가한 줄**에 PN7 검출이 있습니다. 기존 줄의 PN7 은 건수만, 다른 규칙 검출은 출력만 합니다. |
+| f. 판단 노트 | `## 설계 반영` · `## 서브 에이전트 산출물` · `## 교정` 중 없거나 비어 있는 절이 있습니다. |
+
+체크 상태 SUCCESS 는 리뷰 여부와 무관합니다. 리뷰 봇은 `commit_id` 로 판정합니다.
+
+증분 리뷰가 꺼진 레포는 수정 커밋을 건너뜁니다. 한도에 걸려도 같습니다. 이때 바뀐 부분을 자체 검증하고 그 사실을 `## 자체 검증` 에 적습니다.
+
+「해당 없음」 같은 한 줄은 본문으로 인정합니다. 비워 두는 것만 막습니다.
+
+레포별 체크리스트는 레포가 `.ops-agent/final-check.sh` 로 선언합니다. 스크립트가 PR 번호를 인자와 `FINAL_CHECK_PR` 로 받습니다.
+
+### 통과와 영수증
+
+통과하면 노트를 PR 댓글로 올리고 영수증을 남깁니다.
+
+| 항목 | 값 |
+|------|-----|
+| 영수증 | `~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json` = `{pr, head, branch, repo, at}` |
+| 지표 | `~/.claude/ops-agent/metrics/final-check.jsonl` 에 매 실행 한 줄. 점검은 `{ts, repo, pr, result: pass\|fail, failed, duration_ms}`, 훅 차단은 `{ts, repo, pr, result: blocked, reason}` |
+
+### 훅 판정
+
+판정은 로컬에서만 합니다. 영수증의 head 와 `git rev-parse refs/remotes/origin/<영수증 branch>` 를 비교합니다. 네트워크 호출이 없어 훅 예산 안에서 끝납니다.
+
+PR 번호는 명령의 첫 positional 에서 얻습니다. 없으면 현재 브랜치명으로 영수증을 찾습니다. repo 는 명령 cwd 의 origin 에서 얻습니다.
+
+영수증이 없거나 head 가 어긋나면 차단합니다. 메시지가 실행할 명령 한 줄과 노트 세 절의 제목을 싣습니다.
+
+게이트가 닫혀 있으면 게이트 차단이 먼저 나옵니다. 영수증 확인은 게이트가 열린 뒤에도 따로 실행됩니다.
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
+```
+
+점검이 끝나면 한 이슈의 생애가 끝난 것이므로 세션을 종료하거나 `/clear` 합니다.
 
 ---
 
@@ -225,5 +287,6 @@ node scripts/selftest-action-gate.mjs
 | 대외비 가드 | `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` | `OPS_AGENT_CONFIDENTIAL_DISABLE=1` |
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
+| 최종 점검 영수증 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.

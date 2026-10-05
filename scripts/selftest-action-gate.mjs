@@ -13,7 +13,7 @@
  * 종료 코드: 실패 1, 전부 통과 0
  */
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -106,7 +106,8 @@ for (const [name, command, want] of CASES) {
       tool_input: { command },
     }),
     encoding: 'utf8',
-    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1' },
+    // 영수증 검사는 아래 별도 케이스에서 본다. 여기서는 동거 검사 판정만 보도록 끈다.
+    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1' },
   });
 
   let got = 'pass';
@@ -134,5 +135,56 @@ for (const [name, command, want] of CASES) {
   console.log(`${ok ? '  OK' : '  XX'}  ${name} — want ${want}, got ${got}${detail ? ` · ${detail}` : ''}`);
 }
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length}건 전부 통과`);
+// 최종 점검 영수증 (#612). 게이트가 열린 상태에서 `gh pr merge` 가 영수증으로 갈리는지 본다.
+// 임시 HOME 에 영수증을 만들고 임시 레포의 origin 추적 브랜치와 대조한다. 사용자의 영수증·
+// 지표 파일을 건드리지 않고 네트워크도 쓰지 않는다.
+const RECEIPT_REPO = 'selftest/repo';
+const RECEIPT_BRANCH = 'feat/7';
+function receiptCase(name, want, setup, command = 'gh pr merge 7 --merge') {
+  const home = mkdtempSync(join(tmpdir(), 'receipt-selftest-'));
+  const repo = join(home, 'work');
+  mkdirSync(repo);
+  const git = (...a) => spawnSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+  git('init', '-q');
+  git('remote', 'add', 'origin', `https://github.com/${RECEIPT_REPO}.git`);
+  git('commit', '-q', '--allow-empty', '-m', 'x');
+  const head = git('rev-parse', 'HEAD').stdout.trim();
+  git('update-ref', `refs/remotes/origin/${RECEIPT_BRANCH}`, head);
+  const dir = join(home, '.claude', 'ops-agent', '.cache', 'final-check');
+  mkdirSync(dir, { recursive: true });
+  setup({ dir, head });
+
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', cwd: repo, session_id: 'selftest', tool_input: { command } }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '' },
+  });
+  let got = 'pass';
+  let detail = '';
+  try {
+    const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput;
+    if (hs && hs.permissionDecision === 'deny') { got = 'deny'; detail = hs.permissionDecisionReason.split('\n')[0]; }
+  } catch { /* 출력 없음 = 통과 */ }
+  // 차단이면 지표에 blocked 한 줄이 남아야 하고, 통과면 남지 않아야 한다.
+  const metrics = join(home, '.claude', 'ops-agent', 'metrics', 'final-check.jsonl');
+  const logged = existsSync(metrics) && readFileSync(metrics, 'utf8').includes('"result":"blocked"');
+  const ok = got === want && logged === (want === 'deny');
+  if (!ok) failed++;
+  rmSync(home, { recursive: true, force: true });
+  console.log(`${ok ? '  OK' : '  XX'}  영수증: ${name} — want ${want}, got ${got}${logged ? ' · 지표 기록' : ''}${detail ? ` · ${detail}` : ''}`);
+}
+const writeReceipt = (dir, pr, head, branch = RECEIPT_BRANCH) =>
+  writeFileSync(join(dir, `${RECEIPT_REPO.replace('/', '__')}__${pr}.json`),
+    JSON.stringify({ pr, head, branch, repo: RECEIPT_REPO, at: new Date().toISOString() }));
+const RECEIPT_CASES = [
+  ['영수증 없음', 'deny', () => {}],
+  ['head 일치', 'pass', ({ dir, head }) => writeReceipt(dir, 7, head)],
+  ['head 불일치 (푸시로 바뀜)', 'deny', ({ dir }) => writeReceipt(dir, 7, '0'.repeat(40))],
+  ['다른 PR 의 영수증', 'deny', ({ dir, head }) => writeReceipt(dir, 8, head)],
+  ['번호 없이 브랜치명으로 일치', 'pass', ({ dir, head }) => writeReceipt(dir, 7, head), `gh pr merge ${RECEIPT_BRANCH} --merge`],
+  ['번호 앞 값 플래그', 'pass', ({ dir, head }) => writeReceipt(dir, 7, head), 'gh pr merge --subject "x y" 7 --merge'],
+];
+for (const [name, want, setup, command] of RECEIPT_CASES) receiptCase(name, want, setup, command);
+
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + RECEIPT_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);
