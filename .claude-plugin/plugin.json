@@ -1,6 +1,6 @@
 {
   "name": "ops-agent",
-  "version": "9.14.0",
+  "version": "9.15.0",
   "description": "A Claude Code plugin that augments the developer's judgment with expert agents and applies flows, rules, and gates so operator agents stay within it.",
   "author": {
     "name": "idean3885"
