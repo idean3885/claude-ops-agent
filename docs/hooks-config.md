@@ -35,6 +35,34 @@
 
 `ended` 가 있는 항목은 주입하지 않습니다. 산출물·관찰은 `log` 에 한 줄씩 더하고, 판정은 세션 끝이 아니라 `review` 조건이 충족될 때 합니다. 프로젝트 메모리는 디렉토리별이라 이 용도의 운반체로 쓰지 않습니다 (#442).
 
+선택 필드로 판정 근거를 시범에 붙일 수 있습니다. 세션 시작 때 trial 마다 최대 4줄(지표 · 기준 · 판정일 · 도래 안내)이 더해집니다.
+
+| 필드 | 형식 | 역할 |
+|------|------|------|
+| `metrics` | `[{ name, source, groupBy, since? }]` | `source`(jsonl)의 `groupBy` 필드 값별 줄 수를 셉니다. `since` 가 없으면 `started` 이후 `ts`(ISO 문자열)만 셉니다. 파일이 없으면 「기록 없음」으로 냅니다. |
+| `criteria` | 문자열 배열 | 판정 기준입니다. ` / ` 로 이어 한 줄로 냅니다. |
+| `reviewAt` | `YYYY-MM-DD` | 판정일입니다. 오늘이 이 날 이후면 기준과 지표를 대조해 정식 도입 · 폐기 · 재검토를 사용자에게 묻는 안내가 붙습니다. |
+
+```json
+{
+  "name": "final-check",
+  "started": "2026-09-01",
+  "metrics": [{ "name": "차단", "source": "~/.claude/ops-agent/metrics/final-check.jsonl", "groupBy": "result" }],
+  "criteria": ["blocked 가 fail 보다 많다", "오탐 신고 0건"],
+  "reviewAt": "2026-10-01"
+}
+```
+
+```
+지표: 차단 blocked 3 · pass 5 · fail 2
+기준: blocked 가 fail 보다 많다 / 오탐 신고 0건
+판정일: 2026-10-01
+```
+
+- 지표: 훅이 자동으로 남기는 jsonl 만, 체감 점수 제외
+- 기준 미달: 폐기가 아니라 재검토
+- 읽기 실패 · 형식 오류: 조용히 건너뜀, 세션 시작은 막지 않음
+
 ```json
 { "pattern": "포괄적|체계적", "replacement": "구체 표현 (무엇을/어떻게)", "reason": "AI 슬롭 (추상적 과장 형용사)" }
 ```
