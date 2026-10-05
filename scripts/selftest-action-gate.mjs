@@ -106,7 +106,7 @@ for (const [name, command, want] of CASES) {
       tool_input: { command },
     }),
     encoding: 'utf8',
-    // 영수증 검사는 아래 별도 케이스에서 본다. 여기서는 동거 검사 판정만 보도록 끈다.
+    // 통과 기록 검사는 아래 별도 케이스에서 본다. 여기서는 동거 검사 판정만 보도록 끈다.
     // 세션 범위도 끈다. 켜 두면 실제 HOME 에 범위 캐시가 쓰인다 (#613).
     env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_SESSION_SCOPE_DISABLE: '1' },
   });
@@ -136,8 +136,8 @@ for (const [name, command, want] of CASES) {
   console.log(`${ok ? '  OK' : '  XX'}  ${name} — want ${want}, got ${got}${detail ? ` · ${detail}` : ''}`);
 }
 
-// 최종 점검 영수증 (#612). 게이트가 열린 상태에서 `gh pr merge` 가 영수증으로 갈리는지 본다.
-// 임시 HOME 에 영수증을 만들고 임시 레포의 origin 추적 브랜치와 대조한다. 사용자의 영수증·
+// 최종 점검 통과 기록 (#612). 게이트가 열린 상태에서 `gh pr merge` 가 통과 기록으로 갈리는지 본다.
+// 임시 HOME 에 통과 기록을 만들고 임시 레포의 origin 추적 브랜치와 대조한다. 사용자의 통과 기록·
 // 지표 파일을 건드리지 않고 네트워크도 쓰지 않는다.
 const RECEIPT_REPO = 'selftest/repo';
 const RECEIPT_BRANCH = 'feat/7';
@@ -172,16 +172,16 @@ function receiptCase(name, want, setup, command = 'gh pr merge 7 --merge') {
   const ok = got === want && logged === (want === 'deny');
   if (!ok) failed++;
   rmSync(home, { recursive: true, force: true });
-  console.log(`${ok ? '  OK' : '  XX'}  영수증: ${name} — want ${want}, got ${got}${logged ? ' · 지표 기록' : ''}${detail ? ` · ${detail}` : ''}`);
+  console.log(`${ok ? '  OK' : '  XX'}  통과 기록: ${name} — want ${want}, got ${got}${logged ? ' · 지표 기록' : ''}${detail ? ` · ${detail}` : ''}`);
 }
 const writeReceipt = (dir, pr, head, branch = RECEIPT_BRANCH) =>
   writeFileSync(join(dir, `${RECEIPT_REPO.replace('/', '__')}__${pr}.json`),
     JSON.stringify({ pr, head, branch, repo: RECEIPT_REPO, at: new Date().toISOString() }));
 const RECEIPT_CASES = [
-  ['영수증 없음', 'deny', () => {}],
+  ['통과 기록 없음', 'deny', () => {}],
   ['head 일치', 'pass', ({ dir, head }) => writeReceipt(dir, 7, head)],
   ['head 불일치 (푸시로 바뀜)', 'deny', ({ dir }) => writeReceipt(dir, 7, '0'.repeat(40))],
-  ['다른 PR 의 영수증', 'deny', ({ dir, head }) => writeReceipt(dir, 8, head)],
+  ['다른 PR 의 통과 기록', 'deny', ({ dir, head }) => writeReceipt(dir, 8, head)],
   ['번호 없이 브랜치명으로 일치', 'pass', ({ dir, head }) => writeReceipt(dir, 7, head), `gh pr merge ${RECEIPT_BRANCH} --merge`],
   ['번호 앞 값 플래그', 'pass', ({ dir, head }) => writeReceipt(dir, 7, head), 'gh pr merge --subject "x y" 7 --merge'],
 ];

@@ -94,7 +94,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 ## 이 프로젝트 (claude-ops-agent)
 
-이슈 플로우 워크플로우를 제공하는 ops-agent 플러그인입니다.
+개발자의 판단을 전문가 에이전트로 보강하고, 실무자 에이전트가 벗어나지 않게 플로우 · 규칙 · 게이트를 적용하는 Claude Code 플러그인입니다.
 
 ### 버전 관리
 
@@ -146,7 +146,7 @@ main ────────────────●─────
 
 로컬 `gh pr merge` 를 쓸 때는 `./scripts/pre-merge-check.sh <브랜치> main` 을 앞에 물린다. 브랜치가 타겟보다 오래된 베이스 위에 있으면 머지가 버전을 뒤로 밀어낸다. 검출 시 종료 코드 1 이라 `&&` 체인이 멈춘다. 한시 권한 대상 행위를 다른 명령과 한 블록에 두면 훅이 차단한다 (ADR 0011).
 
-머지 직전에는 `scripts/final-check.sh <PR번호> --notes <파일>` 의 영수증이 있어야 한다. 없으면 훅이 `gh pr merge` 를 막는다 (#612, [docs/action-gate.md](docs/action-gate.md) 「최종 점검 영수증」).
+머지 직전에는 `scripts/final-check.sh <PR번호> --notes <파일>` 의 통과 기록이 있어야 한다. 없으면 훅이 `gh pr merge` 를 막는다 (#612, [docs/action-gate.md](docs/action-gate.md) 「최종 점검 통과 기록」).
 
 머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (마켓플레이스 update + 활성 세션 경로 복원).
 

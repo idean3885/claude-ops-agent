@@ -9,7 +9,7 @@
 | 대외비 가드 | 공개 표면에 노출되는 대외비 키워드·패턴 | 본문 수정 (해제 플래그는 오탐 조정용) |
 | 도메인 What 가드 | 커밋·PR·이슈 본문의 구현 세부 | 본문 수정 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
-| 최종 점검 영수증 | 영수증 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
+| 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
 | 세션 범위 | 세션 범위 밖 레포로의 첫 쓰기 | 그 레포에 대한 쓰기를 다시 실행합니다. |
 
 ---
@@ -210,7 +210,7 @@ node scripts/selftest-action-gate.mjs
 
 훅 판정 13건과 개방 안내 9건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 돌립니다. 동거 검사는 창이 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다.
 
-영수증 판정은 임시 HOME 과 임시 레포의 origin 추적 브랜치로 6건을 봅니다(없음 · 일치 · head 불일치 · 다른 PR · 브랜치명 · 값 플래그). 동거 검사 케이스는 영수증 검사를 끄고(`OPS_AGENT_FINAL_CHECK_DISABLE=1`) 돌립니다.
+통과 기록 판정은 임시 HOME 과 임시 레포의 origin 추적 브랜치로 6건을 봅니다(없음 · 일치 · head 불일치 · 다른 PR · 브랜치명 · 값 플래그). 동거 검사 케이스는 통과 기록 검사를 끄고(`OPS_AGENT_FINAL_CHECK_DISABLE=1`) 돌립니다.
 
 세션 범위 판정은 임시 HOME 과 임시 레포 둘로 8건과 지표 1건을 봅니다(첫 쓰기 · 다른 레포 차단 · 재시도 통과 · 범위 레포 · 읽기 · 비 git 경로 · git 조회 · 전역 `-R` 이 앞서는 gh 쓰기). 기존 훅 판정 케이스는 세션 범위를 끄고(`OPS_AGENT_SESSION_SCOPE_DISABLE=1`) 돌립니다.
 
@@ -222,16 +222,16 @@ node scripts/selftest-action-gate.mjs
 
 ---
 
-## 최종 점검 영수증
+## 최종 점검 통과 기록
 
-머지 직전 점검이 어시스턴트의 기억에 달려 있으면, 게이트가 열린 순간 점검 없이 머지됩니다. 그래서 `gh pr merge` 는 게이트 개방과 별개로 **머지할 커밋에 묶인 영수증**을 요구합니다 (#612).
+머지 직전 점검이 어시스턴트의 기억에 달려 있으면, 게이트가 열린 순간 점검 없이 머지됩니다. 그래서 `gh pr merge` 는 게이트 개방과 별개로 **머지할 커밋에 묶인 통과 기록**을 요구합니다 (#612).
 
 | 층 | 수단 |
 |----|------|
-| 트리거 | PreToolUse 가 `gh pr merge` 를 잡으면 영수증을 확인합니다. 머지 호출에서만 동작합니다. |
+| 트리거 | PreToolUse 가 `gh pr merge` 를 잡으면 통과 기록을 확인합니다. 머지 호출에서만 동작합니다. |
 | 결정적 점검 | `scripts/final-check.sh <PR번호> --notes <파일>` |
 | 판단 점검 | 노트의 세 절을 어시스턴트가 채웁니다. 스크립트는 절이 비었는지만 봅니다. |
-| 무효화 | 푸시로 HEAD 가 바뀌면 영수증의 head 가 어긋나 무효가 됩니다. |
+| 무효화 | 푸시로 HEAD 가 바뀌면 통과 기록의 head 가 어긋나 무효가 됩니다. |
 
 ### 점검 항목
 
@@ -254,24 +254,24 @@ node scripts/selftest-action-gate.mjs
 
 레포별 체크리스트는 레포가 `.ops-agent/final-check.sh` 로 선언합니다. 스크립트가 PR 번호를 인자와 `FINAL_CHECK_PR` 로 받습니다.
 
-### 통과와 영수증
+### 통과 시 기록
 
-통과하면 노트를 PR 댓글로 올리고 영수증을 남깁니다.
+통과하면 노트를 PR 댓글로 올리고 통과 기록을 남깁니다.
 
 | 항목 | 값 |
 |------|-----|
-| 영수증 | `~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json` = `{pr, head, branch, repo, at}` |
+| 통과 기록 | `~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json` = `{pr, head, branch, repo, at}` |
 | 지표 | `~/.claude/ops-agent/metrics/final-check.jsonl` 에 매 실행 한 줄. 점검은 `{ts, repo, pr, result: pass\|fail, failed, duration_ms}`, 훅 차단은 `{ts, repo, pr, result: blocked, reason}` |
 
 ### 훅 판정
 
-판정은 로컬에서만 합니다. 영수증의 head 와 `git rev-parse refs/remotes/origin/<영수증 branch>` 를 비교합니다. 네트워크 호출이 없어 훅 예산 안에서 끝납니다.
+판정은 로컬에서만 합니다. 통과 기록의 head 와 `git rev-parse refs/remotes/origin/<통과 기록 branch>` 를 비교합니다. 네트워크 호출이 없어 훅 예산 안에서 끝납니다.
 
-PR 번호는 명령의 첫 positional 에서 얻습니다. 없으면 현재 브랜치명으로 영수증을 찾습니다. repo 는 명령 cwd 의 origin 에서 얻습니다.
+PR 번호는 명령의 첫 positional 에서 얻습니다. 없으면 현재 브랜치명으로 통과 기록을 찾습니다. repo 는 명령 cwd 의 origin 에서 얻습니다.
 
-영수증이 없거나 head 가 어긋나면 차단합니다. 메시지가 실행할 명령 한 줄과 노트 세 절의 제목을 싣습니다.
+통과 기록이 없거나 head 가 어긋나면 차단합니다. 메시지가 실행할 명령 한 줄과 노트 세 절의 제목을 싣습니다.
 
-게이트가 닫혀 있으면 게이트 차단이 먼저 나옵니다. 영수증 확인은 게이트가 열린 뒤에도 따로 실행됩니다.
+게이트가 닫혀 있으면 게이트 차단이 먼저 나옵니다. 통과 기록 확인은 게이트가 열린 뒤에도 따로 실행됩니다.
 
 ```bash
 bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
@@ -295,7 +295,7 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 
 대상이 범위와 다르고 `acknowledged` 에 없으면 한 번 차단하고 그 레포를 `acknowledged` 에 넣습니다. 그 레포에 대한 쓰기를 다시 실행하면 통과합니다. 확인 단위는 호출이 아니라 레포입니다. 다른 주제면 이슈로 분리하고 새 세션에서 진행하며, 이 작업의 연계면 그 레포에 쓰기를 다시 실행합니다.
 
-판정 순서는 최종 점검 영수증과 게이트 차단보다 뒤입니다. 그 차단이 먼저 나오면 이 판정은 하지 않습니다.
+판정 순서는 최종 점검 통과 기록과 게이트 차단보다 뒤입니다. 그 차단이 먼저 나오면 이 판정은 하지 않습니다.
 
 지표는 `~/.claude/ops-agent/metrics/session-scope.jsonl` 에 남깁니다.
 
@@ -322,7 +322,7 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 | 대외비 가드 | `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` | `OPS_AGENT_CONFIDENTIAL_DISABLE=1` |
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
-| 최종 점검 영수증 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
+| 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 | 세션 범위 | 없음 | `OPS_AGENT_SESSION_SCOPE_DISABLE=1` |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.
