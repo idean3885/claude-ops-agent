@@ -1,6 +1,6 @@
 # 차단 규칙 레퍼런스
 
-`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 네 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
+`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 다섯 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
 
 이 hook 은 판정만 합니다. 세션 컨텍스트 주입은 `scripts/session-start.mjs` 가 맡습니다.
 
@@ -10,6 +10,7 @@
 | 도메인 What 가드 | 커밋·PR·이슈 본문의 구현 세부 | 본문 수정 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
 | 최종 점검 영수증 | 영수증 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
+| 세션 범위 | 세션 범위 밖 레포로의 첫 쓰기 | 그 레포에 대한 쓰기를 다시 실행합니다. |
 
 ---
 
@@ -211,6 +212,8 @@ node scripts/selftest-action-gate.mjs
 
 영수증 판정은 임시 HOME 과 임시 레포의 origin 추적 브랜치로 6건을 봅니다(없음 · 일치 · head 불일치 · 다른 PR · 브랜치명 · 값 플래그). 동거 검사 케이스는 영수증 검사를 끄고(`OPS_AGENT_FINAL_CHECK_DISABLE=1`) 돌립니다.
 
+세션 범위 판정은 임시 HOME 과 임시 레포 둘로 8건과 지표 1건을 봅니다(첫 쓰기 · 다른 레포 차단 · 재시도 통과 · 범위 레포 · 읽기 · 비 git 경로 · git 조회 · 전역 `-R` 이 앞서는 gh 쓰기). 기존 훅 판정 케이스는 세션 범위를 끄고(`OPS_AGENT_SESSION_SCOPE_DISABLE=1`) 돌립니다.
+
 개방 안내는 마커를 만들지 않도록 함수만 불러 씁니다(`OPS_AGENT_GATE_LIB=1`). 점검이 사용자의 열린 창을 덮어쓰면 안 됩니다.
 
 ### 한계
@@ -278,6 +281,38 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 
 ---
 
+## 세션 범위
+
+한 세션이 다른 주제의 레포까지 쓰기 시작하는 것을 한 번 멈춰, 이슈 분리를 묻습니다 (#613). 시범 적용이며 최소 형태입니다.
+
+| 항목 | 내용 |
+|------|------|
+| 범위 | 세션에서 처음 쓰기 행위가 일어난 git 레포의 toplevel 입니다. 워크트리는 본 레포로 환원합니다. |
+| 기록 | `~/.claude/ops-agent/.cache/session-scope/<session_id>.json` = `{repo, acknowledged}` |
+| 보는 행위 | `Edit` · `Write` · `MultiEdit` · `NotebookEdit` 의 파일 경로. Bash 의 `git commit` · `git push` · `gh issue` · `gh pr` 의 create · comment · edit · merge · close · ready |
+| 대상 레포 | 파일은 경로의 toplevel, Bash 는 `cd` · `git -C` 로 정한 디렉토리의 toplevel 입니다. `gh -R owner/repo` 가 있으면 그 slug 입니다. |
+| 통과 | 읽기, git 레포가 아닌 경로 (`~/.claude` 메모리 · 스크래치 · `/tmp`), `session_id` 가 없는 호출 |
+
+대상이 범위와 다르고 `acknowledged` 에 없으면 한 번 차단하고 그 레포를 `acknowledged` 에 넣습니다. 그 레포에 대한 쓰기를 다시 실행하면 통과합니다. 확인 단위는 호출이 아니라 레포입니다. 다른 주제면 이슈로 분리하고 새 세션에서 진행하며, 이 작업의 연계면 그 레포에 쓰기를 다시 실행합니다.
+
+판정 순서는 최종 점검 영수증과 게이트 차단보다 뒤입니다. 그 차단이 먼저 나오면 이 판정은 하지 않습니다.
+
+지표는 `~/.claude/ops-agent/metrics/session-scope.jsonl` 에 남깁니다.
+
+| 결과 | 시점 |
+|------|------|
+| `{ts, session, scope, target, result: blocked}` | 차단마다 |
+| `{ts, session, scope, target, result: ack}` | 차단 뒤 같은 대상 쓰기가 통과할 때 첫 1회. 같은 호출에 차단 대상이 있으면 기록하지 않습니다. 중복 기록을 막으려 캐시에 `ackLogged` 를 함께 둡니다. |
+
+### 한계
+
+- 같은 레포 안에서의 주제 이탈은 잡지 못합니다. 판정 단위가 레포라서 범위 레포 안의 다른 이슈 작업은 통과합니다.
+- 스크립트 내부에서 실행되는 쓰기와 셸 변수로 정한 경로는 탐지하지 못합니다.
+- 첫 쓰기가 `-R` 로 레포를 지목한 호출이면 범위를 기록하지 않습니다. slug 에서 로컬 경로를 알 수 없습니다.
+- 대외비 가드 비활성(`OPS_AGENT_CONFIDENTIAL_DISABLE=1`)은 훅 판정 전체를 끄므로 이 판정도 함께 꺼집니다.
+
+---
+
 ## 플래그
 
 오탐 조정과 파이프라인 실행용입니다. 상시 사용을 전제하지 않습니다.
@@ -288,5 +323,6 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 영수증 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
+| 세션 범위 | 없음 | `OPS_AGENT_SESSION_SCOPE_DISABLE=1` |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.

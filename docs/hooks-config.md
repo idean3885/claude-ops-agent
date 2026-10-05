@@ -139,6 +139,10 @@ hook 이 내보내는 검출은 두 종류입니다.
 
 `pre-tool-use.mjs` 가 `gh pr merge` 를 잡으면 `scripts/final-check.sh` 가 남긴 영수증을 로컬에서 확인해, 없거나 head 가 어긋나면 막습니다. 점검 항목과 영수증 형식은 [action-gate.md](action-gate.md) 「최종 점검 영수증」에 있고, 비활성은 `OPS_AGENT_FINAL_CHECK_DISABLE=1` 입니다.
 
+## 세션 범위
+
+`pre-tool-use.mjs` 가 세션에서 처음 쓰기가 일어난 레포를 범위로 기록하고, 다른 레포로의 쓰기를 한 번 막아 이슈 분리를 묻습니다. 판정 단위와 한계는 [action-gate.md](action-gate.md) 「세션 범위」에 있고, 비활성은 `OPS_AGENT_SESSION_SCOPE_DISABLE=1` 입니다.
+
 ## 훅 실행 예산
 
 훅이 하네스 타임아웃에 잘리면 그 호출의 검사는 성립하지 않는다. 잘렸다는 사실도 남지 않아, 가드가 걸려야 할 자리에서 조용히 빠진다.

@@ -27,14 +27,17 @@
  * 4. 최종 점검 영수증 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
  *    영수증이 있어야 통과한다. 판정은 로컬만이다. 영수증 head 와 origin 추적 브랜치를 비교한다.
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
+ * 5. 세션 범위 (#613): 세션에서 처음 쓰기가 일어난 레포를 범위로 기록하고, 다른 레포로의 쓰기를
+ *    한 번 멈춰 이슈 분리를 묻는다. 그 레포에 대한 쓰기를 다시 하면 통과한다. 최종 점검 영수증·게이트 차단이
+ *    먼저 나오면 이 판정은 하지 않는다. 비활성 OPS_AGENT_SESSION_SCOPE_DISABLE=1.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
  * 비활성: OPS_AGENT_CONFIDENTIAL_DISABLE=1 설정 시 가드 전체 스킵
  */
 import { execSync } from 'child_process';
-import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync, writeFileSync, statSync } from 'fs';
+import { join, dirname, basename, resolve } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
@@ -100,6 +103,8 @@ const GATE_DRYRUN = process.env.OPS_AGENT_ACTION_GATE_DRYRUN === '1' || process.
 
 // 최종 점검 영수증 (#612). 게이트 플래그와 독립이다. 게이트가 열려 있어도 영수증은 따로 본다.
 const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
+// 세션 범위 (#613). 게이트·영수증 플래그와 독립이다.
+const SESSION_SCOPE_DISABLE = process.env.OPS_AGENT_SESSION_SCOPE_DISABLE === '1';
 const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
 // `gh pr merge` 가 값을 취하는 플래그. 값이 PR 번호 자리로 읽히지 않게 먼저 걷어낸다.
 const MERGE_VALUE_FLAG = /(?:^|\s)(?:-[btFAR]|--(?:body|body-file|subject|match-head-commit|author-email|repo))(?:\s+|=)(?:"[^"]*"|'[^']*'|\S+)/g;
@@ -132,6 +137,8 @@ const DIFF_SCAN_LIMIT = 256 * 1024;
 // `git log --grep commit` 같은 조회 명령을 오인하지 않는다.
 const GIT_GLOBAL_OPT = String.raw`(?:-[cC]\s+\S+|--(?:git-dir|work-tree|namespace|exec-path)(?:=\S+|\s+\S+)|--no-pager|--no-replace-objects|--bare|--literal-pathspecs|-p|--paginate)`;
 const GIT_COMMIT_RE = new RegExp(String.raw`\bgit\s+(?:${GIT_GLOBAL_OPT}\s+)*commit\b`);
+// 세션 범위(#613)가 보는 쓰기 행위. 최상위 await 가 쓰므로 상단에 둔다.
+const writeActionRe = new RegExp(String.raw`^(?:\S*\/)?(?:git\s+(?:${GIT_GLOBAL_OPT}\s+)*(?:commit|push)\b|gh\s+(?:(?:-R|--repo)(?:\s+|=)\S+\s+)*(?:issue|pr)\s+(?:create|comment|edit|merge|close|ready)\b)`);
 const VALUE_FLAGS = new Set([
   '-n', '--namespace', '--context', '--cluster', '--user', '--kubeconfig',
   '-o', '--output', '-l', '--selector', '--field-selector', '-f', '--filename',
@@ -144,6 +151,16 @@ let truncationNotice = '';
 if (!DISABLE) {
   try {
     const hookInput = JSON.parse(input);
+    // 세션 범위: 파일 편집 도구는 여기서 판정한다. Bash 는 영수증·게이트 차단 뒤에서 판정한다.
+    if (!SESSION_SCOPE_DISABLE && remainingMs() > 0 && /^(?:Write|Edit|MultiEdit|NotebookEdit)$/.test(hookInput.tool_name || '')) {
+      const ti = hookInput.tool_input || {};
+      const file = ti.file_path || ti.notebook_path;
+      if (file) {
+        const base = hookInput.cwd || process.cwd();
+        const root = findRepoRoot(dirname(resolve(base, expandHome(file))));
+        if (denyOutOfScope(hookInput.session_id, root ? [{ id: mainRoot(root), name: basename(mainRoot(root)) }] : [])) process.exit(0);
+      }
+    }
     // 빌드 스크립트 가드: 번들을 쓰는 레포의 모듈 빌드 스크립트에 라이브러리 좌표가 더해지면 알린다.
     // 편집은 되돌릴 수 있어 막지 않는다 (README 「되돌릴 수 없는 것만 막는다」). 컴파일이 되니 알리지 않으면 리뷰 전까지 드러나지 않는다 (#574).
     if (!BUILD_GUARD_DISABLE && /^(?:Write|Edit|MultiEdit)$/.test(hookInput.tool_name || '')) {
@@ -364,6 +381,11 @@ if (!DISABLE) {
           }));
           process.exit(0);
         }
+      }
+
+      // 세션 범위: 영수증·게이트 차단이 먼저 나왔으면 여기까지 오지 않는다 (#613).
+      if (!SESSION_SCOPE_DISABLE && remainingMs() > 0) {
+        if (denyOutOfScope(hookInput.session_id, bashWriteTargets(command, hookInput.cwd))) process.exit(0);
       }
     }
   } catch (e) {
@@ -984,6 +1006,110 @@ function detectRepoActions(command) {
     }
   }
   return ops;
+}
+
+// ─── 세션 범위 (#613) ───
+// 세션에서 처음 쓰기가 일어난 git 레포를 범위로 저장하고, 다른 레포로의 쓰기를 한 번 멈춘다.
+// 차단한 레포는 acknowledged 에 넣어 그 레포에 대한 쓰기를 다시 하면 통과한다. 읽기와 git 레포가 아닌 경로는 보지 않는다.
+// 같은 레포 안의 주제 이탈은 잡지 못한다.
+
+// .git 이 파일이면 워크트리다. 같은 레포의 워크트리를 다른 레포로 보지 않도록 본 레포 루트로 환원한다.
+function mainRoot(root) {
+  try {
+    const gitPath = join(root, '.git');
+    if (!statSync(gitPath).isFile()) return root;
+    const m = readFileSync(gitPath, 'utf8').match(/^gitdir:\s*(.+?)\s*$/m);
+    const i = m ? m[1].indexOf('/.git/worktrees/') : -1;
+    return i > 0 ? m[1].slice(0, i) : root;
+  } catch { return root; }
+}
+
+// Bash 명령의 쓰기 행위가 향하는 레포. `-R owner/repo` 가 있으면 그 slug, 없으면 명령 cwd 의 toplevel.
+function bashWriteTargets(command, hookCwd) {
+  const out = [];
+  const dir = extractCwdFromCommand(command, hookCwd);
+  for (const seg of gateSegments(command)) {
+    if (!writeActionRe.test(seg)) continue;
+    const r = seg.match(/(?:^|\s)(?:-R|--repo)(?:\s+|=)["']?([^\s"']+)/);
+    if (r) {
+      const slug = r[1].split('/').slice(-2).join('/');
+      out.push({ id: slug, name: slug, slug });
+      continue;
+    }
+    const root = findRepoRoot(dir);
+    if (root) out.push({ id: mainRoot(root), name: basename(mainRoot(root)) });
+  }
+  return out;
+}
+
+function appendScopeMetric(rec) {
+  try {
+    const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'session-scope.jsonl');
+    mkdirSync(dirname(file), { recursive: true });
+    appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), ...rec }) + '\n');
+  } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
+}
+
+// 범위 밖 첫 쓰기면 deny 를 출력하고 true 를 돌려준다.
+function denyOutOfScope(sessionId, targets) {
+  if (!sessionId || !targets.length) return false;
+  const file = join(homedir(), '.claude', 'ops-agent', '.cache', 'session-scope', `${String(sessionId).replace(/[^\w.-]/g, '_')}.json`);
+  let st = null;
+  try { st = JSON.parse(readFileSync(file, 'utf8')); } catch { st = null; }
+  const save = () => { try { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify(st)); } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ } };
+
+  if (!st || !st.repo) {
+    const first = targets.find(t => !t.slug);
+    if (!first) return false;
+    st = { repo: first.id, acknowledged: [], ackLogged: [] };
+    save();
+  }
+  const scopeName = basename(st.repo);
+  // slug 대상은 범위 레포의 origin 과 비교한다.
+  let scopeSlug;
+  const sameScope = t => {
+    if (!t.slug) return t.id === st.repo;
+    if (scopeSlug === undefined) {
+      try {
+        const url = execSync('git remote get-url origin', { cwd: st.repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: budgeted(800) }).trim();
+        const p = parseRemote(url);
+        scopeSlug = p ? p.slug.split('/').slice(-2).join('/') : null;
+      } catch { scopeSlug = null; }
+    }
+    return t.slug === scopeSlug;
+  };
+
+  const ack = st.acknowledged || (st.acknowledged = []);
+  const logged = st.ackLogged || (st.ackLogged = []);
+  // 한 호출의 모든 대상을 먼저 판정한다. 차단이 나면 ack 는 기록하지 않는다.
+  const fresh = [];
+  const acks = [];
+  for (const t of targets) {
+    if (sameScope(t)) continue;
+    if (ack.includes(t.id)) {
+      if (!logged.includes(t.id)) acks.push(t);
+      continue;
+    }
+    fresh.push(t);
+  }
+  if (fresh.length) {
+    for (const t of fresh) ack.push(t.id);
+    save();
+  } else if (acks.length) {
+    for (const t of acks) {
+      logged.push(t.id);
+      appendScopeMetric({ session: sessionId, scope: st.repo, target: t.id, result: 'ack' });
+    }
+    save();
+  }
+  if (!fresh.length) return false;
+  for (const t of fresh) appendScopeMetric({ session: sessionId, scope: st.repo, target: t.id, result: 'blocked' });
+  const msg = `[ops-agent 세션 범위 · 차단] 세션 범위(${scopeName}) 밖의 쓰기입니다(${fresh[0].name}). ` +
+    `다른 주제면 이슈로 분리하고 새 세션에서 진행합니다. 이 작업의 연계면 그 레포에 대한 쓰기를 다시 실행하면 통과합니다.`;
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+  }));
+  return true;
 }
 
 // ─── 최종 점검 영수증 (#612) ───
