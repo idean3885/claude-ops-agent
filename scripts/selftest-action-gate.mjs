@@ -107,7 +107,8 @@ for (const [name, command, want] of CASES) {
     }),
     encoding: 'utf8',
     // 영수증 검사는 아래 별도 케이스에서 본다. 여기서는 동거 검사 판정만 보도록 끈다.
-    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1' },
+    // 세션 범위도 끈다. 켜 두면 실제 HOME 에 범위 캐시가 쓰인다 (#613).
+    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_SESSION_SCOPE_DISABLE: '1' },
   });
 
   let got = 'pass';
@@ -186,5 +187,54 @@ const RECEIPT_CASES = [
 ];
 for (const [name, want, setup, command] of RECEIPT_CASES) receiptCase(name, want, setup, command);
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + RECEIPT_CASES.length}건 전부 통과`);
+// 세션 범위 (#613). 임시 HOME 과 임시 레포 둘로, 처음 쓰기가 범위를 정하고 다른 레포 쓰기가
+// 한 번 멈췄다 재시도에 통과하는지 본다. 실제 HOME 의 캐시·지표는 건드리지 않는다.
+const scopeHome = mkdtempSync(join(tmpdir(), 'scope-selftest-'));
+const mkRepo = name => {
+  const dir = join(scopeHome, name);
+  mkdirSync(dir);
+  spawnSync('git', ['-C', dir, 'init', '-q']);
+  return dir;
+};
+const repoA = mkRepo('repo-a');
+const repoB = mkRepo('repo-b');
+const plain = join(scopeHome, 'plain');
+mkdirSync(plain);
+function scopeRun(tool_name, tool_input, cwd = repoA) {
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name, cwd, session_id: 'scope-selftest', tool_input }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: scopeHome, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_SESSION_SCOPE_DISABLE: '' },
+  });
+  // 실행 실패나 해석 실패는 통과가 아니라 테스트 실패다.
+  if (res.error || res.status !== 0) return 'error';
+  try {
+    const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput;
+    return hs && hs.permissionDecision === 'deny' ? 'deny' : 'pass';
+  } catch { return 'error'; }
+}
+const SCOPE_RUNS = [
+  ['첫 쓰기는 범위를 기록하고 통과', 'pass', 'Write', { file_path: join(repoA, 'a.txt') }],
+  ['다른 레포 쓰기는 차단', 'deny', 'Write', { file_path: join(repoB, 'b.txt') }],
+  ['같은 행위를 다시 하면 통과', 'pass', 'Write', { file_path: join(repoB, 'b.txt') }],
+  ['범위 레포 쓰기는 통과', 'pass', 'Edit', { file_path: join(repoA, 'a.txt') }],
+  ['읽기는 통과', 'pass', 'Read', { file_path: join(plain, 'c.txt') }],
+  ['git 레포가 아닌 경로는 통과', 'pass', 'Write', { file_path: join(plain, 'p.txt') }],
+  ['git 조회는 통과', 'pass', 'Bash', { command: 'git log -1' }, repoB],
+  ['전역 -R 이 앞에 오는 gh 쓰기는 차단', 'deny', 'Bash', { command: 'gh -R other/zzz issue create -t x' }, repoA],
+];
+for (const [name, want, tool, input, cwd] of SCOPE_RUNS) {
+  const got = scopeRun(tool, input, cwd);
+  const ok = got === want;
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  세션 범위: ${name} — want ${want}, got ${got}`);
+}
+const metricsFile = join(scopeHome, '.claude', 'ops-agent', 'metrics', 'session-scope.jsonl');
+const scopeMetrics = existsSync(metricsFile) ? readFileSync(metricsFile, 'utf8').trim().split('\n').map(l => JSON.parse(l).result) : [];
+const metricOk = scopeMetrics.join(',') === 'blocked,ack,blocked';
+if (!metricOk) failed++;
+console.log(`${metricOk ? '  OK' : '  XX'}  세션 범위: 지표는 blocked · ack · blocked 순 — ${scopeMetrics.join(',') || '없음'}`);
+rmSync(scopeHome, { recursive: true, force: true });
+
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + RECEIPT_CASES.length + SCOPE_RUNS.length + 1}건 전부 통과`);
 process.exit(failed ? 1 : 0);
