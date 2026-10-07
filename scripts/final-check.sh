@@ -6,11 +6,12 @@
 # pre-tool-use.mjs 가 `gh pr merge` 직전에 이 통과 기록을 확인한다. 푸시로 HEAD 가 바뀌면
 # 통과 기록은 무효가 되므로 다시 돌린다.
 #
-# 사용: final-check.sh <PR번호> --notes <파일>
+# 사용: final-check.sh <PR번호> --notes <파일> [--no-comment]
 #   notes  판단 점검 노트. 아래 세 절이 있고 각 본문이 비어 있지 않아야 한다.
 #          ## 설계 반영 / ## 서브 에이전트 산출물 / ## 교정
 #          CodeRabbit 의 마지막 리뷰가 HEAD 가 아닐 때는 ## 자체 검증 도 채운다.
 #          「해당 없음」 같은 한 줄은 본문으로 인정한다. 비워 두는 것만 막는다.
+#   no-comment  통과해도 노트를 PR 댓글로 올리지 않는다. 노트는 통과 기록에만 남는다.
 #
 # 실패 조건 (하나라도 걸리면 목록을 출력하고 종료 코드 1):
 #   a. 실패 또는 대기 중인 체크
@@ -21,8 +22,8 @@
 #   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) 검출. 기존 줄의 PN7 과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
 #   f. 노트의 세 절 중 없거나 비어 있는 것
 #
-# 통과하면 노트를 PR 댓글로 올리고 통과 기록을 남긴다.
-#   통과 기록: ~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json
+# 통과하면 노트를 PR 댓글로 올리고(--no-comment 면 생략) 통과 기록을 남긴다.
+#   통과 기록: ~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json (노트 본문 포함)
 #   지표:   ~/.claude/ops-agent/metrics/final-check.jsonl (매 실행 한 줄)
 set -uo pipefail
 
@@ -36,21 +37,26 @@ COUNTER="${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/..}/config/style-rules/metrics/readab
 
 PR=""
 NOTES=""
+COMMENT=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --notes) NOTES="${2:-}"; shift 2 ;;
+    --no-comment) COMMENT=0; shift ;;
     -*) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
     *) PR="$1"; shift ;;
   esac
 done
 if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
-  echo "사용: final-check.sh <PR번호> --notes <파일>" >&2
+  echo "사용: final-check.sh <PR번호> --notes <파일> [--no-comment]" >&2
   exit 2
 fi
 
 meta=$(gh pr view "$PR" --json number,headRefOid,headRefName,url) || { echo "PR $PR 을 읽지 못했다" >&2; exit 2; }
 HEAD_SHA=$(jq -r .headRefOid <<<"$meta")
 BRANCH=$(jq -r .headRefName <<<"$meta")
+# why: gh pr · gh repo 는 원격에서 호스트를 찾지만 gh api 는 기본 호스트로 간다. PR 주소의 호스트로 맞춘다
+PR_HOST=$(jq -r .url <<<"$meta" | awk -F/ '{print $3}')
+[ -z "${GH_HOST:-}" ] && [ -n "$PR_HOST" ] && export GH_HOST="$PR_HOST"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "레포를 읽지 못했다" >&2; exit 2; }
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -165,10 +171,13 @@ if [ "${#failed[@]}" -gt 0 ]; then
   exit 1
 fi
 
-gh pr comment "$PR" --body-file "$NOTES" >/dev/null || { echo "노트 댓글을 올리지 못했다" >&2; failed+=(comment); record fail; exit 1; }
+if [ "$COMMENT" = 1 ]; then
+  gh pr comment "$PR" --body-file "$NOTES" >/dev/null || { echo "노트 댓글을 올리지 못했다" >&2; failed+=(comment); record fail; exit 1; }
+fi
 mkdir -p "$CACHE_DIR"
 jq -nc --argjson pr "$PR" --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$REPO" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{pr:$pr,head:$head,branch:$branch,repo:$repo,at:$at}' >"$CACHE_DIR/${REPO/\//__}__${PR}.json"
+  --rawfile notes "$NOTES" \
+  '{pr:$pr,head:$head,branch:$branch,repo:$repo,at:$at,notes:$notes}' >"$CACHE_DIR/${REPO/\//__}__${PR}.json"
 record pass
 echo "최종 점검 통과 (PR $PR, HEAD ${HEAD_SHA:0:7}). 통과 기록을 남겼다."
 # why: 훅은 로컬 추적 브랜치로만 비교하므로, 원격에 다른 푸시가 있으면 서버 쪽 대조로 막는다
