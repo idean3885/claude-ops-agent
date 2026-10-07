@@ -229,7 +229,7 @@ node scripts/selftest-action-gate.mjs
 | 층 | 수단 |
 |----|------|
 | 트리거 | PreToolUse 가 `gh pr merge` 를 잡으면 통과 기록을 확인합니다. 머지 호출에서만 동작합니다. |
-| 결정적 점검 | `scripts/final-check.sh <PR번호> --notes <파일>` |
+| 결정적 점검 | `scripts/final-check.sh <PR번호> --notes <파일> [--no-comment]` |
 | 판단 점검 | 노트의 세 절을 어시스턴트가 채웁니다. 스크립트는 절이 비었는지만 봅니다. |
 | 무효화 | 푸시로 HEAD 가 바뀌면 통과 기록의 head 가 어긋나 무효가 됩니다. |
 
@@ -254,13 +254,17 @@ node scripts/selftest-action-gate.mjs
 
 레포별 체크리스트는 레포가 `.ops-agent/final-check.sh` 로 선언합니다. 스크립트가 PR 번호를 인자와 `FINAL_CHECK_PR` 로 받습니다.
 
+GitHub API 조회는 PR 주소의 호스트로 보냅니다. GitHub Enterprise 원격 레포에서도 `GH_HOST` 를 넘기지 않아도 됩니다. `GH_HOST` 를 직접 넘기면 그 값을 씁니다.
+
 ### 통과 시 기록
 
 통과하면 노트를 PR 댓글로 올리고 통과 기록을 남깁니다.
 
+`--no-comment` 를 주면 댓글을 올리지 않습니다. PR 정보를 본문으로만 관리해 댓글이 알림 노이즈가 되는 경우에 씁니다. 노트는 통과 기록의 `notes` 에 남습니다.
+
 | 항목 | 값 |
 |------|-----|
-| 통과 기록 | `~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json` = `{pr, head, branch, repo, at}` |
+| 통과 기록 | `~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json` = `{pr, head, branch, repo, at, notes}` |
 | 지표 | `~/.claude/ops-agent/metrics/final-check.jsonl` 에 매 실행 한 줄. 점검은 `{ts, repo, pr, result: pass\|fail, failed, duration_ms}`, 훅 차단은 `{ts, repo, pr, result: blocked, reason}` |
 
 ### 훅 판정
