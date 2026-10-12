@@ -13,6 +13,12 @@
 
 ## [Unreleased]
 
+### Added
+* 기획 최신화(planning-sync) 스킬: 기획 재조회 · 직전 스냅샷 디프 · 항목별 설계 보완점 보고, 조회 기본 도구 Chrome DevTools MCP · 출처는 오버레이 선언 (#641)
+
+### Changed
+* 기획 전문가 조회 절차: Figma MCP 단계 제거, 기획 최신화의 조회 절차 참조 (#641)
+
 ## [9.17.1] - 2026-10-07
 
 ### Added
