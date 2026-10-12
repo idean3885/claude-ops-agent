@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.21.0] - 2026-10-12
+
 ### Added
 * 자율 위임 문구를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계)를 주입하는 UserPromptSubmit 훅. 발동은 metrics/autonomy-prompt.jsonl 에 기록 (#649)
 
