@@ -44,7 +44,7 @@ Issue → Spec → Implement → Commit → PR
 | `~/.claude/ops-agent/providers/` | 로컬 전용 커스텀 provider |
 | `~/.claude/ops-agent/overlays/` | host별 오버레이 설정 |
 | `~/.claude/ops-agent/experts/` | 로컬 전용 전문가. expert 로스터에 합쳐지고, 파일명이 겹치면 내장보다 먼저 열린다 |
-| `~/.claude/ops-agent/planning/` | 기획 최신화의 프로젝트별 기획 출처 · 스냅샷 자리 · 대조할 설계 · 조회 도구 오버라이드 |
+| `~/.claude/ops-agent/planning/` | 기획 최신화의 프로젝트별 기획 출처 · 스냅샷 · 대조할 설계 · 반영 이슈 자리 · 추출 스크립트 · 조회 도구 오버라이드 |
 
 ### 스킬 목록
 
