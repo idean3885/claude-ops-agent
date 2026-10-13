@@ -444,12 +444,11 @@ def absolutist_count(text: str) -> int:
 
 _RULE_FILES = (
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "forbidden-words.json"),
-    os.path.expanduser("~/.claude/forbidden-words.local.json"),
 )
 
 
 def forbidden_words(text: str) -> list[dict[str, Any]]:
-    """금지 표현 룰(기본 + 개인)을 대조해 위반을 줄 번호·매칭어·대체어로 돌려준다.
+    """금지 표현 룰을 대조해 위반을 줄 번호·매칭어·대체어로 돌려준다.
 
     %E% 는 기본 룰 파일의 _endingClass 로 펼친다 (stop hook 과 같은 규칙).
     손상되었거나 없는 룰 파일은 건너뛴다.

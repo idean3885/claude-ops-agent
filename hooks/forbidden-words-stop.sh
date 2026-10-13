@@ -2,18 +2,16 @@
 # Stop hook: 직전 어시스턴트 응답을 transcript에서 추출해 금지 표현 검출.
 # 위반 발견 시 .pending 파일에 기록 (다음 UserPromptSubmit hook이 주입 후 삭제).
 #
-# 룰 머지: 플러그인 기본(${CLAUDE_PLUGIN_ROOT}/config/style-rules/forbidden-words.json)
-#         + 개인(~/.claude/forbidden-words.local.json)
+# 룰: ${CLAUDE_PLUGIN_ROOT}/config/style-rules/forbidden-words.json 하나 (ADR-0026)
 set -euo pipefail
 
 INPUT=$(cat)
 PLUGIN_RULES="${CLAUDE_PLUGIN_ROOT}/config/style-rules/forbidden-words.json"
-LOCAL_RULES="$HOME/.claude/forbidden-words.local.json"
 PENDING_FILE="$HOME/.claude/.forbidden-violations-pending"
 
 [[ -f "$PLUGIN_RULES" ]] || exit 0
 
-HOOK_INPUT="$INPUT" PLUGIN_RULES="$PLUGIN_RULES" LOCAL_RULES="$LOCAL_RULES" PENDING_FILE="$PENDING_FILE" python3 <<'PYEOF'
+HOOK_INPUT="$INPUT" PLUGIN_RULES="$PLUGIN_RULES" PENDING_FILE="$PENDING_FILE" python3 <<'PYEOF'
 import json, os, re, sys
 
 input_data = json.loads(os.environ.get("HOOK_INPUT", "{}"))
@@ -22,7 +20,6 @@ if not transcript or not os.path.exists(transcript):
     sys.exit(0)
 
 plugin_path = os.environ["PLUGIN_RULES"]
-local_path = os.environ["LOCAL_RULES"]
 pending_path = os.environ["PENDING_FILE"]
 
 with open(plugin_path) as f:
@@ -30,15 +27,7 @@ with open(plugin_path) as f:
 plugin_rules = plugin_conf.get("rules", [])
 ending_class = plugin_conf.get("_endingClass", "")
 
-local_rules = []
-if os.path.exists(local_path):
-    try:
-        with open(local_path) as f:
-            local_rules = json.load(f).get("rules", [])
-    except Exception:
-        local_rules = []
-
-rules = list(plugin_rules) + list(local_rules)
+rules = list(plugin_rules)
 
 last_text = ""
 with open(transcript) as f:

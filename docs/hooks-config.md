@@ -19,8 +19,7 @@
 
 | 위치 | 역할 |
 |------|------|
-| `config/style-rules/forbidden-words.json` | 기본 룰 (표현 가드 패턴) |
-| `~/.claude/forbidden-words.local.json` | 사용자 추가 룰 (선택, 머지됨) |
+| `config/style-rules/forbidden-words.json` | 룰 전체 (표현 가드 패턴). 기계에 두는 개인 룰 파일은 읽지 않는다 (ADR-0026). |
 
 룰 추가는 JSON 에 객체 하나만 더하면 즉시 반영됩니다(Python 정규식).
 
