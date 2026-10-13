@@ -472,7 +472,7 @@ K-4 는 `tone.md` T8(구어체·감정체 동사 금지) 물리 조작 계열의
 
 ## forbidden-words.json 매핑 표
 
-`forbidden-words.json` 의 룰은 위 분류 체계의 S1 패턴 중 정규식 대조로 즉시 교정할 가치가 있는 것들이다. 근거로 심각도가 S2 로 내려간 패턴은 hook 에서 뺀다(예: A-1 `통해`: ADR 0001). 저자 개인 선호는 `~/.claude/forbidden-words.local.json` 에 둔다. 카테고리 ID 대응:
+`forbidden-words.json` 의 룰은 위 분류 체계의 S1 패턴 중 정규식 대조로 즉시 교정할 가치가 있는 것들이다. 근거로 심각도가 S2 로 내려간 패턴은 hook 에서 뺀다(예: A-1 `통해`: ADR 0001). 저자가 쓰지 않는 표현도 이 파일에 둔다 (ADR-0026). 카테고리 ID 대응:
 
 | forbidden-words 패턴 | 카테고리 ID | reason |
 |--------------------|----------|--------|
@@ -497,7 +497,6 @@ K-4 는 `tone.md` T8(구어체·감정체 동사 금지) 물리 조작 계열의
 | `(^·\s)축($·[\s을은이의로과와도만에으])` | D-16 | 추상 차원 명사 (가리키는 실물이 사라진다) |
 
 신규 패턴은 분류 체계에 카테고리 ID 부여 후 S1 으로 판정될 때 `forbidden-words.json` 에 추가한다. 단 정규식 오탐 위험이 큰 패턴(예: C-10 대칭 대구)은 hook 에 등록하지 않고 SSOT 검증 규칙으로만 둔다.
-사용자 추가 룰은 `~/.claude/forbidden-words.local.json` 에 작성 (ops-agent hook 이 머지).
 
 ---
 
