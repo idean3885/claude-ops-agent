@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Fixed
+* 금지 표현에 「전이」 · 「봉투」 추가: transition · envelope 직역 (#653)
+
 ## [9.24.0] - 2026-10-13
 
 ### Changed

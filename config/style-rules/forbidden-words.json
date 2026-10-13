@@ -224,6 +224,18 @@
       "replacement": "미리 끝내야 할/먼저 처리할/사전 준비",
       "reason": "구두로 쓰지 않는 한자어다. 무엇을 먼저 해야 하는지 동사로 풀어 쓴다",
       "taxonomyId": "readability.md P11"
+    },
+    {
+      "pattern": "(?<![가-힣])전이(?!학습)",
+      "replacement": "상태 변경/변경",
+      "reason": "transition 직역. 상태 머신 다이어그램 밖에서 쓰지 않는다",
+      "taxonomyId": "tone.md T9"
+    },
+    {
+      "pattern": "(?<![가-힣])봉투",
+      "replacement": "응답 바디/에러 응답",
+      "reason": "envelope 직역. 개발 용어가 아닌 조어",
+      "taxonomyId": "tone.md T9"
     }
   ]
 }
