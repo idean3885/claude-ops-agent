@@ -1,6 +1,6 @@
 # ADR 0001. AI 티 제거의 우선순위와 저자 취향의 경계
 
-- 상태: 채택 (일부 열린 질문은 검토 지속). 개인 룰 파일(`forbidden-words.local`)을 두는 부분은 [ADR-0026](0026-writing-rules-live-in-repo.md) 이 대체했다
+- 상태: 채택 (일부 열린 질문은 검토 지속). 개인 룰 파일(`forbidden-words.local`)을 두는 부분은 [ADR-0026](0026-writing-rules-live-in-repo.md) 이 대체했다.
 - 날짜: 2026-07-26
 - 관련: #153, `config/style-rules/base/ai-tells.md`, `config/style-rules/references/scholarship.md`
 
