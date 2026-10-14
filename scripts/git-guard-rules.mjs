@@ -30,7 +30,9 @@ const DESTRUCTIVE = [
   {
     verb: 'clean',
     test: seg => /^(?:\S*\/)?git\s+(?:-\S+\s+|--\S+(?:=\S+|\s+\S+)\s+)*clean\b/.test(seg)
-      && /(?:^|\s)-[a-zA-Z]*[fdx]/.test(seg),
+      && /(?:^|\s)-[a-zA-Z]*[fdx]/.test(seg)
+      // 목록만 보는 실행은 지우지 않는다. -n · --dry-run 이 있으면 대상이 아니다.
+      && !/(?:^|\s)(?:-[a-zA-Z]*n[a-zA-Z]*|--dry-run)(?=\s|$)/.test(seg),
     why: '추적되지 않는 파일을 지웁니다. 되돌릴 기록이 남지 않습니다',
     alt: 'git clean -n 으로 지워질 목록을 먼저 확인합니다',
   },

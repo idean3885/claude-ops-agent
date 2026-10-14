@@ -29,7 +29,7 @@ Git 상태와 무관하게 **명시적 요청**이 있으면 해당 가이드를
 feature 브랜치의 분기 원점을 아래 순서로 결정한다. 첫 번째 성공한 결과를 사용한다.
 
 1. **upstream 추적**: `git config branch.<current>.merge` → `refs/heads/` 제거
-2. **merge-base 최근접**: upstream 없으면 리모트 브랜치 중 feature/fix/docs/refactor/chore 접두사를 제외한 후보에 대해 `git merge-base HEAD origin/<후보>` + `git rev-list --count <merge-base>..HEAD` → 커밋 수가 가장 적은 브랜치 선택
+2. **merge-base 최근접**: upstream 없으면 리모트 브랜치 중 feat/fix/docs/refactor/chore 접두사를 제외한 후보에 대해 `git merge-base HEAD origin/<후보>` + `git rev-list --count <merge-base>..HEAD` → 커밋 수가 가장 적은 브랜치 선택
 
 감지된 base 브랜치를 이후 모든 diff/commit 비교(`git log <base>..HEAD`, `git diff <base>..HEAD`)에 사용한다.
 
@@ -69,8 +69,8 @@ git rev-parse --git-dir          # 현재 .git 경로
 
 | 조건 | 감지 소스 |
 |------|----------|
-| git 없음 or git diff 없음 (feature/ 브랜치 아님) | **이슈 상태** |
-| git diff 존재 (feature/ 브랜치) | **Git/PR 상태** (이슈 교차 검증) |
+| git 없음 or git diff 없음 (feat/ 브랜치 아님) | **이슈 상태** |
+| git diff 존재 (feat/ 브랜치) | **Git/PR 상태** (이슈 교차 검증) |
 
 ### 이슈 상태 기반 (코드 없음)
 
@@ -96,7 +96,7 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 | 5 | 커밋 있음, PR 없음 | 커밋 리뷰 + 초안 PR 생성 | `guides/commit.md` → `guides/pr.md` |
 | 6 | 브랜치 dirty | 구현 계속 안내 | `guides/implement.md` |
 | 7 | 브랜치 clean, base와 diff 없음 | 구현 시작 | `guides/implement.md` (변경 영역 분류) → 프로젝트별 구현 규칙 |
-| 8 | feature/ 브랜치 아님 | 이슈 탐색/생성 + 브랜치 생성 | `guides/issue.md` (start) |
+| 8 | feat/ 브랜치 아님 | 이슈 탐색/생성 + 브랜치 생성 | `guides/issue.md` (start) |
 
 ## 확인 게이트
 
@@ -143,7 +143,7 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 
 ## 이슈 불일치 감지
 
-현재 브랜치가 `feature/<N>` 형태이고, 사용자 요청의 이슈 번호가 `<N>`과 다를 때:
+현재 브랜치가 `feat/<N>` 형태이고, 사용자 요청의 이슈 번호가 `<N>`과 다를 때:
 
 1. 현재 브랜치에 PR 대기/리뷰 중 등 진행 상태가 있으면 → 간단히 질문:
    - "현재 브랜치는 #N 작업 중입니다. 워크트리 분기 / 현재 디렉토리 신규 브랜치 중 어떻게 할까요?"

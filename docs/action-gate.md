@@ -148,7 +148,7 @@
 
 이 절차는 원래 1번부터 시작했고, 발동 조건이 「차단이 나면」이었습니다. 차단을 만나기 전까지 어시스턴트는 자기가 어디 서 있는지 몰랐고, 그 공백을 사용자의 자연어 문장으로 메꿔 진행하는 사고가 났습니다.
 
-게이트가 필요하다는 것을 작업 도중에 알았다면 그 시점에 요청합니다. 멈추기 어려우면 게이트 없이 되는 일을 먼저 끝내고 마지막에 요청합니다. 미루는 것은 요청이지 행위가 아니며, 대상 행위는 창이 열린 뒤에만 실행합니다.
+게이트가 필요하다는 것을 작업 도중에 알았다면 그 시점에 요청합니다. 자율 위임을 받았다면 시작 전에 단계를 펼쳐 필요한 갈래와 개방 명령을 한 번에 요청합니다(선취 절차, 자율 위임 문구에서 주입됩니다). 작업 도중에 새로 알았다면 그 시점에 요청합니다. 대상 행위는 창이 열린 뒤에만 실행합니다.
 
 **판정 근거는 마커의 `scopes` 와 `expiresAt` 뿐입니다.** 「승인」·「게이트 오픈」 같은 사용자의 문장은 2단계를 통과시키고 3단계를 예고할 뿐, 권한을 열지 않습니다. 2와 3은 합쳐지지 않습니다.
 
@@ -160,13 +160,14 @@
 
 | 갈래 | 대상 명령 |
 |------|-----------|
-| `cluster-write` | kubectl · argocd · helm mutation |
+| `cluster-write` | kubectl · argocd · helm mutation (kubectl `exec` · `cp` 포함) |
+| `cluster-exec` | kubectl `exec` · `cp` 만. 쓰기 갈래를 열지 않고 진입만 연다. |
 | `repo-merge` | `gh pr merge` |
 | `repo-release` | `gh release create/edit/delete` |
 | `repo-delete` | `gh repo delete/archive` |
 | `git-force` | force push · 원격 브랜치 삭제 |
 | `git-default-push` | 기본 브랜치 직접 push |
-| `worktree-destructive` | `git reset --hard` · `clean` · `branch -D` · `restore` |
+| `worktree-destructive` | `git reset --hard` · `clean`(`-n` · `--dry-run` 제외) · `branch -D` · `restore` |
 | `all` | 전부 |
 
 갈래를 이 형태로 둔 판단입니다.
@@ -214,6 +215,8 @@ node scripts/selftest-action-gate.mjs
 개방 안내는 마커를 만들지 않도록 함수만 불러 씁니다(`OPS_AGENT_GATE_LIB=1`). 점검이 사용자의 열린 창을 덮어쓰면 안 됩니다.
 
 ### 한계
+
+Bash 만 판정합니다. MCP 도구 호출은 보지 않습니다. 쓰기형 MCP 서버를 들일 때 판정 설계를 다시 엽니다.
 
 최상위 명령만 봅니다. `bash deploy.sh` 처럼 스크립트 내부에서 실행되는 명령은 탐지하지 못합니다. 의도된 배포 스크립트 경로는 승인된 것으로 간주하고, 직접 타이핑하는 일회성 명령을 막는 안전망으로 둡니다.
 

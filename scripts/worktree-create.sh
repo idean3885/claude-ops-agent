@@ -82,7 +82,7 @@ else:
     repos = {}
     for name in repo_names:
         repo_cfg = manifest["repos"].get(name, {})
-        branch = f"feature/{ticket}"
+        branch = f"feat/{ticket}"
         repos[name] = {
             "branch": branch,
             "base": repo_cfg.get("base", "main"),

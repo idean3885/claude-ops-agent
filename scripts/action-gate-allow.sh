@@ -20,7 +20,8 @@
 #           읽기만 하므로 어시스턴트가 직접 실행해도 자기 수정으로 차단되지 않는다.
 #
 # 갈래 목록 (차단 메시지가 해당 갈래를 담은 명령을 그대로 제시한다):
-#   cluster-write         kubectl·argocd·helm mutation
+#   cluster-write         kubectl·argocd·helm mutation (kubectl exec·cp 포함, 호환)
+#   cluster-exec          kubectl exec·cp 만 (쓰기 갈래를 열지 않고 진입만)
 #   repo-merge            gh pr merge
 #   repo-release          gh release create/edit/delete
 #   repo-delete           gh repo delete/archive
@@ -66,6 +67,12 @@ warn_lost_scopes() {
   echo "[action-gate-allow] 이전 갈래 ${lost} 가 닫힙니다. 함께 열려면 on ${new_scopes},${lost} 형태로 실행하세요." >&2
 }
 
+# 머리 주석의 「갈래 목록」 이 유효한 갈래 이름의 원천이다. 이름 목록을 코드에 따로 두면
+# 주석과 어긋난다. 오타 갈래는 아무것도 열지 않은 채 열린 것처럼 보이므로 여기서 거른다 (#439).
+valid_scopes() {
+  sed -n '/^# 갈래 목록/,/^#$/p' "${BASH_SOURCE[0]}" | sed -n 's/^#   \([a-z][a-z-]*\)  .*/\1/p'
+}
+
 # 테스트가 함수만 불러 쓸 때는 여기서 멈춘다. 마커를 만들지 않는다.
 [ "${OPS_AGENT_GATE_LIB:-}" = "1" ] && return 0
 
@@ -103,6 +110,18 @@ case "$cmd" in
     done)
     scopes_json="[${scopes_json%,}]"
     [ "$scopes_json" = "[]" ] && scopes_json='["all"]'
+
+    valid=$(valid_scopes)
+    bad=$(printf '%s\n' "$scopes" | tr ',' '\n' | while IFS= read -r s; do
+      s="${s// /}"
+      [ -z "$s" ] && continue
+      printf '%s\n' "$valid" | grep -qx -- "$s" || printf '%s,' "$s"
+    done)
+    if [ -n "$bad" ]; then
+      echo "[action-gate-allow] 없는 갈래입니다: ${bad%,}" >&2
+      echo "[action-gate-allow] 유효한 갈래: $(printf '%s' "$valid" | tr '\n' ' ')" >&2
+      exit 1
+    fi
 
     # 살아 있는 마커만 대상이다. 만료된 마커는 이미 아무것도 열고 있지 않다.
     if [ -f "$MARKER" ]; then
