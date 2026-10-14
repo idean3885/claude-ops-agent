@@ -147,6 +147,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
    - **Yes**: 브랜치명·베이스를 확정하기 전에 [레슨런 인덱스 대조](#대조-판단-지점마다) 를 수행하고 `대조 N건 / 걸림 M건` 을 적는다. 그다음 provider의 브랜치 패턴과 리모트 머지 이력에 남은 접두를 대조해 브랜치명을 정하고, `origin/{base}` 에서 분기한다
      - 워크트리 (권장): `git fetch origin && git worktree add ../{프로젝트}-{타입}-{번호} -b {브랜치명} origin/{base}`
      - 직접 체크아웃: `git fetch origin && git checkout -b {브랜치명} origin/{base}`
+     - 현재 브랜치에 고유 커밋이 있으면 워크트리로 한다 ([이슈 불일치 감지](../SKILL.md#이슈-불일치-감지))
    - **No**: 브랜치 생성 스킵
 11. **Extensions 실행**: provider에 post-start Extensions이 정의되어 있으면 실행
 

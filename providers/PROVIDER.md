@@ -24,7 +24,7 @@
 ### start
 - 상태 변경 API
 - 담당자 설정 방법
-- 브랜치 패턴 (예: `feature/{number}`)
+- 브랜치 패턴 (예: `feat/{number}`)
 - 시작 시 추가 동작 (타임스탬프 기록 등)
 
 ### complete

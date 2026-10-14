@@ -312,7 +312,8 @@ if os.path.isfile(vcs_xml):
 
     new_lines = []
     for line in lines:
-        if f"feature-{ticket}" in line or f"feature/{ticket}" in line:
+        # 브랜치 기본 접두가 feat/ 로 바뀌었다(#403). 이전에 만든 feature/ 브랜치도 함께 정리한다
+        if f"feature-{ticket}" in line or f"feature/{ticket}" in line or f"feat/{ticket}" in line:
             vcs_removed += 1
             continue
         new_lines.append(line)

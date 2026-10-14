@@ -18,7 +18,7 @@ ops-agent 기본 내장 provider입니다.
 **라벨 매핑**:
 | 키워드 | 라벨 | 브랜치 접두사 | 색상 |
 |--------|------|---------------|------|
-| 기능, feat | `feat` | `feature/` | `0E8A16` |
+| 기능, feat | `feat` | `feat/` | `0E8A16` |
 | 버그, fix | `fix` | `fix/` | `d73a4a` |
 | 문서, docs | `docs` | `docs/` | `0075ca` |
 | 리팩토링 | `refactor` | `refactor/` | `e4e669` |

@@ -119,6 +119,9 @@ const KUBECTL_WRITE = new Set([
   'set', 'cordon', 'drain', 'uncordon', 'taint', 'rollout', 'create', 'expose',
   'autoscale', 'run', 'exec', 'cp', 'attach', 'certificate',
 ]);
+// 파드 안으로 들어가거나 파일을 옮기는 동사. 쓰기 갈래와 따로 열 수 있게 갈래를 나눈다 (#445).
+// 원격 명령의 내용은 보지 않는다. 호환을 위해 cluster-write 가 열려 있으면 이 갈래도 통과한다.
+const KUBECTL_EXEC = new Set(['exec', 'cp']);
 const ARGOCD_WRITE = new Set([
   'create', 'delete', 'set', 'unset', 'sync', 'rollback', 'patch', 'add', 'rm',
   'terminate-op', 'actions', 'update-password',
@@ -827,7 +830,10 @@ function runActionGate(command, sessionId, hookCwd) {
   const allowed = allowedScopes(sessionId);
   // `all` 이 열려 있어도 탐지는 한다. 동거 검사(#386)가 열린 창에서만 발동하기 때문이다.
   const ops = detectGatedActions(command, hookCwd);
-  const outside = allowed.has('all') ? [] : ops.filter(o => !allowed.has(o.scope || 'unscoped'));
+  // cluster-exec 는 cluster-write 에서 갈라진 갈래다. 기존에 cluster-write 로 열던 창이 exec 를
+  // 계속 통과하도록 cluster-write 가 열려 있으면 함께 통과시킨다 (#445).
+  const isOpen = scope => allowed.has(scope) || (scope === 'cluster-exec' && allowed.has('cluster-write'));
+  const outside = allowed.has('all') ? [] : ops.filter(o => !isOpen(o.scope || 'unscoped'));
   return { blocked: outside.length > 0, ops: outside, detected: ops, allowed: [...allowed] };
 }
 
@@ -955,7 +961,7 @@ function detectClusterMutations(command) {
     let m;
     if ((m = seg.match(/^(?:\S*\/)?kubectl\s+(.*)$/s))) {
       const verb = firstPositional(m[1]);
-      if (verb && KUBECTL_WRITE.has(verb)) ops.push({ category: 'cluster', scope: 'cluster-write', tool: 'kubectl', verb });
+      if (verb && KUBECTL_WRITE.has(verb)) ops.push({ category: 'cluster', scope: KUBECTL_EXEC.has(verb) ? 'cluster-exec' : 'cluster-write', tool: 'kubectl', verb });
     } else if ((m = seg.match(/^(?:\S*\/)?argocd\s+(app|proj|repo|cluster|account|admin)\s+(.*)$/s))) {
       const verb = firstPositional(m[2]);
       if (verb && ARGOCD_WRITE.has(verb)) ops.push({ category: 'cluster', scope: 'cluster-write', tool: `argocd ${m[1]}`, verb });

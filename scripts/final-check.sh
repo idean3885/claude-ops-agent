@@ -21,6 +21,7 @@
 #   d. 레포의 `.ops-agent/final-check.sh` 가 있고 종료 코드가 0 이 아님 (레포가 선언한 체크리스트)
 #   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) 검출. 기존 줄의 PN7 과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
 #   f. 노트의 세 절 중 없거나 비어 있는 것
+#   g. merge-base 이후 커밋이 1개가 아님 (초안 중 쌓인 교정 커밋은 스쿼시한다)
 #
 # 통과하면 노트를 PR 댓글로 올리고(--no-comment 면 생략) 통과 기록을 남긴다.
 #   통과 기록: ~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json (노트 본문 포함)
@@ -51,9 +52,20 @@ if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-meta=$(gh pr view "$PR" --json number,headRefOid,headRefName,url) || { echo "PR $PR 을 읽지 못했다" >&2; exit 2; }
+# merge-base 이후 커밋 수. 머지할 커밋이 로컬에 있으면 git 으로, 없으면 PR 의 커밋 목록으로 센다.
+commits_since_merge_base() {
+  local base="$1" head="$2" mb
+  if git cat-file -e "$head^{commit}" 2>/dev/null && mb=$(git merge-base "$base" "$head" 2>/dev/null); then
+    git rev-list --count "$mb..$head"
+  else
+    return 1
+  fi
+}
+
+meta=$(gh pr view "$PR" --json number,headRefOid,headRefName,baseRefName,url) || { echo "PR $PR 을 읽지 못했다" >&2; exit 2; }
 HEAD_SHA=$(jq -r .headRefOid <<<"$meta")
 BRANCH=$(jq -r .headRefName <<<"$meta")
+BASE_BRANCH=$(jq -r .baseRefName <<<"$meta")
 # why: gh pr · gh repo 는 원격에서 호스트를 찾지만 gh api 는 기본 호스트로 간다. PR 주소의 호스트로 맞춘다
 PR_HOST=$(jq -r .url <<<"$meta" | awk -F/ '{print $3}')
 [ -z "${GH_HOST:-}" ] && [ -n "$PR_HOST" ] && export GH_HOST="$PR_HOST"
@@ -153,6 +165,12 @@ else
   for sec in "설계 반영" "서브 에이전트 산출물" "교정"; do
     [ -z "$(section_body "$sec")" ] && fail f "노트의 ## $sec 절이 없거나 비어 있다"
   done
+fi
+
+# g. 커밋 정리: merge-base 이후 커밋이 1개여야 한다. 세지 못하면 PR 의 커밋 목록으로 센다.
+ncommits=$(commits_since_merge_base "origin/$BASE_BRANCH" "$HEAD_SHA" 2>/dev/null || gh pr view "$PR" --json commits -q '.commits | length' 2>/dev/null || echo "?")
+if [ "$ncommits" != "1" ]; then
+  fail g "merge-base 이후 커밋이 ${ncommits}개다. 1개로 스쿼시한다 (푸시는 git push --force-with-lease=<브랜치>:<원격 현재 sha>)"
 fi
 
 record() {

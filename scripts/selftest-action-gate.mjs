@@ -83,6 +83,10 @@ const TTL_CASES = [
   ['ttl 이 숫자', ['on', 'git-force', '30'], 0, ''],
   ['ttl 생략', ['on', 'git-force'], 0, ''],
   ['옛 형식 (ttl 만)', ['on', '30'], 0, ''],
+  // 갈래 이름은 스크립트 머리 주석의 목록과 대조한다 (#439). 오타가 마커에 들어가면 열린 것처럼 보인다.
+  ['없는 갈래 이름', ['on', 'clustr-write'], 1, '유효한 갈래: '],
+  ['목록 중 하나가 없는 이름', ['on', 'repo-merge,git-frce'], 1, '없는 갈래입니다: git-frce'],
+  ['새 갈래 이름', ['on', 'cluster-exec'], 0, ''],
 ];
 for (const [name, args, wantCode, expect] of TTL_CASES) {
   const home = mkdtempSync(join(tmpdir(), 'gate-selftest-'));
@@ -135,6 +139,47 @@ for (const [name, command, want] of CASES) {
   console.log(`${ok ? '  OK' : '  XX'}  ${name} — want ${want}, got ${got}${detail ? ` · ${detail}` : ''}`);
 }
 
+// 마커로 연 갈래별 판정. 임시 HOME 에 마커를 만들어 갈래가 행위를 가르는지 본다.
+// scopes 가 null 이면 마커가 없다(전부 닫힘). 사용자의 열린 창을 건드리지 않는다.
+function scopeGateCase(name, want, command, scopes) {
+  const home = mkdtempSync(join(tmpdir(), 'scope-selftest-'));
+  if (scopes) {
+    const dir = join(home, '.claude', 'ops-agent', '.cache');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'action-gate-allow.json'), JSON.stringify({ expiresAt: Date.now() + 600000, scopes }));
+  }
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', cwd: repoRoot, session_id: 'selftest', tool_input: { command } }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, OPS_AGENT_ACTION_GATE_ALLOW: '', OPS_AGENT_CLUSTER_WRITE_ALLOW: '', OPS_AGENT_FINAL_CHECK_DISABLE: '1' },
+  });
+  let got = 'pass';
+  try {
+    const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput;
+    if (hs && hs.permissionDecision === 'deny') got = 'deny';
+  } catch { /* 출력 없음 = 통과 */ }
+  rmSync(home, { recursive: true, force: true });
+  const ok = got === want;
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  갈래 판정: ${name} — want ${want}, got ${got}`);
+}
+const SCOPE_GATE_CASES = [
+  // git clean 은 지우는 실행만 대상이다. 목록만 보는 -n · --dry-run 은 막지 않는다 (#660).
+  ['git clean -fd 는 닫힘', 'deny', 'git clean -fd', null],
+  ['git clean -nfd 는 통과', 'pass', 'git clean -nfd', null],
+  ['git clean -fdn 은 통과', 'pass', 'git clean -fdn', null],
+  ['git clean -fd --dry-run 은 통과', 'pass', 'git clean -fd --dry-run', null],
+  ['git clean -fd 는 열린 갈래에서 통과', 'pass', 'git clean -fd', ['worktree-destructive']],
+  // exec · cp 는 cluster-exec 로 분리했다. 쓰기 갈래를 열지 않고 진입만 열 수 있다 (#445).
+  ['exec 는 닫힘', 'deny', 'kubectl exec -it pod-a -- sh', null],
+  ['cluster-exec 가 exec 를 연다', 'pass', 'kubectl exec -it pod-a -- sh', ['cluster-exec']],
+  ['cluster-exec 가 cp 를 연다', 'pass', 'kubectl cp pod-a:/tmp/x ./x', ['cluster-exec']],
+  ['cluster-exec 는 쓰기를 열지 않는다', 'deny', 'kubectl delete pod pod-a', ['cluster-exec']],
+  ['cluster-write 는 exec 를 계속 연다 (호환)', 'pass', 'kubectl exec -it pod-a -- sh', ['cluster-write']],
+  ['cluster-write 는 쓰기를 연다', 'pass', 'kubectl delete pod pod-a', ['cluster-write']],
+];
+for (const [name, want, command, scopes] of SCOPE_GATE_CASES) scopeGateCase(name, want, command, scopes);
+
 // 최종 점검 통과 기록 (#612). 게이트가 열린 상태에서 `gh pr merge` 가 통과 기록으로 갈리는지 본다.
 // 임시 HOME 에 통과 기록을 만들고 임시 레포의 origin 추적 브랜치와 대조한다. 사용자의 통과 기록·
 // 지표 파일을 건드리지 않고 네트워크도 쓰지 않는다.
@@ -186,5 +231,5 @@ const RECEIPT_CASES = [
 ];
 for (const [name, want, setup, command] of RECEIPT_CASES) receiptCase(name, want, setup, command);
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + RECEIPT_CASES.length}건 전부 통과`);
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
@@ -338,6 +338,13 @@ function mirrorStyleRules() {
         const content = readFileSync(srcPath, 'utf8');
         writeFileSync(dstPath, content);
       }
+    }
+
+    // 미러 대상이 아닌 디렉토리가 남아 있으면 미러만 보는 소비자가 낡은 지표 · 참조를 규칙으로
+    // 읽는다 (#688). 미러 루트 아래 정해진 이름만 지운다. 목록에 없는 디렉토리는 사용자 데이터일
+    // 수 있어 건드리지 않는다.
+    for (const stale of ['metrics', 'references']) {
+      rmSync(join(dst, stale), { recursive: true, force: true });
     }
 
     // 파일별 역할 색인(README.md)도 함께 미러한다. 미러만 보는 소비자가 어느 파일이
