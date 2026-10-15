@@ -287,6 +287,37 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 
 ---
 
+## 레포 유형
+
+병합 주체는 반영 결과의 영향 범위로 정합니다 ([ADR-0028](adr/0028-merge-owner-follows-impact-scope.md)). 업무 · 사상 유형 레포는 사람이 웹에서 병합합니다. 저장소 유형 레포만 어시스턴트가 `gh pr merge` 로 반영합니다.
+
+| 항목 | 내용 |
+|------|------|
+| 선언 자리 | 레포 루트의 `.ops-agent/repo-type.json` = `{"type": "work" \| "principle" \| "storage"}`. 루트는 `.git` 이 있는 상위 디렉토리입니다. |
+| 기본값 | 파일이 없거나 파싱에 실패하거나 모르는 값이면 `work` 로 봅니다. 잘못 분류해도 피해가 작은 쪽입니다. |
+| 편집 차단 | 어시스턴트가 이 파일을 쓰지 못합니다. 유형을 AI 가 선언하면 자기 자율의 범위를 스스로 정하게 됩니다. |
+| 병합 거부 | `work` · `principle` 레포의 `gh pr merge` 는 `repo-merge` 갈래가 열려 있어도 차단합니다. |
+
+### 편집 차단
+
+Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-type.json` 이면 차단합니다. Bash 는 명령에 `repo-type.json` 이 나오고 쓰기 형태일 때 차단합니다. 쓰기 형태는 `>` · `>>` 의 대상, `tee`, `sed -i`, `mv`, `rm`, `cp` · `ln` 의 대상입니다. 읽기(`cat` · `grep` · `jq`)는 통과합니다.
+
+사람은 `!` 로 직접 씁니다. `!` 명령은 훅을 거치지 않습니다.
+
+```bash
+! mkdir -p .ops-agent && echo '{"type": "storage"}' > .ops-agent/repo-type.json
+```
+
+### 병합 거부
+
+`gh pr merge` 의 대상 레포를 먼저 정합니다. `-R` · `--repo` 가 있으면 로컬 선언을 알 수 없어 `work` 로 봅니다. 없으면 명령 cwd 의 레포 루트 선언을 읽습니다.
+
+`work` · `principle` 이면 갈래 개방 여부와 무관하게 차단합니다. 메시지는 상황 보고 뒤 웹 UI 에서 병합하도록 안내합니다. `storage` 만 기존 흐름(갈래 개방과 최종 점검 통과 기록)을 따릅니다.
+
+`action-gate-allow.sh on` 은 `repo-merge`(또는 `all`)를 열 때 현재 디렉토리 레포의 유형이 `work` · `principle` 이면 경고를 stderr 로 냅니다. 개방은 막지 않습니다. 실행 위치가 대상 레포가 아닐 수 있기 때문입니다. 실제 보장은 훅이 합니다.
+
+---
+
 ## 플래그
 
 오탐 조정과 파이프라인 실행용입니다. 상시 사용을 전제하지 않습니다.

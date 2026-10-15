@@ -24,6 +24,8 @@
  *    세션 허용: OPS_AGENT_ACTION_GATE_ALLOW=1 또는 action-gate-allow.sh on 마커.
  *    드라이런 OPS_AGENT_ACTION_GATE_DRYRUN=1 · 비활성 OPS_AGENT_ACTION_GATE_DISABLE=1.
  *    (레거시 OPS_AGENT_CLUSTER_WRITE_ALLOW / _GUARD_* · cluster-write-allow.json 도 계속 인식)
+ *    레포 유형 (ADR-0028): `.ops-agent/repo-type.json` 선언을 AI 가 쓰지 못하게 막고,
+ *    업무 · 사상 유형(기본값 work) 레포의 `gh pr merge` 는 갈래가 열려 있어도 거부한다.
  * 4. 최종 점검 통과 기록 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
  *    통과 기록이 있어야 통과한다. 판정은 로컬만이다. 통과 기록 head 와 origin 추적 브랜치를 비교한다.
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
@@ -98,6 +100,15 @@ const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
 const GATE_DISABLE = process.env.OPS_AGENT_ACTION_GATE_DISABLE === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DISABLE === '1';
 const GATE_DRYRUN = process.env.OPS_AGENT_ACTION_GATE_DRYRUN === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DRYRUN === '1';
 
+// 레포 유형 상수 (ADR-0028). 판정 함수는 아래 findRepoRoot 옆에 있다. 훅 본문이 모듈 위쪽에서 돌아 상수가 먼저 있어야 한다.
+const REPO_TYPES = new Set(['work', 'principle', 'storage']);
+const REPO_TYPE_FILE = /(?:^|[\\/])\.ops-agent[\\/]repo-type\.json$/;
+
+const REPO_TYPE_DENY_EDIT = '[ops-agent 레포 유형 · 차단] 유형 선언은 사람이 한다 (ADR-0028). `!` 로 직접 쓴다.\n\n'
+  + '예시 (저장소 유형):\n'
+  + '  ! mkdir -p .ops-agent && echo \'{"type": "storage"}\' > .ops-agent/repo-type.json\n'
+  + '값: work | principle | storage. 선언이 없으면 work 로 본다.';
+
 // 최종 점검 통과 기록 (#612). 게이트 플래그와 독립이다. 게이트가 열려 있어도 통과 기록은 따로 본다.
 const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
 const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
@@ -147,6 +158,13 @@ let truncationNotice = '';
 if (!DISABLE) {
   try {
     const hookInput = JSON.parse(input);
+    // 레포 유형 선언 편집 차단 (ADR-0028). 유형은 사람이 선언한다.
+    if (writesRepoTypeFile(hookInput.tool_name || '', hookInput.tool_input)) {
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: REPO_TYPE_DENY_EDIT },
+      }));
+      process.exit(0);
+    }
     // 빌드 스크립트 가드: 번들을 쓰는 레포의 모듈 빌드 스크립트에 라이브러리 좌표가 더해지면 알린다.
     // 편집은 되돌릴 수 있어 막지 않는다 (README 「되돌릴 수 없는 것만 막는다」). 컴파일이 되니 알리지 않으면 리뷰 전까지 드러나지 않는다 (#574).
     if (!BUILD_GUARD_DISABLE && /^(?:Write|Edit|MultiEdit)$/.test(hookInput.tool_name || '')) {
@@ -257,6 +275,21 @@ if (!DISABLE) {
       // ·리소스 삭제)는 세션 명시 허용 없으면 차단한다. 권한을 추측해 실행하는 사고를 기계적으로 막는다.
       if (!GATE_DISABLE && remainingMs() <= 0) noteBudgetExceeded('한시 권한');
       if (!GATE_DISABLE && remainingMs() > 0) {
+        // 업무 · 사상 유형 레포의 병합은 사람이 웹에서 한다 (ADR-0028). 갈래가 열려 있어도 거부한다.
+        const mergeType = mergeTargetRepoType(command, hookInput.cwd);
+        if (mergeType && mergeType !== 'storage') {
+          const msg = `[ops-agent 레포 유형 · 차단] 업무 · 사상 유형 레포는 사람이 웹에서 병합한다 (ADR-0028). 상황 보고 뒤 웹 UI 에서 머지한다.\n\n`
+            + `대상 레포 유형: ${mergeType} (선언이 없거나 -R/--repo 로 대상이 로컬이 아니면 work 로 본다)\n`
+            + `유형 선언은 사람이 한다: .ops-agent/repo-type.json`;
+          if (GATE_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+            }));
+            process.exit(0);
+          }
+        }
         const gateResult = runActionGate(command, hookInput.session_id, hookInput.cwd);
         if (gateResult.blocked) {
           const header = GATE_DRYRUN
@@ -622,6 +655,49 @@ function findRepoRoot(startDir) {
     dir = parent;
   }
   return null;
+}
+
+// ─── 레포 유형 (ADR-0028) ───
+// 레포 루트의 `.ops-agent/repo-type.json` = {"type": "work" | "principle" | "storage"}.
+// 파일 없음 · 파싱 실패 · 모르는 값은 work 다. 잘못 분류해도 피해가 작은 쪽이다.
+// 유형은 사람이 선언한다. AI 가 선언하면 자기 자율의 범위를 스스로 정하게 되므로 편집을 막는다.
+function readRepoType(repoRoot) {
+  if (!repoRoot) return 'work';
+  try {
+    const t = JSON.parse(readFileSync(join(repoRoot, '.ops-agent', 'repo-type.json'), 'utf8')).type;
+    return REPO_TYPES.has(t) ? t : 'work';
+  } catch {
+    return 'work';
+  }
+}
+
+// 어시스턴트가 레포 유형 파일을 쓰는 호출인지. 도구 호출은 경로 끝으로, Bash 는 쓰기 형태로 본다.
+// 읽기(cat · grep · jq)는 통과한다.
+function writesRepoTypeFile(toolName, toolInput) {
+  const ti = toolInput || {};
+  if (/^(?:Edit|Write|MultiEdit|NotebookEdit)$/.test(toolName)) {
+    return [ti.file_path, ti.notebook_path].some(f => typeof f === 'string' && REPO_TYPE_FILE.test(f));
+  }
+  if (toolName !== 'Bash') return false;
+  const NAME = 'repo-type.json';
+  for (const seg of gateSegments(ti.command || '')) {
+    if (!seg.includes(NAME)) continue;
+    const toks = seg.split(/\s+/).filter(Boolean).map(t => t.replace(/^["']|["']$/g, ''));
+    const cmd = (toks[0] || '').replace(/^.*\//, '');
+    if (/>>?\|?\s*["']?[^\s;|&"']*repo-type\.json/.test(seg)) return true;
+    if (cmd === 'tee' || cmd === 'rm' || cmd === 'mv') return true;
+    if (cmd === 'sed' && toks.some(t => /^-[A-Za-z]*i[A-Za-z]*$/.test(t) || t.startsWith('--in-place'))) return true;
+    if ((cmd === 'cp' || cmd === 'ln') && toks[toks.length - 1].endsWith(NAME)) return true;
+  }
+  return false;
+}
+
+// `gh pr merge` 의 대상 레포 유형. -R/--repo 가 있으면 로컬 선언을 알 수 없어 work 로 본다.
+function mergeTargetRepoType(command, hookCwd) {
+  const mergeSegs = gateSegments(command).filter(s => /^(?:\S*\/)?gh\s+pr\s+merge\b/.test(s));
+  if (!mergeSegs.length) return null;
+  if (mergeSegs.some(s => /(?:^|\s)(?:-R|--repo)(?:\s|=)/.test(s))) return 'work';
+  return readRepoType(findRepoRoot(extractCwdFromCommand(command, hookCwd)));
 }
 
 function resolveCommandCwd(command, fallbackCwd) {
