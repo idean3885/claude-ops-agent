@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
 
+# step output 은 run 블록에 expression 으로 넣지 않는다. 셸 실행 전에 문자열로 치환되어
+# VERSION · CHANGELOG(머지된 PR 이 바꾸는 값) 안의 셸 문법이 그대로 실행된다. env 로 넘긴다.
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -23,8 +25,10 @@ jobs:
 
       - name: Check if tag exists
         id: check
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          if git ls-remote --tags origin "refs/tags/v${{ steps.version.outputs.version }}" | grep -q .; then
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -33,10 +37,11 @@ jobs:
       - name: Extract changelog
         if: steps.check.outputs.exists == 'false'
         id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           # Extract section for this version from CHANGELOG.md
-          BODY=$(awk "/^## \\[$VERSION\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          BODY=$(awk -v ver="$VERSION" 'index($0, "## [" ver "]") == 1 {found=1; next} /^## \[/{if(found) exit} found{print}' CHANGELOG.md)
           if [ -z "$BODY" ]; then
             BODY="Release v$VERSION"
           fi
@@ -47,8 +52,9 @@ jobs:
 
       - name: Sync marketplace.json version
         if: steps.check.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if [ -f .claude-plugin/marketplace.json ]; then
             sed -i'' -e "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" .claude-plugin/marketplace.json
             if git diff --quiet .claude-plugin/marketplace.json; then
@@ -66,9 +72,9 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          BODY: ${{ steps.changelog.outputs.body }}
         run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "${{ steps.version.outputs.tag }}" \
-            --notes "${{ steps.changelog.outputs.body }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "$TAG" --notes "$BODY"
