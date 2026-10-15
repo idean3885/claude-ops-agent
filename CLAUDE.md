@@ -163,7 +163,7 @@ main ────────────────●─────
 |------|------|
 | 기존 규칙 · 가이드 · 훅이 이미 그 자리를 맡는가 (`grep` 로 skills · docs · scripts 를 본다) | 있으면 플러그인 갭이 아니다. 동작하지 않은 원인이 「없음」인지 「안 읽힘」인지 가른다. 안 읽힘이면 읽는 단계를 고치는 이슈다 |
 | 소비 레포의 문서(README · CLAUDE.md)에 규칙이 있는가 | 있으면 레포 규칙이고 플러그인이 할 일은 그 문서를 여는 단계뿐이다 |
-| 같은 주제의 과거 지시 · 결정이 있는가 ([ADR-0027](docs/adr/0027-instructions-are-checked-against-records.md)) | 있으면 이전 · 지금 · 바뀐 점을 이슈에 적는다. 바뀐 것이 없으면 과거 지시를 따른다. |
+| 같은 주제의 과거 지시 · 결정이 있는가 ([ADR-0027](docs/adr/0027-instructions-are-checked-against-records.md)) | 이슈 `## Why` 의 「기존 기록」 줄에 적는다. 있으면 이전 · 지금 · 바뀐 점, 없으면 「없음 · 찾은 자리」. 바뀐 것이 없으면 과거 지시를 따른다. 어댑터가 이 줄 없이는 생성하지 않는다 (ISS5). |
 | ADR 로 남길 결정인가 | 기존 결정을 뒤집거나 기각한 대안을 남겨야 할 때만 ADR 이다. 그 밖의 지시는 다스리는 문서에 한 줄로 남긴다. |
 | 같은 자리가 두 번 이상 나왔는가 | 한 번이면 사례로 기록하고 이슈는 올리지 않는다 (전문가 추가와 같은 기준) |
 | 고칠 층이 맞는가 ([ADR-0004](docs/adr/0004-fix-altitude.md)) | 사상 → 집행 → 개별. 개별 수정으로 끝날 것을 집행 장치로 올리지 않는다 |
@@ -198,9 +198,10 @@ main ────────────────●─────
           if v!=sorted(v): print(p,k,v)
   "
   ```
-- [ ] **`scripts/pre-tool-use.mjs` 를 고쳤으면 자체 점검을 돌린다** (차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다)
+- [ ] **`scripts/pre-tool-use.mjs` · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
   ```bash
   node scripts/selftest-action-gate.mjs
+  node scripts/selftest-issue-adapter.mjs
   node scripts/selftest-build-guard.mjs
   ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지

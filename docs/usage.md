@@ -38,6 +38,7 @@ claude plugin update ops-agent@ops-agent
 | SessionStart | 시범 적용 규칙 주입 (`~/.claude/ops-agent/trials.local.json`, 세션 1회, 디렉토리 무관) | 자동 적용 |
 | PreToolUse | 대외비 키워드가 공개 표면으로 전송되는 명령 | **실행 전 차단** |
 | PreToolUse | 커밋·PR·이슈 본문의 구현 세부 서술 | **실행 전 차단** |
+| PreToolUse | 어댑터(`scripts/gh-issue.sh`)를 거치지 않은 이슈 생성 (`gh issue create` · `gh api …/issues`) | **실행 전 차단** |
 | PreToolUse | 머지·릴리즈·force push·클러스터 변경·리소스 삭제 | **사용자가 세션 허용을 켤 때까지 차단** |
 | PreToolUse | 기본 브랜치 직접 push, `reset --hard`·`clean -f`·`branch -D`·`restore` | **사용자가 세션 허용을 켤 때까지 차단** |
 | PostToolUse | 문서 편집 후 표현·구조 위반 위치와 수치 | 알림 (마커 파일 있을 때만) |
@@ -56,13 +57,16 @@ flowchart LR
   W --> T{"도구 실행"}
   T -->|"공개 표면 쓰기"| C["대외비 가드"]
   T -->|"커밋·PR 본문"| H["What 가드"]
+  T -->|"이슈 생성"| I["이슈 생성 가드"]
   T -->|"머지·릴리즈·삭제"| A["한시 권한"]
   T -->|"문서 편집"| E["편집 후 자가 점검"]
   C -->|히트| X["차단"]
   H -->|히트| X
+  I -->|직접 호출| X
   A -->|미허용| X
   C -->|통과| OK["실행"]
   H -->|통과| OK
+  I -->|어댑터| OK
   A -->|허용| OK
   E --> OK
   OK --> S["Stop<br/>응답 스캔 → 다음 턴 통지"]
@@ -133,7 +137,10 @@ flowchart LR
 | `scripts/post-merge-sync.sh` | 머지 후 로컬 캐시 동기 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | `scripts/action-gate-allow.sh` | 되돌리기 어려운 행위의 세션 허용 토글 | [action-gate.md](action-gate.md) |
 | `scripts/pre-merge-check.sh` | 머지 전 버전·CHANGELOG 대조 (검출 시 종료 코드 1) | [action-gate.md](action-gate.md) |
-| `scripts/selftest-action-gate.mjs` | 한시 권한 판정·개방 안내 자체 점검 (22건) | [action-gate.md](action-gate.md) |
+| `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
+| `scripts/issue-body-rules.mjs` | 이슈 본문 구조 룰 정본 (ISS1 · ISS5 · ISS6 · ISS7). 어댑터가 부른다. | [action-gate.md](action-gate.md) |
+| `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 자체 점검 (114건) | [action-gate.md](action-gate.md) |
+| `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (50건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/resolve-manifest.mjs` | 소유자 식별과 org·repo 매니페스트 발견 | [conventions-slot.md](conventions-slot.md) |
 | `config/style-rules/metrics/tells_count.py` | AI 티 지표 측정 | [지표 정의](../config/style-rules/metrics/metrics-spec.md) |
