@@ -73,6 +73,16 @@ valid_scopes() {
   sed -n '/^# 갈래 목록/,/^#$/p' "${BASH_SOURCE[0]}" | sed -n 's/^#   \([a-z][a-z-]*\)  .*/\1/p'
 }
 
+# 현재 디렉토리 레포의 유형 (ADR-0028). 선언이 없거나 읽지 못하거나 모르는 값이면 work.
+repo_type() {
+  root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo work; return 0; }
+  t=$(sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.ops-agent/repo-type.json" 2>/dev/null | head -1)
+  case "$t" in
+    storage|principle|work) echo "$t" ;;
+    *) echo work ;;
+  esac
+}
+
 # 테스트가 함수만 불러 쓸 때는 여기서 멈춘다. 마커를 만들지 않는다.
 [ "${OPS_AGENT_GATE_LIB:-}" = "1" ] && return 0
 
@@ -131,6 +141,17 @@ case "$cmd" in
         warn_lost_scopes "$prev_scopes" "$scopes"
       fi
     fi
+
+    # 업무 · 사상 유형 레포에서는 훅이 병합을 거부한다 (ADR-0028). 개방은 막지 않는다:
+    # 실행 위치가 대상 레포가 아닐 수 있고, 실제 보장은 훅이 한다. 경고만 낸다.
+    case ",$(printf '%s' "$scopes" | tr -d ' ')," in
+      *,repo-merge,*|*,all,*)
+        rt=$(repo_type)
+        if [ "$rt" != "storage" ]; then
+          echo "[action-gate-allow] 이 레포(유형: ${rt})에서는 병합이 거부된다. 웹에서 병합 (ADR-0028)." >&2
+        fi
+        ;;
+    esac
 
     mkdir -p "$(dirname "$MARKER")"
     now_ms=$(( $(date +%s) * 1000 ))

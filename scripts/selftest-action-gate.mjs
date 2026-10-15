@@ -22,10 +22,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const hook = join(here, 'pre-tool-use.mjs');
 const repoRoot = join(here, '..');
 
+// 레포 유형 선언이 없으면 work 라 `gh pr merge` 가 거부된다 (ADR-0028). 기존 케이스는 갈래 판정을 보는 것이라
+// 저장소 유형을 선언한 임시 레포를 cwd 로 쓴다.
+const storageRepo = mkdtempSync(join(tmpdir(), 'storage-repo-'));
+mkdirSync(join(storageRepo, '.git'));
+mkdirSync(join(storageRepo, '.ops-agent'));
+writeFileSync(join(storageRepo, '.ops-agent', 'repo-type.json'), '{"type": "storage"}');
+
 // want: 'pass' = 통과해야 한다, 'deny' = 차단되어야 한다
 const CASES = [
   ['gated 행위 단독', 'gh pr merge 386 --merge', 'pass'],
-  ['cd 뒤 머지', 'cd /tmp && gh pr merge 386 --merge', 'pass'],
+  ['cd 뒤 머지', `cd ${storageRepo} && gh pr merge 386 --merge`, 'pass'],
+  ['레포 밖으로 cd 한 머지는 work 취급', 'cd /tmp && gh pr merge 386 --merge', 'deny'],
   ['주석 뒤 머지', '# 버전 대조 통과\ngh pr merge 386 --merge', 'pass'],
   ['환경 설정 뒤 머지', 'export GH_HOST=github.com\ngh pr merge 386 --merge', 'pass'],
   ['머지 뒤 정리', 'gh pr merge 386 --merge && git worktree list', 'pass'],
@@ -105,7 +113,7 @@ for (const [name, command, want] of CASES) {
   const res = spawnSync('node', [hook], {
     input: JSON.stringify({
       tool_name: 'Bash',
-      cwd: repoRoot,
+      cwd: storageRepo,
       session_id: 'selftest',
       tool_input: { command },
     }),
@@ -191,6 +199,8 @@ function receiptCase(name, want, setup, command = 'gh pr merge 7 --merge') {
   mkdirSync(repo);
   const git = (...a) => spawnSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
   git('init', '-q');
+  mkdirSync(join(repo, '.ops-agent'));
+  writeFileSync(join(repo, '.ops-agent', 'repo-type.json'), '{"type": "storage"}');
   git('remote', 'add', 'origin', `https://github.com/${RECEIPT_REPO}.git`);
   git('commit', '-q', '--allow-empty', '-m', 'x');
   const head = git('rev-parse', 'HEAD').stdout.trim();
@@ -231,5 +241,116 @@ const RECEIPT_CASES = [
 ];
 for (const [name, want, setup, command] of RECEIPT_CASES) receiptCase(name, want, setup, command);
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length}건 전부 통과`);
+// 레포 유형 (ADR-0028). 임시 레포(git init)에 선언을 두고 훅과 개방 스크립트가 같은 판정을 내리는지 본다.
+// 선언 없음 · 잘못된 JSON · 모르는 값은 work 다.
+const TYPE_MERGE = 'gh pr merge 7 --merge';
+function typeRepo(decl) {
+  const home = mkdtempSync(join(tmpdir(), 'type-selftest-'));
+  const repo = join(home, 'work');
+  mkdirSync(repo);
+  spawnSync('git', ['-C', repo, 'init', '-q']);
+  if (decl !== null) {
+    mkdirSync(join(repo, '.ops-agent'));
+    writeFileSync(join(repo, '.ops-agent', 'repo-type.json'), decl);
+  }
+  return { home, repo };
+}
+function runHook({ home, repo }, toolName, toolInput, marker = 'all') {
+  if (marker) {
+    const dir = join(home, '.claude', 'ops-agent', '.cache');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'action-gate-allow.json'), JSON.stringify({ expiresAt: Date.now() + 600000, scopes: marker.split(',') }));
+  }
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: toolName, cwd: repo, session_id: 'selftest', tool_input: toolInput }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, OPS_AGENT_ACTION_GATE_ALLOW: '', OPS_AGENT_CLUSTER_WRITE_ALLOW: '', OPS_AGENT_FINAL_CHECK_DISABLE: '' },
+  });
+  try {
+    const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput;
+    if (hs && hs.permissionDecision === 'deny') return { got: 'deny', reason: hs.permissionDecisionReason };
+  } catch { /* 출력 없음 = 통과 */ }
+  return { got: 'pass', reason: '' };
+}
+function typeCase(group, name, want, decl, toolName, toolInput, { marker = 'all', reasonHas = '' } = {}) {
+  const ctx = typeRepo(decl);
+  const { got, reason } = runHook(ctx, toolName, toolInput, marker);
+  rmSync(ctx.home, { recursive: true, force: true });
+  const ok = got === want && (!reasonHas || reason.includes(reasonHas));
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  ${group}: ${name} — want ${want}, got ${got}${reasonHas ? ` (${reasonHas})` : ''}`);
+}
+const TYPE_DENY = '레포 유형 · 차단';
+const TYPE_MERGE_MSG = '사람이 웹에서 병합한다';
+const RECEIPT_MSG = '최종 점검';
+let typeCaseCount = 0;
+const T = (...a) => { typeCaseCount++; typeCase(...a); };
+// S1: 유형 판정은 병합 거부로 드러난다. 갈래는 repo-merge 만 연 상태다.
+T('유형 판정', '선언 없음은 work', 'deny', null, 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: TYPE_MERGE_MSG });
+T('유형 판정', 'work', 'deny', '{"type": "work"}', 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: TYPE_MERGE_MSG });
+T('유형 판정', 'principle', 'deny', '{"type": "principle"}', 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: TYPE_MERGE_MSG });
+T('유형 판정', 'storage 는 기존 흐름(통과 기록 없음)', 'deny', '{"type": "storage"}', 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: RECEIPT_MSG });
+T('유형 판정', '잘못된 JSON 은 work', 'deny', '{type: storage', 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: TYPE_MERGE_MSG });
+T('유형 판정', '모르는 값은 work', 'deny', '{"type": "team"}', 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: TYPE_MERGE_MSG });
+T('유형 판정', 'type 키 없음은 work', 'deny', '{}', 'Bash', { command: TYPE_MERGE }, { marker: 'repo-merge', reasonHas: TYPE_MERGE_MSG });
+// S2: 편집 차단
+const TYPE_PATH = '/x/repo/.ops-agent/repo-type.json';
+T('유형 편집', 'Write', 'deny', null, 'Write', { file_path: TYPE_PATH, content: '{}' }, { marker: null, reasonHas: '사람이 한다' });
+T('유형 편집', 'Edit', 'deny', null, 'Edit', { file_path: TYPE_PATH, old_string: 'a', new_string: 'b' }, { marker: null, reasonHas: '사람이 한다' });
+T('유형 편집', 'MultiEdit', 'deny', null, 'MultiEdit', { file_path: TYPE_PATH, edits: [] }, { marker: null, reasonHas: '사람이 한다' });
+T('유형 편집', 'NotebookEdit', 'deny', null, 'NotebookEdit', { notebook_path: TYPE_PATH }, { marker: null, reasonHas: '사람이 한다' });
+T('유형 편집', '다른 .ops-agent 파일은 통과', 'pass', null, 'Write', { file_path: '/x/repo/.ops-agent/confidential.json', content: '{}' }, { marker: null });
+T('유형 편집', '이름만 비슷한 파일은 통과', 'pass', null, 'Write', { file_path: '/x/repo/docs/repo-type.json', content: '{}' }, { marker: null });
+const BASH_DENY = [
+  ['리다이렉트', `echo '{"type":"storage"}' > .ops-agent/repo-type.json`],
+  ['추가 리다이렉트', `echo x >> .ops-agent/repo-type.json`],
+  ['따옴표 리다이렉트 대상', `echo x > ".ops-agent/repo-type.json"`],
+  ['tee', `echo x | tee .ops-agent/repo-type.json`],
+  ['sed -i', `sed -i 's/work/storage/' .ops-agent/repo-type.json`],
+  ['cp 대상', `cp /tmp/a.json .ops-agent/repo-type.json`],
+  ['mv', `mv /tmp/a.json .ops-agent/repo-type.json`],
+  ['ln 대상', `ln -s /tmp/a.json .ops-agent/repo-type.json`],
+  ['rm', `rm .ops-agent/repo-type.json`],
+  ['체인 안의 쓰기', `mkdir -p .ops-agent && echo x > .ops-agent/repo-type.json`],
+];
+for (const [name, command] of BASH_DENY) T('유형 편집', `Bash ${name}`, 'deny', null, 'Bash', { command }, { marker: null, reasonHas: '사람이 한다' });
+const BASH_PASS = [
+  ['cat', 'cat .ops-agent/repo-type.json'],
+  ['grep', 'grep type .ops-agent/repo-type.json'],
+  ['jq', 'jq .type .ops-agent/repo-type.json'],
+  ['sed 읽기', 'sed -n 1p .ops-agent/repo-type.json'],
+  ['cp 원본', 'cp .ops-agent/repo-type.json /tmp/backup.json'],
+  ['읽은 뒤 다른 파일에 쓰기', 'cat .ops-agent/repo-type.json > /tmp/out.json'],
+];
+for (const [name, command] of BASH_PASS) T('유형 편집', `Bash ${name}`, 'pass', null, 'Bash', { command }, { marker: null });
+// S3: 병합 거부. 갈래를 all 로 열어도 work · principle 은 거부하고, 대상이 로컬이 아니면 work 로 본다.
+T('병합 거부', 'work, 전체 개방에서도', 'deny', '{"type": "work"}', 'Bash', { command: TYPE_MERGE }, { marker: 'all', reasonHas: TYPE_MERGE_MSG });
+T('병합 거부', 'principle, 전체 개방에서도', 'deny', '{"type": "principle"}', 'Bash', { command: TYPE_MERGE }, { marker: 'all', reasonHas: TYPE_MERGE_MSG });
+T('병합 거부', 'work, 갈래 닫힘도 유형 메시지', 'deny', '{"type": "work"}', 'Bash', { command: TYPE_MERGE }, { marker: null, reasonHas: TYPE_MERGE_MSG });
+T('병합 거부', 'storage 는 갈래 닫힘이면 기존 갈래 메시지', 'deny', '{"type": "storage"}', 'Bash', { command: TYPE_MERGE }, { marker: null, reasonHas: '한시 권한' });
+T('병합 거부', 'storage -R 지정은 work 취급', 'deny', '{"type": "storage"}', 'Bash', { command: 'gh pr merge 7 -R o/r --merge' }, { marker: 'all', reasonHas: TYPE_MERGE_MSG });
+T('병합 거부', 'storage --repo 지정은 work 취급', 'deny', '{"type": "storage"}', 'Bash', { command: 'gh pr merge 7 --repo o/r --merge' }, { marker: 'all', reasonHas: TYPE_MERGE_MSG });
+T('병합 거부', 'work 가 아닌 명령은 영향 없음', 'pass', '{"type": "work"}', 'Bash', { command: 'git status' }, { marker: 'all' });
+// S4: 개방 스크립트 경고. 개방은 막지 않는다.
+function allowCase(name, decl, scopes, wantWarn) {
+  const ctx = typeRepo(decl);
+  const res = spawnSync('bash', [join(here, 'action-gate-allow.sh'), 'on', scopes], {
+    cwd: ctx.repo, encoding: 'utf8', env: { ...process.env, HOME: ctx.home },
+  });
+  const warned = (res.stderr || '').includes('병합이 거부된다');
+  const opened = existsSync(join(ctx.home, '.claude', 'ops-agent', '.cache', 'action-gate-allow.json'));
+  rmSync(ctx.home, { recursive: true, force: true });
+  const ok = res.status === 0 && opened && warned === wantWarn;
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  개방 경고: ${name} — ${warned ? '경고' : '경고 없음'}${opened ? ', 개방됨' : ', 개방 안 됨'}`);
+}
+allowCase('선언 없음 + repo-merge', null, 'repo-merge', true);
+allowCase('work + all', '{"type": "work"}', 'all', true);
+allowCase('principle + repo-merge', '{"type": "principle"}', 'repo-merge,git-force', true);
+allowCase('storage + repo-merge', '{"type": "storage"}', 'repo-merge', false);
+allowCase('work 이어도 병합 갈래 아님', '{"type": "work"}', 'cluster-write', false);
+rmSync(storageRepo, { recursive: true, force: true });
+
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount}건 전부 통과`);
 process.exit(failed ? 1 : 0);

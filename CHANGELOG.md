@@ -17,6 +17,7 @@
 * ADR-0028: 반영 결과의 영향 범위에 따른 병합 주체 (#685)
 * 한시 권한 갈래 `cluster-exec`: kubectl `exec` · `cp` 만 연다. `cluster-write` 개방도 계속 통과 (#445)
 * 최종 점검 항목 g: merge-base 이후 커밋이 1개가 아니면 실패 (#573)
+* 레포 유형 선언 `.ops-agent/repo-type.json` (work · principle · storage, 기본 work). 어시스턴트의 선언 편집을 막고, work · principle 레포의 `gh pr merge` 는 갈래가 열려 있어도 거부 (ADR-0028, #690)
 
 ### Changed
 * `action-gate-allow.sh on` 이 없는 갈래 이름을 거부하고 유효 목록을 출력 (#439)
@@ -25,6 +26,7 @@
 * 표현 · 구조 규칙 보강: 「닫다」 판독, T8 명사구 · 관용구, 보고 · 검토 TL;DR 순서(W2HO), AR14 본문은 최종 상태 (#526 #689 #687 #466)
 * 전문가 기준 보강: architect AR3 새 용어 검색, planner PL7 원문 대조 (#636 #468)
 * 문서 보강: 보고 식별자는 요청 시, 게이트는 Bash 만 판정, 위임 시 권한 선취, 시범 판정 연결, 기획 확인 별칭 (#639 #424 #463 #684)
+* `action-gate-allow.sh on` 이 병합이 거부되는 레포 유형에서 `repo-merge` · `all` 을 열면 경고 (#690)
 
 ### Fixed
 * `git clean -n` · `--dry-run` 을 작업 손실 가드 대상에서 제외 (#660)
