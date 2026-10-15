@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.27.0] - 2026-10-15
+
 ### Added
 * ADR-0028: 반영 결과의 영향 범위에 따른 병합 주체 (#685)
 * 한시 권한 갈래 `cluster-exec`: kubectl `exec` · `cp` 만 연다. `cluster-write` 개방도 계속 통과 (#445)
