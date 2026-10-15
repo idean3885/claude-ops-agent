@@ -124,6 +124,8 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 
 7. provider 정의에 따라 라벨/태그 매핑
 8. 이슈 본문 작성 (provider의 본문 템플릿 사용)
+   - 본문 · 코멘트는 개조식 불릿으로 쓴다. 불릿 하나에 의미 하나, 세부는 하위 불릿으로 내린다.
+   - 진행 상황은 본문 체크리스트에 두고 코멘트는 한두 줄로 쓴다.
 9. **대외비 가드 (GATE 0)**: 제목·본문 전체에 대해 `references/confidential-guard.md` 검증. 히트 시 사용자 정정 후 재검증
 10. provider의 이슈 생성 API/명령 실행 (provider에 정의된 인증·endpoint·body 그대로 사용)
 11. **Extensions 실행**: provider에 post-create Extensions이 정의되어 있으면 실행
