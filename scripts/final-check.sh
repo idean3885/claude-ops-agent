@@ -6,12 +6,11 @@
 # pre-tool-use.mjs 가 `gh pr merge` 직전에 이 통과 기록을 확인한다. 푸시로 HEAD 가 바뀌면
 # 통과 기록은 무효가 되므로 다시 돌린다.
 #
-# 사용: final-check.sh <PR번호> --notes <파일> [--no-comment]
+# 사용: final-check.sh <PR번호> --notes <파일>
 #   notes  판단 점검 노트. 아래 세 절이 있고 각 본문이 비어 있지 않아야 한다.
 #          ## 설계 반영 / ## 서브 에이전트 산출물 / ## 교정
 #          CodeRabbit 의 마지막 리뷰가 HEAD 가 아닐 때는 ## 자체 검증 도 채운다.
 #          「해당 없음」 같은 한 줄은 본문으로 인정한다. 비워 두는 것만 막는다.
-#   no-comment  통과해도 노트를 PR 댓글로 올리지 않는다. 노트는 통과 기록에만 남는다.
 #
 # 실패 조건 (하나라도 걸리면 목록을 출력하고 종료 코드 1):
 #   a. 실패 또는 대기 중인 체크
@@ -23,7 +22,8 @@
 #   f. 노트의 세 절 중 없거나 비어 있는 것
 #   g. merge-base 이후 커밋이 1개가 아님 (초안 중 쌓인 교정 커밋은 스쿼시한다)
 #
-# 통과하면 노트를 PR 댓글로 올리고(--no-comment 면 생략) 통과 기록을 남긴다.
+# 통과하면 통과 기록을 남기고 레포 유형별 끝 안내를 낸다. 기록의 원천은 이 로컬 기록 하나이고
+# PR 댓글 · 커밋 상태 같은 공유 표면에는 올리지 않는다 (ADR-0029).
 #   통과 기록: ~/.claude/ops-agent/.cache/final-check/<owner>__<repo>__<PR>.json (노트 본문 포함)
 #   지표:   ~/.claude/ops-agent/metrics/final-check.jsonl (매 실행 한 줄)
 set -uo pipefail
@@ -36,19 +36,36 @@ METRICS_FILE="$HOME_DIR/.claude/ops-agent/metrics/final-check.jsonl"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COUNTER="${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/..}/config/style-rules/metrics/readability_count.py"
 
+# 통과 뒤 끝 안내. 레포 유형(ADR-0028)에 따라 병합 주체가 다르다.
+#   storage          AI 가 반영한다. 훅이 통과 기록을 확인하는 gh pr merge 명령을 낸다.
+#   work · principle 사람이 웹에서 병합한다. 상황 보고에 통과 기록 경로와 HEAD 를 첨부한다.
+pass_guidance() {
+  local type="$1" pr="$2" head="$3" record="$4"
+  echo "최종 점검 통과 (PR $pr, HEAD ${head:0:7}). 통과 기록: $record"
+  case "$type" in
+    storage)
+      # why: 훅은 로컬 추적 브랜치로만 비교하므로, 원격에 다른 푸시가 있으면 서버 쪽 대조로 막는다
+      echo "머지: gh pr merge $pr --merge --match-head-commit $head" ;;
+    *)
+      echo "병합은 웹에서 사람이 한다 (ADR-0028). 상황 보고에 통과 기록 경로와 HEAD ${head:0:7} 를 첨부한다." ;;
+  esac
+  echo "이슈가 끝나면 세션 종료 또는 /clear"
+}
+
+# 테스트가 함수만 불러 쓸 때는 여기서 멈춘다. gh 를 부르지 않는다.
+[ "${FINAL_CHECK_LIB:-}" = "1" ] && return 0
+
 PR=""
 NOTES=""
-COMMENT=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --notes) NOTES="${2:-}"; shift 2 ;;
-    --no-comment) COMMENT=0; shift ;;
     -*) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
     *) PR="$1"; shift ;;
   esac
 done
 if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
-  echo "사용: final-check.sh <PR번호> --notes <파일> [--no-comment]" >&2
+  echo "사용: final-check.sh <PR번호> --notes <파일>" >&2
   exit 2
 fi
 
@@ -189,15 +206,12 @@ if [ "${#failed[@]}" -gt 0 ]; then
   exit 1
 fi
 
-if [ "$COMMENT" = 1 ]; then
-  gh pr comment "$PR" --body-file "$NOTES" >/dev/null || { echo "노트 댓글을 올리지 못했다" >&2; failed+=(comment); record fail; exit 1; }
-fi
 mkdir -p "$CACHE_DIR"
+RECORD="$CACHE_DIR/${REPO/\//__}__${PR}.json"
 jq -nc --argjson pr "$PR" --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$REPO" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --rawfile notes "$NOTES" \
-  '{pr:$pr,head:$head,branch:$branch,repo:$repo,at:$at,notes:$notes}' >"$CACHE_DIR/${REPO/\//__}__${PR}.json"
+  '{pr:$pr,head:$head,branch:$branch,repo:$repo,at:$at,notes:$notes}' >"$RECORD"
 record pass
-echo "최종 점검 통과 (PR $PR, HEAD ${HEAD_SHA:0:7}). 통과 기록을 남겼다."
-# why: 훅은 로컬 추적 브랜치로만 비교하므로, 원격에 다른 푸시가 있으면 서버 쪽 대조로 막는다
-echo "머지: gh pr merge $PR --merge --match-head-commit $HEAD_SHA"
-echo "이슈가 끝나면 세션 종료 또는 /clear"
+# 레포 유형 판독은 개방 스크립트의 함수 하나를 같이 쓴다. 판독기가 둘이면 언젠가 다르게 읽는다.
+OPS_AGENT_GATE_LIB=1 . "$SCRIPT_DIR/action-gate-allow.sh"
+pass_guidance "$(repo_type)" "$PR" "$HEAD_SHA" "$RECORD"

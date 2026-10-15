@@ -114,9 +114,9 @@ Closes #{이슈번호}
 > - `Closes #` 는 github.com + Issues 일 때만. GHE + 외부 트래커면 생략 — 최상단 링크로 대체.
 > - **자가 검증 표·변경 파일 표·커밋 내역 표는 넣지 않는다** (CI·`Files changed`·git log 에 이미 표시).
 
-**PR 머지 + 정리**:
+**PR 머지 + 정리**: 머지 전 `final-check.sh` 통과 기록이 있어야 한다 (`skills/flow/guides/pr.md` 「머지 전 최종 점검과 상황 보고」). 업무 · 사상 유형 레포는 사람이 웹에서 병합하고 아래는 정리만 한다. 저장소 유형 레포만 어시스턴트가 병합한다.
 ```bash
-gh pr merge {PR번호} --merge
+gh pr merge {PR번호} --merge --match-head-commit {HEAD}   # 저장소 유형만
 git checkout {타겟브랜치} && git pull
 ```
 워크트리 사용 시: `git worktree remove ../{워크트리 경로}`
