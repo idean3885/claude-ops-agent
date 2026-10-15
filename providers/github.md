@@ -13,7 +13,14 @@ ops-agent 기본 내장 provider입니다.
 
 ### create
 
-**도구**: `gh issue create`
+**도구**: `scripts/gh-issue.sh create` (어댑터. 계약은 [PROVIDER.md](PROVIDER.md) 「어댑터 계약」)
+
+```bash
+bash ~/.claude/ops-agent/current/scripts/gh-issue.sh create --title "{제목}" --body-file {본문.md} --type {feat|fix|docs|refactor|chore} \
+  (--start [--worktree|--checkout] [--base {브랜치}] [--branch {이름}] | --no-start "{사유}") [-R {owner/repo}] [--structure {iss1|iss5|iss6|iss7}]
+```
+
+어댑터가 본문 구조 검사(`scripts/issue-body-rules.mjs`) → 라벨 보장 → `gh issue create --label {타입}` → `--start` 면 start 를 이어서 한다. 구조 기본값은 `fix` → ISS1, 그 외 → ISS5. `gh issue create` 직접 호출은 훅이 거부한다. 출력은 JSON 한 줄(`status` · `number` · `url` · `start`).
 
 **라벨 매핑**:
 | 키워드 | 라벨 | 브랜치 접두사 | 색상 |
@@ -29,14 +36,15 @@ ops-agent 기본 내장 provider입니다.
 gh label list --json name --jq '.[].name' | grep -q "^${라벨}$" || gh label create "${라벨}" --color "${색상}"
 ```
 
-**본문 템플릿**:
+**본문 템플릿** (`config/style-rules/extensions/issue.md` 「필수 구조」 절. 기능 · 운영은 ISS5, 버그는 ISS1):
 ```markdown
-## 작업 내용
-{요약}
+## What
+{도메인 수준 한 줄}
 
-## 체크리스트
-- [ ] 항목 1
-- [ ] 항목 2
+## Why
+- {배경 사실}
+- {배경 사실}
+- 기존 기록: {이전 · 지금 · 바뀐 점 | 없음 · 찾은 자리}
 ```
 
 **이슈 검색** (기존 이슈 탐색):
@@ -46,23 +54,26 @@ gh issue list --state open --search "{키워드}" --json number,title,labels --l
 
 ### start
 
+**도구**: `scripts/gh-issue.sh start` (어댑터)
+
+```bash
+bash ~/.claude/ops-agent/current/scripts/gh-issue.sh start {이슈번호} [--type {타입}] [-R {owner/repo}] [--worktree|--checkout] [--base {브랜치}] [--branch {이름}]
+```
+
 **상태**: GitHub Issues는 별도 상태 전환 API 없음 (open 상태 유지)
 
-**담당자 설정**:
-```bash
-gh issue edit {이슈번호} --add-assignee @me
-```
+**담당자 설정**: 어댑터가 `gh issue edit {이슈번호} --add-assignee @me`
 
-**시작 기록**: 이슈 코멘트로 시작 일시 기록
-```bash
-gh issue comment {이슈번호} --body "작업 시작: {시작일시}"
-```
+**시작 기록**: 어댑터가 이슈 코멘트로 `작업 시작: {시작일시}`
 
-**브랜치 생성** (코드 작업 이슈만):
-- 브랜치 패턴: `{타입}/{이슈번호}`
-- 이슈 내용은 변경될 수 있으므로 설명은 붙이지 않는다
-- **워크트리 (권장)**: `git worktree add ../{프로젝트}-{타입}-{번호} -b {타입}/{번호}`
-- **직접 체크아웃**: `git checkout main && git pull && git checkout -b {타입}/{번호}`
+**타입**: `--type` 이 없으면 이슈의 타입 라벨(feat · fix · docs · refactor · chore)에서 읽는다. 하나가 아니면 종료 코드 1
+
+**브랜치 생성** (코드 작업 이슈만. `--worktree` 또는 `--checkout` 을 줄 때):
+- 브랜치 패턴: `{타입}/{이슈번호}`. `--branch` 로 덮는다.
+- 이슈 내용은 변경될 수 있으므로 설명은 붙이지 않는다.
+- 어댑터가 `git fetch origin` 뒤 `origin/{base}` (기본 `main`) 에서 분기한다.
+- **워크트리 (권장)**: `--worktree` → `git worktree add ../{프로젝트}-{타입}-{번호} -b {브랜치} origin/{base}`
+- **직접 체크아웃**: `--checkout` → `git checkout -b {브랜치} origin/{base}`
 
 ### complete
 

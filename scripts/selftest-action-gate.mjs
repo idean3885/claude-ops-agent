@@ -350,7 +350,66 @@ allowCase('work + all', '{"type": "work"}', 'all', true);
 allowCase('principle + repo-merge', '{"type": "principle"}', 'repo-merge,git-force', true);
 allowCase('storage + repo-merge', '{"type": "storage"}', 'repo-merge', false);
 allowCase('work 이어도 병합 갈래 아님', '{"type": "work"}', 'cluster-write', false);
+
+// 이슈 생성 가드 (#696). 직접 호출은 거부하고 어댑터(gh-issue.sh)는 통과한다. 어댑터 호출의 제목 · 본문 파일은
+// 대외비 가드가 직접 호출과 같이 본다. 키워드 · 사내 호스트는 임시 설정으로 주입한다 (사용자 로컬 설정에 기대지 않는다).
+const issueHome = mkdtempSync(join(tmpdir(), 'issue-guard-selftest-'));
+const issueCfg = join(issueHome, 'confidential.json');
+writeFileSync(issueCfg, JSON.stringify({
+  externalOnly: { keywords: ['SELFTEST_INTERNAL_WORD'] },
+  personalDevOnly: { keywords: ['SELFTEST_HOME_WORD'] },
+  internalHosts: ['ghe.selftest.internal'],
+}));
+const bodyOf = (name, text) => { const p = join(issueHome, name); writeFileSync(p, text); return p; };
+const cleanBody = bodyOf('clean.md', '## What\n한 줄\n\n## Why\n- 사실 1\n- 사실 2\n- 기존 기록: 없음 · docs\n');
+const internalWordBody = bodyOf('internal-word.md', '## What\nSELFTEST_INTERNAL_WORD 를 다룬다\n\n## Why\n- 사실 1\n- 사실 2\n- 기존 기록: 없음 · docs\n');
+const homeWordBody = bodyOf('home-word.md', '## What\nSELFTEST_HOME_WORD 를 다룬다\n\n## Why\n- 사실 1\n- 사실 2\n- 기존 기록: 없음 · docs\n');
+const ADAPTER = 'bash ~/.claude/ops-agent/current/scripts/gh-issue.sh';
+const ISSUE_DENY = '이슈 생성 가드';
+function issueCase(name, want, command, { env = {}, reasonHas = '' } = {}) {
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', cwd: storageRepo, session_id: 'selftest', tool_input: { command } }),
+    encoding: 'utf8',
+    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg, ...env },
+  });
+  let got = 'pass';
+  let reason = '';
+  try {
+    const d = JSON.parse((res.stdout || '').trim());
+    const hs = d.hookSpecificOutput;
+    if (hs && hs.permissionDecision === 'deny') { got = 'deny'; reason = hs.permissionDecisionReason; }
+    else if (d.systemMessage) { got = 'error'; reason = d.systemMessage; }
+  } catch { /* 출력 없음 = 통과 */ }
+  const ok = got === want && (!reasonHas || reason.includes(reasonHas));
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  이슈 생성 가드: ${name} — want ${want}, got ${got}${reason ? ` · ${reason.split('\n')[0]}` : ''}`);
+}
+const ISSUE_CASES = [
+  ['gh issue create 직접 호출', 'deny', 'gh issue create --title "x" --body "y"', { reasonHas: ISSUE_DENY }],
+  ['gh api -X POST …/issues', 'deny', 'gh api -X POST repos/o/r/issues -f title=x', { reasonHas: ISSUE_DENY }],
+  ['gh api …/issues -f (메서드 생략은 POST)', 'deny', 'gh api repos/o/r/issues -f title=x -f body=y', { reasonHas: ISSUE_DENY }],
+  ['gh api …/issues --input', 'deny', 'gh api repos/o/r/issues --input body.json', { reasonHas: ISSUE_DENY }],
+  ['gh api …/issues 조회', 'pass', 'gh api repos/o/r/issues?state=open --jq ".[].number"'],
+  ['gh api …/issues -X GET', 'pass', 'gh api -X GET repos/o/r/issues -f state=open'],
+  ['gh api …/issues/1/comments 는 코멘트', 'pass', 'gh api repos/o/r/issues/1/comments -f body=x'],
+  ['gh api …/issues/1/labels 는 라벨', 'pass', 'gh api repos/o/r/issues/1/labels -f "labels[]=feat"'],
+  ['gh api graphql createIssue', 'deny', `gh api graphql -f query='mutation { createIssue(input: {repositoryId: "x", title: "t"}) { issue { number } } }'`, { reasonHas: ISSUE_DENY }],
+  ['gh api graphql 조회', 'pass', `gh api graphql -f query='query { repository(owner: "o", name: "r") { issues(first: 1) { nodes { number } } } }'`],
+  ['어댑터 호출', 'pass', `${ADAPTER} create --title "x" --body-file ${cleanBody} --type feat --no-start "후속"`],
+  ['어댑터 뒤에 붙인 직접 호출', 'deny', `${ADAPTER} create --title "x" --body-file ${cleanBody} --type feat --start; gh issue create --title y --body z`, { reasonHas: ISSUE_DENY }],
+  ['경로 언급만 하는 검색', 'pass', "grep -n 'gh issue create' skills/flow/guides/issue.md"],
+  ['문구 echo', 'pass', "echo 'gh issue create --title x'"],
+  ['드라이런은 통과', 'pass', 'gh issue create --title "x" --body "y"', { env: { OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN: '1' } }],
+  ['비활성은 통과', 'pass', 'gh issue create --title "x" --body "y"', { env: { OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE: '1' } }],
+  // 어댑터 호출의 본문 파일에 대외비 가드가 적용된다. cwd 에 origin 리모트가 없어 표면은 public 이다.
+  ['어댑터 본문의 대외비 키워드', 'deny', `${ADAPTER} create --title "x" --body-file ${internalWordBody} --type feat --start`, { reasonHas: '대외비 가드' }],
+  // -R 의 사내 호스트로 internal 표면이 잡힌다. 개인 환경 흔적은 막고, 사내 용어는 통과한다.
+  ['어댑터 -R 사내 호스트 + 개인 환경 흔적', 'deny', `${ADAPTER} create --title "x" --body-file ${homeWordBody} --type feat -R ghe.selftest.internal/o/r --start`, { reasonHas: '사내 공유 표면 쓰기에서 개인 환경 흔적 히트' }],
+  ['어댑터 -R 사내 호스트 + 사내 용어', 'pass', `${ADAPTER} create --title "x" --body-file ${internalWordBody} --type feat -R ghe.selftest.internal/o/r --start`],
+];
+for (const [name, want, command, opts] of ISSUE_CASES) issueCase(name, want, command, opts);
+rmSync(issueHome, { recursive: true, force: true });
 rmSync(storageRepo, { recursive: true, force: true });
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount}건 전부 통과`);
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);
