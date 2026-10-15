@@ -351,6 +351,33 @@ allowCase('principle + repo-merge', '{"type": "principle"}', 'repo-merge,git-for
 allowCase('storage + repo-merge', '{"type": "storage"}', 'repo-merge', false);
 allowCase('work 이어도 병합 갈래 아님', '{"type": "work"}', 'cluster-write', false);
 
+// 최종 점검 통과 뒤 끝 안내 (ADR-0029). 함수만 불러 쓴다(FINAL_CHECK_LIB=1). gh 를 부르지 않는다.
+// 저장소 유형만 gh pr merge 를 안내하고, 그 밖은 웹 병합 + 보고 첨부다. 통과 기록 경로는 유형과 무관하게 나온다.
+const FC = join(here, 'final-check.sh');
+const FC_HEAD = 'a'.repeat(40);
+function guidanceCase(type, wantMerge) {
+  const res = spawnSync('bash', ['-c', 'set -euo pipefail; FINAL_CHECK_LIB=1 . "$1"; pass_guidance "$2" 7 "$3" /r/x.json', 'selftest', FC, type, FC_HEAD], { encoding: 'utf8' });
+  const out = res.stdout || '';
+  const hasMerge = out.includes(`gh pr merge 7 --merge --match-head-commit ${FC_HEAD}`);
+  const hasWeb = out.includes('병합은 웹에서 사람이 한다');
+  const ok = res.status === 0 && out.includes('통과 기록: /r/x.json') && hasMerge === wantMerge && hasWeb === !wantMerge;
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  끝 안내: ${type} — ${hasMerge ? 'gh pr merge' : ''}${hasWeb ? '웹 병합' : ''}${res.status ? ` · exit ${res.status}` : ''}`);
+}
+guidanceCase('storage', true);
+guidanceCase('work', false);
+guidanceCase('principle', false);
+{
+  // 실제 진입점. PR 댓글 옵션은 없어졌으므로 거부되고(gh 호출 전 종료), 스크립트에 댓글 게시 호출이 없다.
+  const res = spawnSync('bash', [FC, '7', '--notes', '/dev/null', '--no-comment'], { encoding: 'utf8' });
+  const src = readFileSync(FC, 'utf8');
+  const ok = res.status === 2 && (res.stderr || '').includes('알 수 없는 옵션') && !src.includes('gh pr comment');
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  끝 안내: PR 댓글 게시 없음 — --no-comment exit ${res.status}, 소스에 gh pr comment ${src.includes('gh pr comment') ? '있음' : '없음'}`);
+}
+
 // 이슈 생성 가드 (#696). 직접 호출은 거부하고 어댑터(gh-issue.sh)는 통과한다. 어댑터 호출의 제목 · 본문 파일은
 // 대외비 가드가 직접 호출과 같이 본다. 키워드 · 사내 호스트는 임시 설정으로 주입한다 (사용자 로컬 설정에 기대지 않는다).
 const issueHome = mkdtempSync(join(tmpdir(), 'issue-guard-selftest-'));

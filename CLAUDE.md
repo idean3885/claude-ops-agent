@@ -147,7 +147,7 @@ main ────────────────●─────
 
 로컬 `gh pr merge` 를 쓸 때는 `./scripts/pre-merge-check.sh <브랜치> main` 을 앞에 물린다. 브랜치가 타겟보다 오래된 베이스 위에 있으면 머지가 버전을 뒤로 밀어낸다. 검출 시 종료 코드 1 이라 `&&` 체인이 멈춘다. 한시 권한 대상 행위를 다른 명령과 한 블록에 두면 훅이 차단한다 (ADR 0011).
 
-머지 직전에는 `scripts/final-check.sh <PR번호> --notes <파일>` 의 통과 기록이 있어야 한다. 없으면 훅이 `gh pr merge` 를 막는다 (#612, [docs/action-gate.md](docs/action-gate.md) 「최종 점검 통과 기록」).
+머지 직전에는 `scripts/final-check.sh <PR번호> --notes <파일>` 의 통과 기록이 있어야 한다. 없으면 훅이 `gh pr merge` 를 막는다 (#612, [docs/action-gate.md](docs/action-gate.md) 「최종 점검 통과 기록」). 이 레포는 사상 유형이라 병합은 사람이 웹에서 하고, 어시스턴트는 상황 보고에 통과 기록 경로를 첨부한다 (ADR-0028 · ADR-0029).
 
 머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (마켓플레이스 update + 활성 세션 경로 복원).
 
