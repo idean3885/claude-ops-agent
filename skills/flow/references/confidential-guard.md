@@ -25,7 +25,7 @@
 | 캐시 경로 | `~/.claude/ops-agent/cache/repo-visibility.json` |
 | 키 | `host/owner/repo` |
 | 유효 기간 | 7일 |
-| 조회 시점 | `git commit` · `gh issue/pr/release` 만. 레포당 최초 1회 |
+| 조회 시점 | `git commit` · `gh issue/pr/release` · 이슈 어댑터(`gh-issue.sh create/start`) 만. 레포당 최초 1회 |
 | 조회 실패·불명 | `public` 으로 닫는다 |
 
 측정값: 최초 조회 약 590ms, 캐시 적중 약 83ms.
@@ -39,6 +39,7 @@
 다음 명령/API는 **공개 표면**에 텍스트를 기록한다. 실행 전 가드 필수.
 
 - `gh issue create`, `gh issue edit`, `gh issue comment`
+- `gh-issue.sh create`, `gh-issue.sh start` (이슈 어댑터. `--title` · `--body-file` 이 대상)
 - `gh pr create`, `gh pr edit`, `gh pr comment`, `gh pr review`
 - `gh release create`, `gh release edit`
 - `git commit -m`, `git commit --amend` (퍼블릭 리모트 대상 브랜치)

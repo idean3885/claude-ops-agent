@@ -27,6 +27,20 @@
 - 브랜치 패턴 (예: `feat/{number}`)
 - 시작 시 추가 동작 (타임스탬프 기록 등)
 
+### 어댑터 계약 (create · start)
+
+생성과 시작은 provider 가 어댑터 스크립트 하나로 제공한다. 생성 API 직접 호출은 훅이 거부한다. 경로가 하나여야 본문 규칙 · 시작 결정이 실행된다.
+
+| 항목 | 계약 |
+|------|------|
+| 필수 판단 | 생성 시 `--start` \| `--no-start "<사유>"`. 둘 다 없으면 생성하지 않는다. |
+| 본문 검사 | 생성 전에 `scripts/issue-body-rules.mjs` 로 구조를 검사한다. 실패하면 생성하지 않는다. |
+| 종료 코드 | 0 성공 · 1 인자 · 본문 검사 실패(생성 안 됨) · 2 API 오류(생성 실패) · 3 생성됐으나 시작 실패 |
+| 출력 | JSON 한 줄. 성공은 stdout, 오류는 stderr. `status`(`ok` \| `error`) · `start`(`started` \| `skipped` \| `failed`) · `reason`(`--no-start` 사유) · 식별자(키는 provider 가 정한다. github `number`) |
+| 생성 뒤 실패 | 식별자를 반드시 담는다. 이슈는 남아 있으므로 start 를 다시 부른다. |
+
+내장 github 구현은 `scripts/gh-issue.sh` 다.
+
 ### complete
 - 완료 상태 변경 API
 - 결과 기록 형식

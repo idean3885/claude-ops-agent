@@ -18,6 +18,8 @@
 * 한시 권한 갈래 `cluster-exec`: kubectl `exec` · `cp` 만 연다. `cluster-write` 개방도 계속 통과 (#445)
 * 최종 점검 항목 g: merge-base 이후 커밋이 1개가 아니면 실패 (#573)
 * 레포 유형 선언 `.ops-agent/repo-type.json` (work · principle · storage, 기본 work). 어시스턴트의 선언 편집을 막고, work · principle 레포의 `gh pr merge` 는 갈래가 열려 있어도 거부 (ADR-0028, #690)
+* 이슈 생성 · 시작 어댑터 `scripts/gh-issue.sh create|start` 와 본문 구조 룰 `scripts/issue-body-rules.mjs` (ISS1 · ISS5 · ISS6 · ISS7). 생성 시 시작 결정(`--start` | `--no-start`)이 필수이고 ISS5 본문에 「기존 기록」 줄(ADR-0027)이 있어야 생성 (#696)
+* 이슈 생성 가드: 어댑터를 거치지 않은 `gh issue create` · `gh api …/issues` POST · `gh api graphql` createIssue 를 거부. 대외비 · What 가드가 어댑터 호출의 제목 · 본문 파일도 본다 (#696)
 
 ### Changed
 * `action-gate-allow.sh on` 이 없는 갈래 이름을 거부하고 유효 목록을 출력 (#439)
@@ -27,6 +29,7 @@
 * 전문가 기준 보강: architect AR3 새 용어 검색, planner PL7 원문 대조 (#636 #468)
 * 문서 보강: 보고 식별자는 요청 시, 게이트는 Bash 만 판정, 위임 시 권한 선취, 시범 판정 연결, 기획 확인 별칭 (#639 #424 #463 #684)
 * `action-gate-allow.sh on` 이 병합이 거부되는 레포 유형에서 `repo-merge` · `all` 을 열면 경고 (#690)
+* flow 이슈 가이드 · github provider 의 create · start 를 어댑터 호출로, 본문 템플릿을 ISS5 구조로. PROVIDER.md 에 어댑터 계약 (#696)
 
 ### Fixed
 * `git clean -n` · `--dry-run` 을 작업 손실 가드 대상에서 제외 (#660)

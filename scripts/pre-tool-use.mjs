@@ -94,6 +94,19 @@ const DRYRUN = process.env.OPS_AGENT_CONFIDENTIAL_DRYRUN === '1';
 const WHAT_GUARD_DISABLE = process.env.OPS_AGENT_WHAT_GUARD_DISABLE === '1';
 const WHAT_GUARD_DRYRUN = process.env.OPS_AGENT_WHAT_GUARD_DRYRUN === '1';
 
+// 이슈 생성 가드 (#696): 어시스턴트의 `gh issue create` · `gh api …/issues` 직접 호출을 거부하고
+// 어댑터(scripts/gh-issue.sh)로 보낸다. 생성 경로가 하나여야 본문 규칙 · 시작 결정이 실행된다.
+const ISSUE_CREATE_GUARD_DISABLE = process.env.OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE === '1';
+const ISSUE_CREATE_GUARD_DRYRUN = process.env.OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN === '1';
+// 어댑터 호출. 대외비 · What 가드가 이 호출의 제목 · 본문 파일을 직접 호출과 같이 본다.
+const ISSUE_ADAPTER_RE = /\bgh-issue\.sh\s+(create|start)\b/;
+// gh api 토큰 판정용. 값을 받는 플래그는 다음 토큰을 건너뛰고, 파라미터 플래그가 있으면 메서드 기본값이 POST 다.
+const GH_API_VALUE_FLAGS = new Set([
+  '-X', '--method', '-f', '--raw-field', '-F', '--field', '--input', '-H', '--header', '-p', '--preview',
+  '-q', '--jq', '-t', '--template', '--hostname', '--cache',
+]);
+const GH_API_PARAM_FLAGS = /^(?:-f|--raw-field|-F|--field|--input)(?:=|$)/;
+
 const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
 
 // 한시 권한 플래그 (레거시 OPS_AGENT_CLUSTER_GUARD_* 도 계속 인식)
@@ -271,6 +284,34 @@ if (!DISABLE) {
         }
       }
 
+      // 이슈 생성 가드: 생성은 어댑터(gh-issue.sh)로만 한다 (#696). 직접 호출은 본문 규칙 · 시작 결정을 거치지 않는다.
+      if (!ISSUE_CREATE_GUARD_DISABLE && remainingMs() <= 0) noteBudgetExceeded('이슈 생성 가드');
+      if (!ISSUE_CREATE_GUARD_DISABLE && remainingMs() > 0) {
+        const issueHits = detectDirectIssueCreate(command);
+        if (issueHits.length) {
+          const header = ISSUE_CREATE_GUARD_DRYRUN
+            ? '[ops-agent 이슈 생성 가드 · 드라이런]'
+            : '[ops-agent 이슈 생성 가드 · 차단]';
+          const msg = `${header} 이슈 생성은 어댑터로만 합니다. 직접 호출:\n${issueHits.map(h => `  - ${h}`).join('\n')}\n\n` +
+            `어댑터 (본문 구조 검사 → 라벨 → 생성 → 시작 결정을 한 호출로):\n` +
+            `  bash ~/.claude/ops-agent/current/scripts/gh-issue.sh create --title "<제목>" --body-file <본문.md> --type <feat|fix|docs|refactor|chore> \\\n` +
+            `       (--start [--worktree|--checkout] | --no-start "<사유>") [-R <레포>] [--structure <iss1|iss5|iss6|iss7>]\n` +
+            `필수 판단 둘:\n` +
+            `  - 시작 결정: 지금 손대는 이슈면 --start, 백로그 · 후속이면 --no-start "<사유>"\n` +
+            `  - 기존 기록: ISS5 본문 ## Why 에 「- 기존 기록: {이전 · 지금 · 바뀐 점 | 없음 · 찾은 자리}」 한 줄 (ADR-0027)\n` +
+            `본문 규칙: config/style-rules/extensions/issue.md · 가이드: skills/flow/guides/issue.md\n` +
+            `드라이런: OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1`;
+          if (ISSUE_CREATE_GUARD_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+            }));
+            process.exit(0);
+          }
+        }
+      }
+
       // 한시 권한: 되돌리기 어려운/외부 영향 행위(클러스터 mutation·PR 머지·릴리즈·force push
       // ·리소스 삭제)는 세션 명시 허용 없으면 차단한다. 권한을 추측해 실행하는 사고를 기계적으로 막는다.
       if (!GATE_DISABLE && remainingMs() <= 0) noteBudgetExceeded('한시 권한');
@@ -438,6 +479,7 @@ function runConfidentialGuard(command, cwd) {
     /\bgh\s+issue\s+(create|edit|comment)\b/,
     /\bgh\s+pr\s+(create|edit|comment|review)\b/,
     /\bgh\s+release\s+(create|edit)\b/,
+    ISSUE_ADAPTER_RE,
     GIT_COMMIT_RE,
   ];
   if (!writePatterns.some(re => re.test(command))) {
@@ -735,7 +777,9 @@ function resolveTarget(command, cwd, internalHosts) {
 
   // 1. gh 명령: GH_HOST 환경 변수 접두어 우선
   const ghHostMatch = command.match(/\bGH_HOST=([^\s'"]+)/);
-  const ghRepoMatch = command.match(/\bgh\s+\S+[^&|;]*?\s(?:-R|--repo)[\s=]+["']?([^\s"']+)/);
+  // 어댑터 호출(gh-issue.sh)의 -R 도 같이 읽는다. 안 읽으면 4번 기본값(public)으로 떨어져
+  // 사내 호스트 레포의 이슈 본문이 공개 표면으로 오판된다.
+  const ghRepoMatch = command.match(/\b(?:gh|gh-issue\.sh)\s+\S+[^&|;]*?\s(?:-R|--repo)[\s=]+["']?([^\s"']+)/);
   const repoArg = ghRepoMatch ? ghRepoMatch[1].split('/') : null;
 
   if (ghHostMatch) {
@@ -760,7 +804,7 @@ function resolveTarget(command, cwd, internalHosts) {
   // 문자열이 있는지만 봤는데, 그 출력에는 로그인된 **모든** 호스트가 나열된다.
   // 사내·개인 계정을 함께 쓰는 머신에서는 항상 사내로 판정되어 externalOnly 규칙이
   // 통째로 건너뛰어졌다. 퍼블릭 레포 대상 명령이 사내 용어를 통과시키는 fail-open 이었다.
-  if (/\bgh\s+(issue|pr|release)\b/.test(command) || GIT_COMMIT_RE.test(command)) {
+  if (/\bgh\s+(issue|pr|release)\b/.test(command) || ISSUE_ADAPTER_RE.test(command) || GIT_COMMIT_RE.test(command)) {
     let url = '';
     try {
       url = execSync('git remote get-url origin 2>/dev/null', {
@@ -860,6 +904,53 @@ function stripQuotes(s) {
 }
 
 
+// ─── 이슈 생성 가드 ───
+// 세그먼트마다 판정한다. 어댑터 호출 세그먼트에는 `gh issue create` 가 없으므로 면제 규칙이 필요 없고,
+// `bash gh-issue.sh …; gh issue create …` 처럼 뒤에 붙인 직접 호출은 그 세그먼트가 걸린다.
+// 최상위 명령만 본다 (docs/action-gate.md 「한계」). 헬퍼 스크립트 · bash -c 내부는 보지 않는다.
+//
+// gh api: 경로 끝이 `/issues` (쿼리스트링 제외) 인 것만 생성이다. `…/issues/1/comments` · `…/issues/1/labels` 는
+// 코멘트 · 라벨이라 막지 않는다. 메서드는 명시한 -X/--method 가 이기고, 없으면 파라미터(-f/--raw-field ·
+// -F/--field)가 있으면 POST 다 (`gh api --help`: 파라미터가 더해지면 POST). --input 은 규격에 메서드 언급이
+// 없어 보수적으로 POST 로 본다. GraphQL 은 경로가 `graphql` 이라 `createIssue` 토큰으로 본다.
+function ghApiCreatesIssue(segment) {
+  const tokens = segment.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/g) || [];
+  const apiIdx = tokens.findIndex(t => /^(?:\S*\/)?gh$/.test(t));
+  if (apiIdx < 0 || tokens[apiIdx + 1] !== 'api') return false;
+  let path = null;
+  let method = null;
+  let hasParam = false;
+  for (let i = apiIdx + 2; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.startsWith('-')) {
+      if (GH_API_PARAM_FLAGS.test(t)) hasParam = true;
+      const eq = t.indexOf('=');
+      const flag = eq >= 0 ? t.slice(0, eq) : t;
+      if ((flag === '-X' || flag === '--method')) {
+        method = (eq >= 0 ? t.slice(eq + 1) : tokens[i + 1] || '').replace(/^["']|["']$/g, '').toUpperCase();
+      }
+      if (eq < 0 && GH_API_VALUE_FLAGS.has(flag)) i++;
+      continue;
+    }
+    if (path === null) path = t.replace(/^["']|["']$/g, '');
+  }
+  if (!path) return false;
+  const bare = path.replace(/\?.*$/, '').replace(/\/+$/, '');
+  if (/^graphql$/.test(bare)) return /\bcreateIssue\b/.test(segment);
+  if (!/(?:^|\/)issues$/.test(bare)) return false;
+  const effective = method || (hasParam ? 'POST' : 'GET');
+  return effective === 'POST';
+}
+
+function detectDirectIssueCreate(command) {
+  const hits = [];
+  for (const seg of gateSegments(command)) {
+    if (/^(?:\S*\/)?gh\s+issue\s+create\b/.test(seg)) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
+    else if (/^(?:\S*\/)?gh\s+api\b/.test(seg) && ghApiCreatesIssue(seg)) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
+  }
+  return hits;
+}
+
 // ─── 도메인 What 추상화 가드 ───
 // 커밋/PR/이슈 본문에서 구현 세부(클래스명·메서드명·어노테이션·헥사고날 어휘·yaml 키·산출물 카운트) 차단
 function runWhatAbstractionGuard(command) {
@@ -867,6 +958,7 @@ function runWhatAbstractionGuard(command) {
     /\bgh\s+issue\s+(create|edit|comment)\b/,
     /\bgh\s+pr\s+(create|edit|comment|review)\b/,
     /\bgh\s+release\s+(create|edit)\b/,
+    ISSUE_ADAPTER_RE,
     GIT_COMMIT_RE,
   ];
   if (!writePatterns.some(re => re.test(command))) {

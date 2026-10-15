@@ -102,7 +102,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 1. **레슨런 인덱스 로드**: 위 [레슨런 인덱스](#레슨런-인덱스) 의 로드 절차를 수행하고 결과 문구를 표시
 2. provider 정의 파일 읽기
 3. 이슈 제목 및 내용 파악 (사용자에게 질문)
-   - 방식 · 규칙을 정하는 지시면 같은 주제의 기존 기록(ADR · 규칙 · 스킬 · 이슈)을 찾고, 이전 · 지금 · 바뀐 점을 이슈 본문에 한 줄로 적는다 ([ADR-0027](../../../docs/adr/0027-instructions-are-checked-against-records.md)).
+   - 같은 주제의 기존 기록(ADR · 규칙 · 스킬 · 이슈)을 찾고, 이전 · 지금 · 바뀐 점을 이슈 본문 `## Why` 의 「기존 기록」 줄에 적는다 ([ADR-0027](../../../docs/adr/0027-instructions-are-checked-against-records.md)). ISS5 이슈는 항상 적는다. 없으면 「없음 · 찾은 자리」. 어댑터가 이 줄이 없으면 생성하지 않는다 (`extensions/issue.md` ISS5).
 4. **기존 수단 확인 (조건부)**: 만들려는 것이 데이터·계정·환경이면 [기존 수단 확인](#기존-수단-확인-조건부) 을 수행하고 결과를 한 줄 적는다. 아니면 건너뛴다
 5. **작업 단위 결정 + 상위-하위 관계 체크**:
    - 한 용건을 이슈 몇 건으로 둘지 정하기 전에 [레슨런 인덱스 대조](#대조-판단-지점마다) 를 수행하고 `대조 N건 / 걸림 M건` 을 적는다
@@ -122,10 +122,10 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 
    **한 건이면 표 대신 한 줄로 제시한다.** 개수와 구조가 판단 대상인데 한 건에는 나눌 것이 없다. 표를 요구하면 게이트가 형식이 되고, 형식이 된 게이트는 읽히지 않는다
 
-7. provider 정의에 따라 라벨/태그 매핑
-8. 이슈 본문 작성 (provider의 본문 템플릿 사용)
-9. **대외비 가드 (GATE 0)**: 제목·본문 전체에 대해 `references/confidential-guard.md` 검증. 히트 시 사용자 정정 후 재검증
-10. provider의 이슈 생성 API/명령 실행 (provider에 정의된 인증·endpoint·body 그대로 사용)
+7. **시작 결정**: 지금 손대는 이슈면 `--start`, 백로그 · 후속이면 `--no-start "<사유>"`. 어댑터가 둘 중 하나 없이는 생성하지 않는다.
+8. 이슈 본문 작성. 구조는 `config/style-rules/extensions/issue.md` 「필수 구조」 절에서 고른다 (버그 ISS1 · 기능 ISS5 · 보고 ISS6 · 판정 ISS7). 본문은 파일로 쓴다 (Write).
+9. **대외비 가드 (GATE 0)**: 제목·본문 전체에 대해 `references/confidential-guard.md` 검증. 어댑터 호출의 `--title` · `--body-file` 에도 훅이 같이 적용된다. 히트 시 사용자 정정 후 재검증.
+10. **어댑터로 생성**: provider 의 생성 어댑터 한 호출 (github: `scripts/gh-issue.sh create`). 어댑터가 본문 구조 검사 → 라벨 보장 → 생성 → (`--start` 면) 시작을 이어서 한다. `gh issue create` 직접 호출은 훅이 거부한다 (`docs/action-gate.md` 「이슈 생성 가드」).
 11. **Extensions 실행**: provider에 post-create Extensions이 정의되어 있으면 실행
 
 ### `/issue start`
@@ -138,18 +138,13 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 2. provider 정의 파일 읽기
 3. 이슈 식별 (번호, URL, 또는 사용자에게 질문)
 4. **착수 검증**: 이슈 본문의 처방에 [착수 검증](#착수-검증) 을 수행하고 결과를 표시한다. 열 때 판정했어도 다시 한다. 그사이 원천이 바뀌었을 수 있다
-5. provider의 상태 변경 API로 "진행 중" 전환 (provider의 dedicated API 사용)
-6. 담당자 설정 (provider의 assignee 설정)
-7. 시작 일시 텍스트 작성 (본문 추가용 또는 코멘트용)
-8. **대외비 가드 (GATE 0)**: 위 7에서 생성된 텍스트에 대해 검증. 기존 필드를 수정하는 경우 새로 덧붙이는 텍스트만 검증 대상
-9. provider API로 시작 일시 기록 (본문 추가 또는 코멘트, 기존 필드 보존)
-10. **코드 작업 여부 확인**: "코드 작업이 필요한 이슈입니까?"
-   - **Yes**: 브랜치명·베이스를 확정하기 전에 [레슨런 인덱스 대조](#대조-판단-지점마다) 를 수행하고 `대조 N건 / 걸림 M건` 을 적는다. 그다음 provider의 브랜치 패턴과 리모트 머지 이력에 남은 접두를 대조해 브랜치명을 정하고, `origin/{base}` 에서 분기한다
-     - 워크트리 (권장): `git fetch origin && git worktree add ../{프로젝트}-{타입}-{번호} -b {브랜치명} origin/{base}`
-     - 직접 체크아웃: `git fetch origin && git checkout -b {브랜치명} origin/{base}`
-     - 현재 브랜치에 고유 커밋이 있으면 워크트리로 한다 ([이슈 불일치 감지](../SKILL.md#이슈-불일치-감지)).
-   - **No**: 브랜치 생성 스킵
-11. **Extensions 실행**: provider에 post-start Extensions이 정의되어 있으면 실행
+5. **코드 작업 여부 확인**: "코드 작업이 필요한 이슈입니까?"
+   - **Yes**: 브랜치명·베이스를 확정하기 전에 [레슨런 인덱스 대조](#대조-판단-지점마다) 를 수행하고 `대조 N건 / 걸림 M건` 을 적는다. 그다음 provider의 브랜치 패턴과 리모트 머지 이력에 남은 접두를 대조해 브랜치명을 정한다. 접두가 provider 패턴과 다르면 어댑터에 `--branch` 로 넘긴다.
+     - 워크트리 (권장): `--worktree`. 현재 브랜치에 고유 커밋이 있으면 워크트리로 한다 ([이슈 불일치 감지](../SKILL.md#이슈-불일치-감지)).
+     - 직접 체크아웃: `--checkout`
+   - **No**: 브랜치 인자 없이
+6. **어댑터로 시작**: provider 의 시작 어댑터 한 호출 (github: `scripts/gh-issue.sh start <번호> [--worktree|--checkout] [--base <브랜치>] [--branch <이름>]`). 어댑터가 상태 전환 · 담당자 · 시작 일시 기록 · (코드 작업이면) `git fetch origin` 뒤 `origin/{base}` 분기를 이어서 한다. 시작 일시 텍스트는 어댑터가 만들고 대외비 가드(GATE 0)는 어댑터 호출에 적용된다.
+7. **Extensions 실행**: provider에 post-start Extensions이 정의되어 있으면 실행
 
 ### `/issue complete`
 

@@ -8,6 +8,7 @@
 |------|---------|------|
 | 대외비 가드 | 공개 표면에 노출되는 대외비 키워드·패턴 | 본문 수정 (해제 플래그는 오탐 조정용) |
 | 도메인 What 가드 | 커밋·PR·이슈 본문의 구현 세부 | 본문 수정 |
+| 이슈 생성 가드 | 어댑터를 거치지 않은 `gh issue create` · `gh api …/issues` 생성 | 어댑터(`scripts/gh-issue.sh create`)로 호출 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
 | 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
 
@@ -20,6 +21,7 @@
 | 명령 | 검사 대상 |
 |------|-----------|
 | `gh issue` / `gh pr` / `gh release` | 제목·본문·코멘트 |
+| `gh-issue.sh create` / `start` (이슈 어댑터) | `--title` · `--body-file`. 표면은 `-R` 의 호스트 또는 리모트로 판정합니다. |
 | `git commit` | 커밋 메시지 + **커밋 대상 diff 의 추가된 줄** |
 
 삭제된 줄은 검사하지 않습니다. 대외비를 제거하는 커밋이 자기 가드에 막히는 모순을 피합니다.
@@ -76,6 +78,33 @@
 | `tx-phase-const` | 트랜잭션 phase·propagation 상수 |
 
 구현 방법은 본문 최하단 `How` 절에만 씁니다. 형식은 provider 의 풀리퀘스트 템플릿을 따릅니다.
+
+---
+
+## 이슈 생성 가드
+
+이슈 생성은 provider 의 어댑터(github: `scripts/gh-issue.sh create`)로만 합니다. 어시스턴트가 `gh issue create` 나 `gh api` 로 직접 만들면 막습니다 (#696). 작성 규칙(ISS5 · 기존 기록 줄)과 시작 결정은 있었지만 생성 명령이 가이드를 거치지 않아 실행되지 않았습니다. 읽는 지점과 판단 지점이 달랐던 것이라 규칙이 아니라 경로를 하나로 묶습니다.
+
+훅이 아니라 어댑터가 본문을 보는 이유는, 빠진 것이 검사가 아니라 행위(시작 결정 · 라벨 보장 · 시작 체인)이기 때문입니다. 훅은 거부만 하고 판정은 어댑터가 합니다. 분담은 다음과 같습니다.
+
+| 자리 | 보는 것 |
+|------|---------|
+| 어댑터 (`scripts/issue-body-rules.mjs`) | 구조. 절 제목 · Why 불릿 수 · 기존 기록 줄 · 줄글 · 불릿 두 문장 |
+| 대외비 가드 · What 가드 | 어휘. 어댑터 호출의 `--title` · `--body-file` 에 같이 적용됩니다. |
+| lint | 나머지 (ISS2 제목 등) |
+
+판정식은 세그먼트 단위입니다.
+
+| 명령 | 판정 |
+|------|------|
+| `gh issue create` | 거부합니다. |
+| `gh api <경로>` | 경로 끝이 `/issues`(쿼리스트링 제외)이고 메서드가 POST 면 거부. 메서드는 `-X`/`--method` 가 이기고, 없으면 `-f`/`--raw-field`/`-F`/`--field`/`--input` 이 있으면 POST 입니다 (`gh api --help`: 파라미터가 더해지면 POST). `…/issues/1/comments` · `…/issues/1/labels` 는 끝이 `/issues` 가 아니라 통과합니다. |
+| `gh api graphql` | 세그먼트에 `createIssue` 가 있으면 거부합니다. |
+| `gh-issue.sh create …` | 통과. 어댑터 호출 세그먼트에는 위 명령이 없으므로 면제 규칙이 없습니다. 뒤에 `; gh issue create` 를 붙이면 그 세그먼트가 걸립니다. |
+
+최상위 명령만 봅니다 (「한계」). 헬퍼 스크립트 · `bash -c` 안의 생성은 보지 않습니다. 시작 코멘트 없이 생긴 이슈가 보이면 그 경로를 판정에 더합니다.
+
+롤백 조건: 규칙에 맞는 본문을 어댑터가 거부(오탐)한 것이 3회면 그 검사를 좁힙니다. 거부 메시지의 검사 이름(`check`)과 PR 노트에 기록합니다. 「기존 기록: 없음」 줄이 열 건 이어지면 ADR-0027 롤백 조건대로 대조 대상을 좁힙니다.
 
 ---
 
@@ -208,7 +237,9 @@
 node scripts/selftest-action-gate.mjs
 ```
 
-훅 판정 13건과 개방 안내 9건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 돌립니다. 동거 검사는 창이 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다.
+훅 판정 23건 · 개방 안내 9건 · 이슈 생성 가드 19건을 포함해 114건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 돌립니다. 동거 검사는 창이 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다. 이슈 생성 가드 케이스는 대외비 키워드 · 사내 호스트를 임시 설정(`OPS_AGENT_CONFIDENTIAL_CONFIG_PATH`)으로 주입해 사용자 로컬 설정에 기대지 않습니다.
+
+어댑터 자체(본문 구조 · 계약 · 시작 체인)는 `node scripts/selftest-issue-adapter.mjs` 가 50건을 봅니다. 가짜 `gh` · `git` 을 PATH 앞에 두고 호출 기록으로 판정하며 네트워크를 쓰지 않습니다.
 
 통과 기록 판정은 임시 HOME 과 임시 레포의 origin 추적 브랜치로 6건을 봅니다(없음 · 일치 · head 불일치 · 다른 PR · 브랜치명 · 값 플래그). 동거 검사 케이스는 통과 기록 검사를 끄고(`OPS_AGENT_FINAL_CHECK_DISABLE=1`) 돌립니다.
 
@@ -326,6 +357,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 |------|------------------|--------|
 | 대외비 가드 | `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` | `OPS_AGENT_CONFIDENTIAL_DISABLE=1` |
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
+| 이슈 생성 가드 | `OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1` | `OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 
