@@ -28,6 +28,7 @@
     em_dash_count                     → T1 em dash (S1, 합격선 0)
     physical_verb_count               → T8 물리 조작 동사 (진단 앵커, 절대치 판정 금지)
     absolutist_count                  → D-17 근거보다 절대적인 양화 (진단 앵커, 절대치 판정 금지)
+    action_noun_agent_count           → D-13 동작 명사를 행위 주체로 둔 문장 (진단 앵커, 절대치 판정 금지)
     forbidden_words                   → forbidden-words.json 룰 매칭 (위치·대체어, 개인 룰 머지)
 
 한국어 처리 근사:
@@ -442,6 +443,70 @@ def absolutist_count(text: str) -> int:
     return len(_ABSOLUTIST_RE.findall(text))
 
 
+# ─────────────────────────────────────────────────────────────
+# 12. action_noun_agent_count (D-13 동작 명사를 행위 주체로 둔 문장, 진단 앵커)
+# ─────────────────────────────────────────────────────────────
+# 「~하다」에서 온 동작 명사는 스스로 행위하지 못한다. 그 명사를 주어로 두고
+# 능동 동사를 붙인 문장(`활성화가 처리 중인`, `검증이 읽지 못한다`)을 센다.
+#
+# 피동·자동사 결합(`요청이 처리된다`, `배포가 막힌다`)은 문법상 맞으므로 세지
+# 않는다. 동사 쪽을 능동 활용형으로만 적어 `되`·`히`·`지` 가 붙은 꼴은 빠진다.
+# 동작 명사가 실체를 가리키는 문장(`조회가 쓰는 인덱스`)은 정규식으로 가를 수
+# 없어 섞인다. 그래서 진단 앵커다.
+
+# 2음절 이상 + `화` 만 받는다. `문화`·`대화`·`영화` 같은 2음절 낱말이 빠진다.
+_ACTION_NOUN = (
+    r"(?<![가-힣])(?:[가-힣]{2,}화|생성|삭제|변경|등록|수정|조회|배포|적용|설치|전환"
+    r"|검증|갱신|처리|판정|교정|검토|확인|실행|분석|검사|대조|측정|저장|전송|수집"
+    r"|추출|변환|인증|승인)(?:가|이) "
+)
+# 목적어 어절 하나까지 허용한다 (`동기화가 값을 만든다`).
+_OBJECT = r"(?:[가-힣]+(?:을|를) )?"
+# `해` 뒤 `지`·`져`·`진` 은 피동(`정해진`)이라 막는다.
+_HA_TAIL = r"(?:하%E%|한|할|했|합니다|함|해(?!지|져|진|졌)| 중)"
+_AGENT_VERBS = [
+    # 「~하다」 능동. `처리 중` 처럼 띄어 쓴 진행도 받는다.
+    r"(?:처리|수행|담당|판단|결정|관리|보장|제공|선택|기록|요구|허용|차단|거부|정)" + _HA_TAIL,
+    # 규칙 활용. 피동 어간(`막히`·`읽히`·`잡히`)은 어미 묶음에 `히` 가 없어 빠진다.
+    r"(?:막|읽|잡|찾)%E%",
+    # 불규칙 활용은 손으로 적는다.
+    r"만들%E%|만든|만드는|만듭니다",
+    # `쓰기`(명사)를 피하려고 어미 묶음 대신 활용형을 적는다.
+    r"쓰(?:는|고|게|지|며|면|도록|던)|쓴|쓸|씁니다|써",
+]
+
+_ACTION_NOUN_AGENT_RE: re.Pattern[str] | None = None
+
+
+def _action_noun_agent_re() -> re.Pattern[str]:
+    """%E% 를 금지 표현 룰 파일의 _endingClass 로 펼쳐 한 번만 컴파일한다."""
+    global _ACTION_NOUN_AGENT_RE
+    if _ACTION_NOUN_AGENT_RE is None:
+        try:
+            with open(_RULE_FILES[0], encoding="utf-8") as f:
+                endings = json.load(f).get("_endingClass", "")
+        except (OSError, ValueError):
+            endings = ""
+        endings = endings or r"(?:다|는|고|게|지|은|을|아|어|도록)"
+        verbs = "|".join(_AGENT_VERBS).replace("%E%", endings)
+        _ACTION_NOUN_AGENT_RE = re.compile(_ACTION_NOUN + _OBJECT + "(?:" + verbs + ")")
+    return _ACTION_NOUN_AGENT_RE
+
+
+def action_noun_agent_count(text: str) -> int:
+    """동작 명사 + 주격 조사 + 능동 동사 결합의 출현 수.
+
+    `physical_verb_count` 와 같은 진단 앵커다. 절대치로 위반을 판정하지 않는다.
+    동작 명사가 실체(질의 · 배포 단위)를 가리키면 그 문장은 맞다. 판정 기준은
+    그 명사가 행위를 가리키는가다. 값이 있으면 그 문장의 실제 행위자를 찾는다.
+
+    0 은 통과가 아니다. 명사 · 동사 목록 밖의 결합은 보지 못한다.
+    """
+    if not text:
+        return 0
+    return len(_action_noun_agent_re().findall(text))
+
+
 _RULE_FILES = (
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "forbidden-words.json"),
 )
@@ -511,10 +576,12 @@ def compute_all(text: str, strip_code_blocks: bool = True) -> dict[str, Any]:
             "em_dash_count": em_dash_count(scan),                        # T1
             "physical_verb_count": physical_verb_count(scan),            # T8
             "absolutist_count": absolutist_count(scan),                  # D-17
+            "action_noun_agent_count": action_noun_agent_count(scan),    # D-13
         },
         "forbidden_words": forbidden_words(scan),
         "covers": [
             "A-4", "A-9", "A-6", "A-7", "C-5", "C-6", "C-10", "T1", "T8", "D-17",
+            "D-13",
         ],
         "uncovered_note": (
             "위 목록에 없는 규칙은 이 지표가 재지 않는다. "
