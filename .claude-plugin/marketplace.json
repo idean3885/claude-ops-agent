@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "ops-agent",
-  "description": "A Claude Code plugin that augments the developer's judgment with expert agents and applies flows, rules, and gates so operator agents stay within it.",
+  "description": "The developer decides; the AI advises and executes, and its work is checked against recorded decisions and tests.",
   "owner": {
     "name": "idean3885"
   },
@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "ops-agent",
-      "description": "A Claude Code plugin that augments the developer's judgment with expert agents and applies flows, rules, and gates so operator agents stay within it.",
+      "description": "The developer decides; the AI advises and executes, and its work is checked against recorded decisions and tests.",
       "version": "9.30.0",
       "author": {
         "name": "idean3885"
