@@ -73,7 +73,6 @@ node ~/.claude/ops-agent/current/scripts/resolve-manifest.mjs
   "rootDir": "/path/to/<org>",
   "providers": {
     "issue": "<adapter-id>",
-    "notify": "<adapter-id>",
     "dailylog": "<adapter-id>",
     "apiGuard": "<adapter-id>"
   },
@@ -118,7 +117,6 @@ node ~/.claude/ops-agent/current/scripts/resolve-manifest.mjs
 | 키 | 호출 시점 | 어댑터 책임 |
 |----|---------|----------|
 | `issue` | ops-agent:flow 위임 시 | 이슈 트래커 API (create/start/complete) |
-| `notify` | 준비 완료 전환 시 PR 알림 | 메신저·웹훅 알림 발송 |
 | `dailylog` | start 검증 (외부 어댑터 정의 시) | 일일 계획 항목 존재 확인 |
 | `apiGuard` | ops-agent:flow 위임 전후 | API 폭주 방지 마커 set/clear |
 
@@ -159,7 +157,6 @@ org-flow     — 스코핑 + 관련 레포 워크트리 + 파이프라인 추적
 | 각 레포 커밋/PR | org-flow → `ops-agent:flow` commit/PR 위임 |
 | 워크트리 정리 | org-flow (`scripts/worktree-cleanup.sh` 또는 매니페스트의 `scriptOverrides.worktreeCleanup`) |
 | 이슈 트래커 직접 호출 | 매니페스트의 `providers.issue` 어댑터에 위임 |
-| PR 알림 | 매니페스트의 `providers.notify` 어댑터에 위임 |
 
 ## 전제조건 (프로젝트 로컬 매니페스트)
 
@@ -330,7 +327,7 @@ clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성. vcs.xml
 | 구간 | 범위 | 시작 |
 |------|------|------|
 | 제출 | 완료 게이트 → 커밋 → 초안 PR | `/org-flow submit` |
-| 요청 | 준비 완료 전환 → 리뷰 요청 발송 | 작성자가 요청한다 |
+| 요청 | 준비 완료 전환 → 리뷰 요청 | 작성자가 웹에서 한다 |
 
 **Step 1: 완료 게이트**
 
@@ -348,16 +345,9 @@ PR 베이스는 `repos.<repo>.parentBranch` 가 있으면 그것, 없으면 `rep
 
 통합 브랜치에서 레포 base 로 가는 PR 은 상위 작업이 전부 끝난 뒤 1회 연다.
 
-**Step 3: 준비 완료 전환 + 리뷰 요청 발송 (GATE)**
+**Step 3: 준비 완료 전환 + 리뷰 요청**
 
-작성자가 요청한 시점에 실행한다. 전환과 발송은 한 동작이다.
-
-레포마다 provider 의 전환 명령으로 초안을 준비 완료로 바꾼 뒤, 매니페스트의 `providers.notify` 어댑터에 발송을 위임한다. 어댑터는 외부에서 정의하며 ops-agent 에 내장 구현은 없다. `notify` 선언이 없으면 전환까지가 이 구간의 끝이다.
-
-- 전환하지 않은 PR 의 리뷰 요청은 보내지 않는다. 초안은 리뷰어가 볼 수 없다
-- 레포마다 1회 발송하고 응답의 성공 여부를 확인한다. 실패면 이 단계는 실패다
-- 이 구간에 들어왔으면 발송 여부를 되묻지 않는다. 리뷰 요청은 이 구간의 완료 조건이지 선택 항목이 아니다
-- 전환 없이 초안 PR 만 생성해 두고 리뷰 요청까지 끝났다고 보고하지 않는다
+작성자가 웹에서 변경분을 다 본 뒤 준비 완료로 바꾸고 리뷰를 요청한다. 어시스턴트는 이 단계를 실행하지 않는다 ([flow 의 PR 가이드](../flow/guides/pr.md#초안으로-생성하고-작성자가-먼저-본다)).
 
 리뷰가 끝난 뒤 머지 전 최종 점검 · 상황 보고 · 판단은 레포마다 [flow 의 PR 가이드](../flow/guides/pr.md#머지-전-최종-점검과-상황-보고) 를 따른다. 표를 여기 복제하지 않는다.
 
