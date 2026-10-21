@@ -238,6 +238,12 @@
       "taxonomyId": "tone.md T9"
     },
     {
+      "pattern": "(?i)(?:(?:SQL|DDL|DML|INSERT|UPDATE|SELECT|DELETE|CREATE|ALTER|DROP|쿼리)\\s?문장|(?<![가-힣])(?:테이블|행|인덱스|스키마|레코드)\\s?(?:생성|삽입|수정|삭제|조회|갱신|변경)\\s?문장)",
+      "replacement": "쿼리 · SQL (예: 생성 쿼리). SQL 키워드 뒤는 「문」 (예: SELECT 문)",
+      "reason": "SQL statement 직역. 개발자는 쿼리 · SQL · ~문 으로 말한다. 맥락 없는 「문장」 · 「AI 생성 문장」 · 「수정 문장」은 걸리지 않는다",
+      "taxonomyId": "tone.md T9"
+    },
+    {
       "pattern": "(?<![가-힣])(?:빼(?:다|고|서|면|는|지|야)|뺀|뺄|뺍니다|뺐)",
       "replacement": "제외하다",
       "reason": "제거 의미의 구어 동사. 문서에는 격식 있는 동사로 쓴다. 빼앗다 · 빼어나다 · 빼곡 · 빼먹다 · 빼내다 · 빼기는 걸리지 않는다",
