@@ -94,8 +94,8 @@ for OLD_NAME in $CANDIDATES; do
     ln -sfn "$NEW_VERSION" "$TARGET"
   elif [ -d "$TARGET" ]; then
     # 디렉토리를 심볼릭으로 원자 교체하는 수단은 없다 — rename 은 디렉토리 위에 심볼릭을 덮지 못한다.
-    # 대신 실패 창을 줄인다. mv 로 비켜두고 즉시 심볼릭을 만든 뒤, 오래 걸리는 삭제를 마지막에 한다.
-    # 반대 순서(rm -rf 먼저)면 트리 삭제에 걸리는 시간 전체가 hook 실패 창이 된다.
+    # 대신 실패 구간을 줄인다. mv 로 비켜두고 즉시 심볼릭을 만든 뒤, 오래 걸리는 삭제를 마지막에 한다.
+    # 반대 순서(rm -rf 먼저)면 트리 삭제에 걸리는 시간 전체가 hook 실패 구간이 된다.
     STALE="$TARGET.stale.$$"
     mv "$TARGET" "$STALE"
     ln -sfn "$NEW_VERSION" "$TARGET"

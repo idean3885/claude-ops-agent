@@ -6,7 +6,7 @@
  * 조용히 무력화되면 아무 신호가 없다. 실제로 판정 스니펫의 종료 코드가 뒤집힌 채 배포된
  * 이력이 있다 (#386).
  *
- * 갈래를 모두 열어(OPS_AGENT_ACTION_GATE_ALLOW=1) 돌린다. 동거 검사는 창이 열린 상태에서만
+ * 갈래를 모두 열어(OPS_AGENT_ACTION_GATE_ALLOW=1) 돌린다. 동거 검사는 게이트가 열린 상태에서만
  * 발동하고, 그 상태가 정확히 사고가 난 조건이다.
  *
  * 사용: node scripts/selftest-action-gate.mjs
@@ -85,7 +85,7 @@ for (const [name, prev, next, expect] of SCOPE_CASES) {
 
 // ttl 자리에 숫자가 아닌 값이 오면 산술식에 넣기 전에 형식을 돌려주는지. 갈래를 공백으로
 // 나열하면 둘째 갈래가 이 자리로 들어오고, 그대로 두면 bash 내부 오류로 죽어 원인이
-// 가려진다 (#414). HOME 을 임시 경로로 돌려 사용자의 열린 창을 건드리지 않는다.
+// 가려진다 (#414). HOME 을 임시 경로로 돌려 사용자가 연 게이트를 건드리지 않는다.
 const TTL_CASES = [
   ['갈래를 공백으로 나열', ['on', 'git-force', 'cluster-write'], 1, 'on git-force,cluster-write'],
   ['ttl 이 숫자', ['on', 'git-force', '30'], 0, ''],
@@ -148,7 +148,7 @@ for (const [name, command, want] of CASES) {
 }
 
 // 마커로 연 갈래별 판정. 임시 HOME 에 마커를 만들어 갈래가 행위를 가르는지 본다.
-// scopes 가 null 이면 마커가 없다(전부 닫힘). 사용자의 열린 창을 건드리지 않는다.
+// scopes 가 null 이면 마커가 없다(전부 닫힘). 사용자가 연 게이트를 건드리지 않는다.
 function scopeGateCase(name, want, command, scopes) {
   const home = mkdtempSync(join(tmpdir(), 'scope-selftest-'));
   if (scopes) {
