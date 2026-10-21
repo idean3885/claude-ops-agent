@@ -142,7 +142,7 @@ flowchart LR
 | `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 자체 점검 (118건) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (50건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
-| `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 | [terms.md](../config/style-rules/base/terms.md) |
+| `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보 · 누적 알림) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/resolve-manifest.mjs` | 소유자 식별과 org·repo 매니페스트 발견 | [conventions-slot.md](conventions-slot.md) |
 | `config/style-rules/metrics/tells_count.py` | AI 티 지표 측정 | [지표 정의](../config/style-rules/metrics/metrics-spec.md) |

@@ -101,6 +101,7 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 2. 줄마다 목록과 대조한다. 이미 있으면 넘어가고, 사용자가 다른 말을 골랐으면 그 항목을 고친다.
 3. 없는 것은 문장 시험을 거친 글 예문 · 말 예문을 붙여 등재안을 낸다. 말로 해서 어색하면 다른 말을 다시 고른다.
 4. 사람 확인 뒤 ops-agent 워킹 카피의 목록에 등재하고 `python3 ~/.claude/ops-agent/current/scripts/terms.py check <고친 목록 경로>` 를 통과시킨다.
+5. `python3 ~/.claude/ops-agent/current/scripts/terms.py stats` 로 항목별 정답률을 집계한다. `removable` 항목은 제거안으로, `overLimit` 이면 항목별 정답률 · 사용 세션 수를 붙여 정리 논의를 올린다. 제거도 사람 확인 뒤에 한다.
 
 공개할 수 없는 사내 용어는 목록에 올리지 않고 판정 요약에 남긴다.
 
