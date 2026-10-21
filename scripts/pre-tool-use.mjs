@@ -354,7 +354,7 @@ if (!DISABLE) {
           // `on` 은 마커를 새로 쓰므로 감지된 갈래만 싣으면 앞서 연 갈래가 지워진다. 그러면
           // 한 작업에서 두 갈래가 순차로 필요할 때 개방 → 차단 → 개방이 반복되고, 같은 종류의
           // 요청이 사람에게 네 번 간다 (#353). 합집합을 스크립트에서 자동으로 만들지 않는 이유는
-          // TTL 이 함께 연장되어 먼저 연 갈래의 창이 사람이 의도한 길이를 넘기기 때문이다.
+          // TTL 이 함께 연장되어 먼저 연 갈래의 개방 시간이 사람이 의도한 길이를 넘기기 때문이다.
           // 마커는 사람이 마지막으로 승인한 것을 그대로 담고, 합치는 일은 이 메시지가 한다.
           const blockedScopes = [...new Set(gateResult.ops.map(o => o.scope).filter(Boolean))];
           const openScopes = (gateResult.allowed || []).filter(s => s && s !== 'all' && s !== 'unscoped');
@@ -386,7 +386,7 @@ if (!DISABLE) {
         }
 
         // 동거 검사: 갈래가 열려 있어도, 앞선 명령의 출력을 읽어야 하는 블록이면 막는다 (#386).
-        // 열린 창에서만 의미가 있다. 닫혀 있으면 위 갈래 차단이 먼저 걸린다.
+        // 게이트가 열린 동안에만 의미가 있다. 닫혀 있으면 위 갈래 차단이 먼저 걸린다.
         if (!gateResult.blocked && (gateResult.detected || []).length) {
           const co = detectGateCohabitation(command, hookInput.cwd);
           if (co) {
@@ -990,15 +990,15 @@ function runWhatAbstractionGuard(command) {
 // 한계: `bash deploy.sh` 처럼 스크립트 내부에서 실행되는 명령은 최상위 명령만 보므로 탐지 못 함
 //   (의도된 배포 스크립트 경로는 sanctioned 로 간주). 직접 타이핑하는 ad-hoc 명령을 막는 안전망.
 // verb 세트/플래그 세트는 파일 상단(게이트 호출보다 먼저 초기화되어야 함)에 선언.
-// 게이트는 시간만이 아니라 **승인된 행위 갈래**로도 열린다. 시간만으로 열면 그 창 안에서
-// 승인 대상이 아니었던 갈래까지 함께 통과한다. 실제로 PR 머지를 위해 연 창에서 기본 브랜치
+// 게이트는 시간만이 아니라 **승인된 행위 갈래**로도 열린다. 시간만으로 열면 열린 동안
+// 승인 대상이 아니었던 갈래까지 함께 통과한다. 실제로 PR 머지를 위해 게이트를 연 동안 기본 브랜치
 // 직접 push 가 통과했다. 둘 다 category 는 `repo` 라 category 단위로는 나뉘지 않는다.
 // 그래서 갈래 키를 category 보다 좁게 둔다 (scope).
 function runActionGate(command, sessionId, hookCwd) {
   const allowed = allowedScopes(sessionId);
-  // `all` 이 열려 있어도 탐지는 한다. 동거 검사(#386)가 열린 창에서만 발동하기 때문이다.
+  // `all` 이 열려 있어도 탐지는 한다. 동거 검사(#386)는 게이트가 열린 동안에만 발동하기 때문이다.
   const ops = detectGatedActions(command, hookCwd);
-  // cluster-exec 는 cluster-write 에서 갈라진 갈래다. 기존에 cluster-write 로 열던 창이 exec 를
+  // cluster-exec 는 cluster-write 에서 갈라진 갈래다. 기존에 cluster-write 로 열던 개방이 exec 를
   // 계속 통과하도록 cluster-write 가 열려 있으면 함께 통과시킨다 (#445).
   const isOpen = scope => allowed.has(scope) || (scope === 'cluster-exec' && allowed.has('cluster-write'));
   const outside = allowed.has('all') ? [] : ops.filter(o => !isOpen(o.scope || 'unscoped'));
@@ -1056,7 +1056,7 @@ function allowedScopes(sessionId) {
       const m = JSON.parse(readFileSync(markerPath, 'utf8'));
       if (m.sessionId && sessionId && m.sessionId !== sessionId) continue;
       if (m.expiresAt && Date.now() > m.expiresAt) continue;
-      // 갈래가 없는 마커는 이 변경 이전 형식이다. 전체 허용으로 읽어 진행 중인 창을 끊지 않는다.
+      // 갈래가 없는 마커는 이 변경 이전 형식이다. 전체 허용으로 읽어 진행 중인 개방을 끊지 않는다.
       const scopes = Array.isArray(m.scopes) && m.scopes.length ? m.scopes : ['all'];
       return new Set(scopes);
     } catch { /* 다음 후보 */ }
