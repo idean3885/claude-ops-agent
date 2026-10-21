@@ -10,6 +10,7 @@
 | `base/tone.md` | 저자 톤 (T1~T23) |
 | `base/punctuation.md` | 한국어 구두점 (PN1~PN7) |
 | `base/length.md` | 산출물 분량 (LN1~LN2) |
+| `base/terms.md` | 표준 용어 목록. 용어 교정으로 바로잡은 말과 문장 시험 예문(글 · 말) |
 | `base/authoring.md` | `SKILL.md`·`CLAUDE.md`·가이드·provider 정의를 쓰거나 고칠 때 적용 (AU1~AU6, mattpocock/skills MIT 차용) |
 | `extensions/profiles.md` | 유형별 적용 대상·적용 강도·합격선 정본 |
 | `extensions/{blog,wiki,poc,info,knowledge,issue,deck,architecture,dailylog,peer-review,work-review}.md` | 문서 유형별 고유 규칙 |
