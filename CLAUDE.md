@@ -210,6 +210,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-tells-count.py
   ```
+- [ ] **`config/style-rules/forbidden-words.json` 을 고쳤으면 자체 점검을 실행한다.** 패턴을 좁히면 정탐이 함께 빠져도 신호가 없다.
+  ```bash
+  python3 scripts/selftest-forbidden-words.py
+  ```
 - [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재된다.
   ```bash
   python3 scripts/selftest-terms.py
