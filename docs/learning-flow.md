@@ -83,7 +83,7 @@
 
 ## 관련
 
-- 설명 수준 · 용어 교정: 글로벌 지침 조각 (`config/global-md/base.md`)
+- 설명 수준 · 용어 교정: 글로벌 지침 조각 (`config/global-md/base.md`) · 표준 용어 목록 (`config/style-rules/base/terms.md`)
 - W2HO 요약 구조 (#687), C4 정지 조건 (`config/style-rules/extensions/architecture.md` AR2)
 - 처음 쓰는 동작은 관찰 기록 ([ADR-0023](adr/0023-first-use-needs-observed-effect.md))
 - README 사고 플로우 등록 (#715)

@@ -210,6 +210,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-tells-count.py
   ```
+- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재된다.
+  ```bash
+  python3 scripts/selftest-terms.py
+  ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인
 

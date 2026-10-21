@@ -93,6 +93,17 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 
 기록 위치는 소비 프로젝트가 정한다. 지표 정의는 [docs/lessons.md](../../docs/lessons.md) 가 갖고 값은 소비 프로젝트가 갖는다.
 
+## 용어 교정 등재
+
+세션의 용어 교정 줄(`용어:` · `차이:` · `나눔:`)은 레슨이 아니라 표준 용어 목록([config/style-rules/base/terms.md](../../config/style-rules/base/terms.md))으로 간다. 추측할 수 없는 취향을 정본에 올리는 자리다.
+
+1. `python3 ~/.claude/ops-agent/current/scripts/terms.py collect <세션 트랜스크립트>` 로 교정 줄을 모은다.
+2. 줄마다 목록과 대조한다. 이미 있으면 넘어가고, 사용자가 다른 말을 골랐으면 그 항목을 고친다.
+3. 없는 것은 문장 시험을 거친 글 예문 · 말 예문을 붙여 등재안을 낸다. 말로 해서 어색하면 다른 말을 다시 고른다.
+4. 사람 확인 뒤 ops-agent 워킹 카피의 목록에 등재하고 `python3 ~/.claude/ops-agent/current/scripts/terms.py check <고친 목록 경로>` 를 통과시킨다.
+
+공개할 수 없는 사내 용어는 목록에 올리지 않고 판정 요약에 남긴다.
+
 ## 하지 않는 것
 
 - 자동 등재. 승격은 사람 확인을 거친다

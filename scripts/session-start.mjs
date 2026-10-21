@@ -463,6 +463,30 @@ function buildMetricText(m, started) {
   }
 }
 
+// 표준 용어 목록은 미러만으로는 세션이 내용을 모른다. 섞어 쓴 말을 알아보려면 목록이 컨텍스트에 있어야 한다.
+// 목록이 늘어나도 비용이 크지 않게 항목당 한 줄(제목 · 구분)만 넣고 예문은 원천에서 읽는다.
+function buildTermsContext() {
+  try {
+    const path = join(pluginRoot, 'config', 'style-rules', 'base', 'terms.md');
+    if (!existsSync(path)) return '';
+    const body = readFileSync(path, 'utf8').split('\n## 항목\n')[1];
+    if (!body) return '';
+    const lines = [];
+    let title = null;
+    for (const line of body.split('\n')) {
+      if (line.startsWith('### ')) title = line.slice(4).trim();
+      else if (title && line.startsWith('- 구분: ')) {
+        lines.push(`- ${title}: ${line.slice('- 구분: '.length).trim()}`);
+        title = null;
+      }
+    }
+    if (lines.length === 0) return '';
+    return ['', `[표준 용어 — 목록에 있는 개념은 이 말을 쓴다. 예문 · 등재 절차: ${join(opsAgentGlobal, 'style-rules', 'base', 'terms.md')}]`, ...lines].join('\n');
+  } catch {
+    return '';
+  }
+}
+
 function buildTrialsContext() {
   try {
     const path = join(opsAgentGlobal, 'trials.local.json');
@@ -562,6 +586,7 @@ if (identity) {
 }
 
 parts.push(buildSkillContext(provider));
+parts.push(buildTermsContext());
 parts.push(buildTrialsContext());
 
 const context = parts.filter(Boolean).join('\n');
