@@ -233,8 +233,8 @@
     },
     {
       "pattern": "(?<![가-힣])봉투",
-      "replacement": "응답 바디/에러 응답",
-      "reason": "envelope 직역. 개발 용어가 아닌 조어",
+      "replacement": "envelope (payload 를 감싸는 바깥 층. 번역하지 않는다. 응답 바디와 다르다)",
+      "reason": "envelope 직역. 개발 용어가 아닌 조어. 표준 용어 목록 base/terms.md",
       "taxonomyId": "tone.md T9"
     },
     {
