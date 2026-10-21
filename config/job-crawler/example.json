@@ -26,7 +26,7 @@
   },
   "_targetsNote": "크롤링 대상. url 만 필수. waitFor(렌더 대기 selector)·extract.container(공고 항목 selector)를 알면 정확도가 올라가고, 생략하면 링크 텍스트 heuristic 으로 떨어진다.",
   "_gotoNote": "선택. 페이지 진입 대기 조건을 대상별로 덮어쓴다. 기본은 목록 networkidle2/45000ms, 상세 networkidle2/30000ms 이고, 선언하면 목록과 상세에 함께 적용된다(타임아웃 기본값만 다름). 애널리틱스·폴링·웹소켓으로 연결을 계속 유지하는 사이트는 렌더가 끝났는데도 networkidle2 에 도달하지 못해 타임아웃하고 0건으로 보고된다. 그때 domcontentloaded 로 낮춘다. 렌더 대기는 waitFor 셀렉터가 받으므로 진입 조건만 느슨하게 해도 추출 시점은 유지된다 — waitFor 없이 낮추면 추출이 빨라져 건수가 줄 수 있다. waitUntil 허용값: load | domcontentloaded | networkidle0 | networkidle2.",
-  "_expandNote": "선택. 목록 한 건이 실제로는 여러 지원 단위를 묶은 공고일 때 자식 공고로 펼친다. 자식 정보는 상세 페이지의 react-query SSR 캐시(__NEXT_DATA__)에서 꺼내므로 추가 요청이 없다. queryKey(캐시 키 부분 일치)와 params(자식 URL 을 만들 쿼리 파라미터 → 항목 필드) 가 필수. jsonString 은 캐시 값이 JSON 문자열일 때 true. title(기본 'title')·group(제목 앞에 붙는 소속)·keywords 는 채점 텍스트를 이룬다 — 본문 전문으로 채점하면 목록 제목으로 채점되는 다른 대상보다 점수가 부풀어 비교가 깨지므로 본문은 넣지 않는다. body 는 원문 저장·추천 전용 감지에만 쓴다. 자식 URL = 부모 URL + params. 펼칠 항목이 없으면 부모를 그대로 둔다.",
+  "_expandNote": "선택. 목록 한 건이 실제로는 여러 지원 단위를 묶은 공고일 때 자식 공고로 펼친다. 자식 정보는 상세 페이지의 react-query SSR 캐시(__NEXT_DATA__)에서 꺼내므로 추가 요청이 없다. queryKey(캐시 키 부분 일치)와 params(자식 URL 을 만들 쿼리 파라미터 → 항목 필드) 가 필수. jsonString 은 캐시 값이 JSON 문자열일 때 true. title(기본 'title')·group(제목 앞에 놓이는 소속)·keywords 는 채점 텍스트를 이룬다 — 본문 전문으로 채점하면 목록 제목으로 채점되는 다른 대상보다 점수가 부풀어 비교가 깨지므로 본문은 넣지 않는다. body 는 원문 저장·추천 전용 감지에만 쓴다. 자식 URL = 부모 URL + params. 펼칠 항목이 없으면 부모를 그대로 둔다.",
   "targets": {
     "예시회사": {
       "url": "https://careers.example.com/jobs",
@@ -126,6 +126,6 @@
     "pattern": "(개발|엔지니어|채용|Engineer|Developer|Backend|Server|SRE|Platform)",
     "flags": "i"
   },
-  "_listNote": "선택. 목록 획득 방법 선언. 미선언이면 DOM 추출(extract.container → 링크 heuristic)을 쓴다. method/endpoint/form 으로 요청하고 itemsPath 로 배열을 찾은 뒤 title·group 으로 제목을, detailUrl 템플릿으로 상세 URL 을 만든다. openWhen 은 열림 판정 필드다. 요청은 페이지 컨텍스트에서 나가므로 쿠키·세션이 유지된다. detailUrl 템플릿의 {필드} 를 채우지 못하면 그 항목의 URL 을 비운다 — 깨진 URL 은 상세 확인 실패로 번진다.",
-  "_disqualifyNote": "선택. 상세 원문에 걸 실격 패턴. 핏 채점은 목록 제목만 보므로 제목에 없지만 지원 여부를 정하는 조건(고용형태·재직자 제한·해외 근무지·필수 자격)이 걸러지지 않는다. 무엇이 실격인지는 지원자 사정이라 엔진이 기준을 갖지 않는다. 걸리면 verdict 를 실격으로 바꿔 후보에서 빼고 사유와 함께 따로 남긴다 — 추천 전용과 같은 처리다. 가감점이 아니라 실격으로 분리한 이유는 채점을 상세까지 넓히면 제목으로 채점되는 대상보다 점수가 부풀어 대상 간 비교가 깨지기 때문이다. targets[].detail.disqualify 로 대상별 덮어쓰기 가능. 미지정이면 현재 동작 그대로."
+  "_listNote": "선택. 목록 획득 방법 선언. 미선언이면 DOM 추출(extract.container → 링크 heuristic)을 쓴다. method/endpoint/form 으로 요청하고 itemsPath 로 배열을 찾은 뒤 title·group 으로 제목을, detailUrl 템플릿으로 상세 URL 을 만든다. openWhen 은 열림 판정 필드다. 요청은 페이지 컨텍스트에서 전송되므로 쿠키·세션이 유지된다. detailUrl 템플릿의 {필드} 를 채우지 못하면 그 항목의 URL 을 비운다 — 깨진 URL 은 상세 확인 실패로 번진다.",
+  "_disqualifyNote": "선택. 상세 원문에 걸 실격 패턴. 핏 채점은 목록 제목만 보므로 제목에 없지만 지원 여부를 정하는 조건(고용형태·재직자 제한·해외 근무지·필수 자격)이 걸러지지 않는다. 무엇이 실격인지는 지원자 사정이라 엔진이 기준을 갖지 않는다. 걸리면 verdict 를 실격으로 바꿔 후보에서 제외하고 사유와 함께 따로 남긴다 — 추천 전용과 같은 처리다. 가감점이 아니라 실격으로 분리한 이유는 채점을 상세까지 넓히면 제목으로 채점되는 대상보다 점수가 부풀어 대상 간 비교가 깨지기 때문이다. targets[].detail.disqualify 로 대상별 덮어쓰기 가능. 미지정이면 현재 동작 그대로."
 }

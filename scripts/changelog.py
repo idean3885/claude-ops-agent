@@ -51,7 +51,7 @@ def unreleased_block(body):
     """Unreleased 절의 (시작, 끝) 인덱스. 없으면 None.
 
     **앵커 바로 다음 절만 본다.** 파일 어디서나 찾으면 끊지 않고 남은 옛 Unreleased 에
-    붙는다. 실제로 5.6.0 아래에 잔재가 있어 새 항목이 파일 중간에 쌓였다 (#409).
+    추가된다. 실제로 5.6.0 아래에 잔재가 있어 새 항목이 파일 중간에 쌓였다 (#409).
     """
     m = re.search(r'^## \[', body, re.M)
     if not m or not body.startswith('## [Unreleased]', m.start()):

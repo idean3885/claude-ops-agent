@@ -4,7 +4,7 @@
 # 점검이 LLM 의 기억에 달려 있으면 게이트가 열린 순간 점검 없이 머지된다. 이 스크립트가
 # 결정적 점검을 돌리고, 통과하면 **머지할 커밋(HEAD)에 묶인 통과 기록**을 남긴다.
 # pre-tool-use.mjs 가 `gh pr merge` 직전에 이 통과 기록을 확인한다. 푸시로 HEAD 가 바뀌면
-# 통과 기록은 무효가 되므로 다시 돌린다.
+# 통과 기록은 무효가 되므로 다시 실행한다.
 #
 # 사용: final-check.sh <PR번호> --notes <파일>
 #   notes  판단 점검 노트. 아래 세 절이 있고 각 본문이 비어 있지 않아야 한다.
@@ -69,7 +69,7 @@ if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-# merge-base 이후 커밋 수. 머지할 커밋이 로컬에 있으면 git 으로, 없으면 PR 의 커밋 목록으로 센다.
+# merge-base 이후 커밋 수. 머지할 커밋이 로컬에 있으면 git 으로, 없으면 PR 의 커밋 목록으로 집계한다.
 commits_since_merge_base() {
   local base="$1" head="$2" mb
   if git cat-file -e "$head^{commit}" 2>/dev/null && mb=$(git merge-base "$base" "$head" 2>/dev/null); then
@@ -136,7 +136,7 @@ if [ -f "$ROOT/.ops-agent/final-check.sh" ]; then
   fi
 fi
 
-# e. 변경 문서의 구조 검출. 로컬 작업 트리가 아니라 HEAD 의 내용을 받아 센다.
+# e. 변경 문서의 구조 검출. 로컬 작업 트리가 아니라 HEAD 의 내용을 받아 집계한다.
 if [ -f "$COUNTER" ]; then
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
@@ -184,7 +184,7 @@ else
   done
 fi
 
-# g. 커밋 정리: merge-base 이후 커밋이 1개여야 한다. 세지 못하면 PR 의 커밋 목록으로 센다.
+# g. 커밋 정리: merge-base 이후 커밋이 1개여야 한다. 세지 못하면 PR 의 커밋 목록으로 집계한다.
 ncommits=$(commits_since_merge_base "origin/$BASE_BRANCH" "$HEAD_SHA" 2>/dev/null || gh pr view "$PR" --json commits -q '.commits | length' 2>/dev/null || echo "?")
 if [ "$ncommits" != "1" ]; then
   fail g "merge-base 이후 커밋이 ${ncommits}개다. 1개로 스쿼시한다 (푸시는 git push --force-with-lease=<브랜치>:<원격 현재 sha>)"

@@ -433,7 +433,7 @@ function assembleGlobalClaudeMd() {
 // 파일이 사용자 스코프(~/.claude/ops-agent/)에 있어 작업 디렉토리가 바뀌어도 풀리지 않는다.
 // 메모리는 프로젝트 디렉토리별이라 운반체로 쓰지 않는다 (#442).
 // 시범이라도 호출형이 아니라 상시형이다. 사용자가 「확인」을 부르지 않는다.
-// 지표: jsonl 의 groupBy 필드 값별 줄 수. since 가 없으면 trial 의 started 이후 ts 만 센다.
+// 지표: jsonl 의 groupBy 필드 값별 줄 수. since 가 없으면 trial 의 started 이후 ts 만 집계한다.
 // 파일 없음 · 형식 오류는 조용히 건너뛴다 (세션 시작을 막지 않는다).
 const METRIC_MAX_BYTES = 5 * 1024 * 1024;
 function buildMetricText(m, started) {

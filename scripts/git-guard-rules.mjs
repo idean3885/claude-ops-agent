@@ -3,7 +3,7 @@
  *
  * 이 모듈이 룰의 단일 출처다. `pre-tool-use.mjs` 의 한시 권한 판정이 호출하고,
  * 다른 소비자(사내 어댑터 등)도 같은 판정을 쓰도록 분리했다.
- * 룰이 호출부마다 복제되면 한쪽만 갱신되어 같은 명령이 경로에 따라 통과·차단으로 갈린다.
+ * 룰이 호출부마다 복제되면 한쪽만 갱신되어 같은 명령이 경로에 따라 통과·차단으로 달라진다.
  *
  * 두 부류를 다룬다.
  *
@@ -11,7 +11,7 @@
  *    브랜치 이름을 `main` 으로 하드코딩하지 않는다. 레포마다 기본 브랜치가 다르고,
  *    하드코딩하면 `master`·`develop` 레포에서 가드가 조용히 통과한다.
  * 2. 작업 손실 명령: `reset --hard` · `clean -fd` · `branch -D` · `restore`/`checkout --`.
- *    외부로 나가지 않지만 커밋되지 않은 작업을 복구 경로 없이 지운다.
+ *    외부로 전송되지 않지만 커밋되지 않은 작업을 복구 경로 없이 지운다.
  *
  * 사용:
  *   import { detectGitRiskActions } from './git-guard-rules.mjs';
@@ -71,7 +71,7 @@ export function resolveDefaultBranch(runGit) {
 }
 
 /**
- * push 세그먼트에서 밀어 넣을 대상 브랜치를 뽑는다.
+ * push 세그먼트에서 밀어 넣을 대상 브랜치를 추출한다.
  * `git push origin main` · `git push origin HEAD:main` · `git push` (현재 브랜치) 를 구분한다.
  * 대상을 확정하지 못하면 null 이고, 호출부가 판정을 건너뛴다.
  */

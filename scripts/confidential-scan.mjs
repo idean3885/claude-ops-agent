@@ -40,7 +40,7 @@ import {
 } from './confidential-rules.mjs';
 
 // 바이너리 확장자. 확장자만 믿지 않고 NUL 바이트 검사를 함께 한다 —
-// 확장자 없는 바이너리에서 나온 우연 일치를 실제 노출로 세면 우선순위가 뒤집힌다.
+// 확장자 없는 바이너리에서 나온 우연 일치를 실제 노출로 집계하면 우선순위가 뒤집힌다.
 const BINARY_EXT = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'tiff', 'avif', 'heic',
   'pdf', 'zip', 'gz', 'tgz', 'bz2', 'xz', '7z', 'rar', 'jar', 'war',
@@ -100,7 +100,7 @@ function main() {
 }
 
 /**
- * 조치 대상이 아닌 것 — 「참고」 구획으로 빼고 종료 코드에서 제외한다.
+ * 조치 대상이 아닌 것 — 「참고」 구획으로 제외하고 종료 코드에서 제외한다.
  *
  * 조치할 수 없거나 조치하지 않기로 정한 대상을 조치 대상에 남기면 리포트가 영구히
  * 빨간 상태가 된다. 그러면 새로 생긴 노출과 이미 판단이 끝난 노출을 구분할 수 없다.
@@ -111,7 +111,7 @@ function main() {
  * - 명시 제외(`--exclude`): 확인 후 유지하기로 정한 대상
  *
  * 빼더라도 존재는 보고에 남긴다. 특히 archived + PUBLIC 은 공개 열람이 그대로이므로
- * 경고를 붙인다. 조치 대상에서 빼는 것과 노출이 사라지는 것은 다르다.
+ * 경고를 붙인다. 조치 대상에서 제외하는 것과 노출이 사라지는 것은 다르다.
  */
 function isReference(r) {
   return r.external === true || r.isFork === true || r.excluded === true
@@ -361,7 +361,7 @@ function scanBranches(root, base, rules, cfg, opts) {
     return [{ name: '(브랜치 목록 조회 실패)', tree: null, merged: null, unique: null, safeDelete: false, error: 'for-each-ref 실패' }];
   }
   const names = raw.split('\n')
-    // refs/remotes/origin/HEAD 는 `origin` 으로 나온다. 브랜치가 아니므로 뺀다.
+    // refs/remotes/origin/HEAD 는 `origin` 으로 나온다. 브랜치가 아니므로 제외한다.
     .filter(s => s.startsWith('origin/'))
     .map(s => s.slice('origin/'.length))
     .filter(n => n && n !== 'HEAD' && n !== def);
@@ -502,7 +502,7 @@ function record(agg, rule, rel, standalone) {
 }
 
 /**
- * 히스토리 검사. 키워드별로 그 값이 등장·소멸한 커밋 수만 센다.
+ * 히스토리 검사. 키워드별로 그 값이 등장·소멸한 커밋 수만 집계한다.
  *
  * 한계: `git log -S` 는 값을 argv 로 받아야 한다. 실행 중 `ps` 에 값이 잠깐 보인다.
  * 그래서 기본이 아니라 명시 옵션이다.

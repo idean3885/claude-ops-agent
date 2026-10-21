@@ -84,7 +84,7 @@ async function fetchDetail(browser, url, goto) {
   return (await fetchPage(browser, url, goto)).text;
 }
 
-// 핏 후보만 상세를 연다. 추천 전용으로 판정되면 verdict 를 바꿔 후보에서 빼고,
+// 핏 후보만 상세를 연다. 추천 전용으로 판정되면 verdict 를 바꿔 후보에서 제외하고,
 // 상한(cap)을 둬 대상이 많을 때 실행 시간이 발산하지 않게 한다.
 //
 // 펼쳐진 자식은 원문이 부모 페이지의 캐시에서 이미 나왔으므로 페이지를 다시 열지

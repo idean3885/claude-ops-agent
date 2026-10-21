@@ -2,7 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["sherpa-onnx==1.13.8", "soundfile", "numpy"]
 # ///
-"""화자 분리: wav(16k mono) + 원문 vtt → 화자 턴이 붙은 txt
+"""화자 분리: wav(16k mono) + 원문 vtt → 화자 턴이 표시된 txt
 
 사용: uv run diarize.py <wav> <vtt> <화자수> <out.txt>
 화자 수는 말한 사람 수다. 자동 판별은 한국어에서 과분할한다 (#540).
