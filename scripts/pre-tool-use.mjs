@@ -42,7 +42,7 @@ import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 // 규칙 로딩·공개 여부 판정은 confidential-scan.mjs 와 공유한다.
-// 복제하면 가드와 스캐너의 판정이 갈라진다.
+// 복제하면 가드와 스캐너의 판정이 달라진다.
 import {
   loadConfig, isEmptyConfig, parseRemote, lookupVisibility, shellQuote, findKeywordHits,
 } from './confidential-rules.mjs';
@@ -349,7 +349,7 @@ if (!DISABLE) {
           const gateRoot = '~/.claude/ops-agent/current';
           // 이 메시지는 자립해야 한다. 정본 절차(GATE 3)는 flow 스킬 안에 있어 /flow 를
           // 거치지 않은 세션에는 로딩되지 않는다. 게이트가 발동하는 순간 컨텍스트에 있다고
-          // 보장되는 것은 이 문자열뿐이므로, 실행 주체·형식·차단 사실을 여기서 다 말한다.
+          // 확실히 전달되는 것은 이 문자열뿐이므로, 실행 주체·형식·차단 사실을 여기서 다 말한다.
           // 개방 명령에는 감지된 갈래와 **이미 열려 있던 갈래**를 함께 싣는다.
           // `on` 은 마커를 새로 쓰므로 감지된 갈래만 싣으면 앞서 연 갈래가 지워진다. 그러면
           // 한 작업에서 두 갈래가 순차로 필요할 때 개방 → 차단 → 개방이 반복되고, 같은 종류의
@@ -686,7 +686,7 @@ function extractCwdFromCommand(command, fallbackCwd) {
 /**
  * `.git` 이 있는 상위 디렉토리를 찾는다. 레포 선언 파일(`.ops-agent/confidential.json`)과
  * allowPaths 정규식이 맞춰 보는 경로가 둘 다 레포 루트 기준이라 루트가 필요하다.
- * 서브프로세스를 띄우지 않는다. 이 훅은 매 Bash 호출마다 돈다.
+ * 서브프로세스를 띄우지 않는다. 이 훅은 매 Bash 호출마다 실행된다.
  */
 function findRepoRoot(startDir) {
   let dir = startDir;
@@ -760,7 +760,7 @@ function resolveCommandCwd(command, fallbackCwd) {
   return { cwd: path, ok: true, source };
 }
 
-// 표면은 셋이다. 호스트만 보면 둘로만 갈라져 비공개 저장소가 공개 표면으로 오판된다.
+// 표면은 셋이다. 호스트만 보면 둘로만 나뉘어 비공개 저장소가 공개 표면으로 오판된다.
 //
 //   internal — 사내 호스트. 개인 환경 흔적(personalDevOnly)을 막는다.
 //   public   — 사내 호스트 아님 + 공개 확인. 사내 용어(externalOnly)를 막는다.
@@ -790,7 +790,7 @@ function resolveTarget(command, cwd, internalHosts) {
     return classifyExternal(slug, `GH_HOST=${host}`, host);
   }
 
-  // 2. gh -R 에 호스트가 붙은 형태 (host/owner/repo)
+  // 2. gh -R 에 호스트가 포함된 형태 (host/owner/repo)
   if (repoArg && repoArg.length >= 3) {
     const host = repoArg[0];
     if (isInternalHost(host)) return { scope: 'internal', reason: `-R host=${host}` };
@@ -799,7 +799,7 @@ function resolveTarget(command, cwd, internalHosts) {
 
   // 3. gh (호스트 미지정) · git commit: 레포 리모트로 판정한다.
   //
-  // gh 는 GH_HOST 도 host 붙은 -R 도 없으면 현재 디렉토리의 git 리모트에서 레포를 해소한다.
+  // gh 는 GH_HOST 도 host 가 포함된 -R 도 없으면 현재 디렉토리의 git 리모트에서 레포를 해소한다.
   // 따라서 판정 근거도 리모트여야 한다. 이전 구현은 `gh auth status` 출력 전문에 사내 호스트
   // 문자열이 있는지만 봤는데, 그 출력에는 로그인된 **모든** 호스트가 나열된다.
   // 사내·개인 계정을 함께 쓰는 머신에서는 항상 사내로 판정되어 externalOnly 규칙이
@@ -845,7 +845,7 @@ function classifyExternal(slug, reason, host) {
 
 // loadConfig · isEmptyConfig · parseRemote · lookupVisibility · shellQuote 와
 // 공개 여부 캐시는 confidential-rules.mjs 로 옮겼다. confidential-scan.mjs 가 같은
-// 규칙·같은 표면 판정을 써야 하고, 복제하면 두 판정이 갈라진다.
+// 규칙·같은 표면 판정을 써야 하고, 복제하면 두 판정이 달라진다.
 
 function extractOption(command, name, out) {
   const re = new RegExp(`--${name}(?:=("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\\S+)|\\s+("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\\S+))`, 'g');
@@ -998,7 +998,7 @@ function runActionGate(command, sessionId, hookCwd) {
   const allowed = allowedScopes(sessionId);
   // `all` 이 열려 있어도 탐지는 한다. 동거 검사(#386)는 게이트가 열린 동안에만 발동하기 때문이다.
   const ops = detectGatedActions(command, hookCwd);
-  // cluster-exec 는 cluster-write 에서 갈라진 갈래다. 기존에 cluster-write 로 열던 개방이 exec 를
+  // cluster-exec 는 cluster-write 에서 나뉘어 나온 갈래다. 기존에 cluster-write 로 열던 개방이 exec 를
   // 계속 통과하도록 cluster-write 가 열려 있으면 함께 통과시킨다 (#445).
   const isOpen = scope => allowed.has(scope) || (scope === 'cluster-exec' && allowed.has('cluster-write'));
   const outside = allowed.has('all') ? [] : ops.filter(o => !isOpen(o.scope || 'unscoped'));
@@ -1013,7 +1013,7 @@ function runActionGate(command, sessionId, hookCwd) {
 // 것은 강도가 다르다. 잊어도 걸리는 쪽을 택한다.
 //
 // 앞 세그먼트만 본다. 뒤에 오는 정리 명령(브랜치 삭제 등)은 이미 실행된 행위의 결과에
-// 딸린 것이라 판정 대상이 아니다.
+// 속한 것이라 판정 대상이 아니다.
 function detectGateCohabitation(command, hookCwd) {
   const segs = gateSegments(command);
   if (segs.length < 2) return null;

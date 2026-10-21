@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""구조 가독성 카운터 — `base/readability.md` 의 자동 판별 `가능` 항목만 센다.
+"""구조 가독성 카운터 — `base/readability.md` 의 자동 판별 `가능` 항목만 집계한다.
 
 판정하지 않고 수치와 위치만 낸다. 상한값의 정본은 `base/readability.md` 이고
 이 스크립트는 그 값을 상수로 복제한다. 규칙을 고치면 양쪽을 함께 고친다.
@@ -83,7 +83,7 @@ def blocks(text):
         if not buf:
             start = i
         kind = k
-        buf.append(ln)  # 원문 유지 — 들여쓰기로 중첩 목록을 가른다
+        buf.append(ln)  # 원문 유지 — 들여쓰기로 중첩 목록을 나눈다
     if buf:
         out.append((kind, start, buf, ""))
     return out
@@ -130,7 +130,7 @@ def check(path):
         prose_run, since_visual = 0, 0
 
         if kind == "list":
-            # 최상위 항목만 센다. 중첩 항목은 부모에 속하므로 L1 대상이 아니다.
+            # 최상위 항목만 집계한다. 중첩 항목은 부모에 속하므로 L1 대상이 아니다.
             items = [b for b in body if LIST_ITEM.match(b)]
             if len(items) > MAX_LIST_ITEMS:
                 hits.append((line, "L1", f"목록 {len(items)}항목 (상한 {MAX_LIST_ITEMS})"))

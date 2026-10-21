@@ -5,7 +5,7 @@
  *
  * 이 모듈이 룰의 단일 출처다. `scripts/gh-issue.sh` 가 생성 전에 부르고, 다른 트래커 어댑터도
  * 같은 모듈을 불러 쓴다 (`what-guard-rules.mjs` 와 같은 꼴). 룰이 호출부마다 복제되면 같은 본문이
- * 경로에 따라 통과·차단으로 갈린다.
+ * 경로에 따라 통과·차단으로 달라진다.
  *
  * 분담: 이 모듈은 구조(절 제목 · 불릿 수 · 기존 기록 줄 · 줄글)만 본다. 어휘(대외비 · 구현 세부)는
  * 훅의 대외비 가드 · What 가드가, 나머지(ISS2 제목 등)는 lint 가 본다.
@@ -19,7 +19,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 // 문장 종결. config/style-rules/metrics/readability_count.py 의 SENT 와 같은 식이다.
-// final-check.sh 가 쓰는 카운터와 정의가 갈리면 같은 본문이 어댑터 통과 · 카운터 검출로 나뉜다.
+// final-check.sh 가 쓰는 카운터와 정의가 달라지면 같은 본문이 어댑터 통과 · 카운터 검출로 나뉜다.
 export const SENT = /(?:다|요)\.(?=\s|$)|[.!?](?=\s|$)/g;
 
 const BULLET = /^\s*(?:[-*]|\d+\.)\s+/;
@@ -29,7 +29,7 @@ const TABLE = /^\s*\|/;
 const RECORD_LINE = /^(?:[-*]|\d+\.)\s+(?:\*\*)?기존 기록(?:\*\*)?\s*[:：]/;
 
 export const STRUCTURES = {
-  // 절 제목이 요소명으로 시작하면 존재로 본다. 레포 템플릿은 `## 재현 절차 (ISS1, ISS4)` 처럼 접미가 붙는다.
+  // 절 제목이 요소명으로 시작하면 존재로 본다. 레포 템플릿은 `## 재현 절차 (ISS1, ISS4)` 처럼 접미가 달린다.
   iss1: { sections: ['재현', '환경', '기대', '실제', '영향'] },
   iss5: { sections: ['What', 'Why'], forbidden: ['변경 범위', '구현 방안', '검증 절차'] },
   iss6: { sections: ['측정 조건', '합격 기준', '결과', '발견 사항'] },

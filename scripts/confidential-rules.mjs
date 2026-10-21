@@ -2,7 +2,7 @@
  * 대외비 규칙 로딩 · 저장소 공개 여부 판정 (공유 모듈)
  *
  * pre-tool-use.mjs(커밋·이슈·PR 직전 차단)와 confidential-scan.mjs(레포 전수 스캔)가
- * 같은 규칙과 같은 표면 판정을 써야 한다. 복제하면 두 판정이 갈라지고, 스캐너가
+ * 같은 규칙과 같은 표면 판정을 써야 한다. 복제하면 두 판정이 달라지고, 스캐너가
  * "깨끗함" 을 보고하는데 가드는 막는(또는 그 반대) 상태가 된다.
  *
  * 규칙 소스는 로컬 전용 파일이다. 공개 레포에 조직 특화 용어를 두지 않는다.
@@ -28,13 +28,13 @@ export const WORD_BOUNDARY_AUTO_LEN = 3;
 /**
  * 단어 경계 문자 집합 — 식별자 문자만 포함한다. 한글은 **넣지 않는다.**
  *
- * 한글을 경계 문자로 넣으면 조사가 붙은 정상 등장이 "묻힌 것" 으로 분류된다.
+ * 한글을 경계 문자로 넣으면 조사가 결합된 정상 등장이 "묻힌 것" 으로 분류된다.
  * 한국어는 조사가 명사에 직접 붙으므로(`Foo를`, `Foo에서`) 그 형태가 전부 통과하게 되고,
  * 그건 가드에서 오탐이 아니라 **미탐**이다. 오탐은 작업을 막고, 미탐은 대외비를 내보낸다.
  * 두 오류의 비용이 다르므로 경계 판정은 차단 쪽으로 닫는다.
  *
  * 대신 한글만으로 된 키워드에는 경계 판정이 사실상 무력하다(앞뒤가 늘 비경계 문자).
- * 그런 키워드의 오탐은 경계 옵션이 아니라 목록에서 빼는 쪽으로 다룬다.
+ * 그런 키워드의 오탐은 경계 옵션이 아니라 목록에서 제외하는 쪽으로 다룬다.
  */
 const WORD_CHAR = /[0-9A-Za-z_]/;
 
@@ -46,7 +46,7 @@ const WORD_CHAR = /[0-9A-Za-z_]/;
  *   { value: "abc", ignoreCase: true }       → 표기형 무시
  *
  * ignoreCase 를 켜면 대소문자 표기형을 따로 등록할 필요가 없다. 표기형마다 항목을
- * 넣는 방식은 세 번째 표기형이 생기면 빠져나간다.
+ * 넣는 방식은 세 번째 표기형이 생기면 누락된다.
  */
 export function normalizeKeywords(value) {
   if (!Array.isArray(value)) return [];
@@ -189,7 +189,7 @@ export function isEmptyConfig(cfg) {
     && cfg.personalDevOnly.patterns.length === 0;
 }
 
-// git 리모트 URL 에서 host 와 owner/repo 를 뽑는다.
+// git 리모트 URL 에서 host 와 owner/repo 를 추출한다.
 // scp 형태(git@host:owner/repo)와 URL 형태 양쪽을 받는다.
 export function parseRemote(url) {
   const scp = url.match(/^[^@/]+@([^:/]+):(.+?)(?:\.git)?\/?$/);
@@ -207,7 +207,7 @@ export function parseRemote(url) {
 
 // 공개 여부 조회 결과를 레포 단위로 캐시한다.
 //
-// 조회는 `gh repo view` 네트워크 왕복이라 수백 ms 가 붙는다. 훅은 매 Bash 호출마다
+// 조회는 `gh repo view` 네트워크 왕복이라 수백 ms 가 추가된다. 훅은 매 Bash 호출마다
 // 돌지만 조회는 커밋·이슈·PR·릴리즈에만, 그리고 레포당 최초 1회만 일어난다.
 //
 // 캐시 파일은 저장소 단위 예외를 표현하는 수단도 된다. 조회가 안 되는 환경에서는
