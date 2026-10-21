@@ -214,7 +214,7 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-forbidden-words.py
   ```
-- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재된다.
+- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재되고, 정답률 집계가 무너지면 익히지 않은 항목이 제거 후보로 나온다.
   ```bash
   python3 scripts/selftest-terms.py
   ```
