@@ -41,6 +41,7 @@ claude plugin update ops-agent@ops-agent
 | PreToolUse | 어댑터(`scripts/gh-issue.sh`)를 거치지 않은 이슈 생성 (`gh issue create` · `gh api …/issues`) | **실행 전 차단** |
 | PreToolUse | 머지·릴리즈·force push·클러스터 변경·리소스 삭제 | **사용자가 세션 허용을 켤 때까지 차단** |
 | PreToolUse | 기본 브랜치 직접 push, `reset --hard`·`clean -f`·`branch -D`·`restore` | **사용자가 세션 허용을 켤 때까지 차단** |
+| PreToolUse | 커밋·push·PR 생성 직전, 그 세션이 플로우 가이드를 읽었는지 | 기록만 (`metrics/flow-entry.jsonl`) |
 | PostToolUse | 문서 편집 후 표현·구조 위반 위치와 수치 | 알림 (마커 파일 있을 때만) |
 | PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU6) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
 | UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`) |

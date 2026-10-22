@@ -138,6 +138,17 @@ hook 이 내보내는 검출은 두 종류입니다.
 
 `pre-tool-use.mjs` 가 `gh pr merge` 를 잡으면 `scripts/final-check.sh` 가 남긴 통과 기록을 로컬에서 확인해, 없거나 head 가 어긋나면 막습니다. 점검 항목과 통과 기록 형식은 [action-gate.md](action-gate.md) 「최종 점검 통과 기록」에 있고, 비활성은 `OPS_AGENT_FINAL_CHECK_DISABLE=1` 입니다.
 
+## 플로우 진입 지표
+
+`pre-tool-use.mjs` 가 커밋 · push · PR 생성 명령을 잡으면, 그 세션 대화 기록에서 플로우 가이드를 읽은 흔적을 찾아 `~/.claude/ops-agent/metrics/flow-entry.jsonl` 에 한 줄 남깁니다. 막지 않습니다. 시범 적용의 지표로 `flow`(loaded · missed · unknown)를 집계합니다 (#769).
+
+| 항목 | 값 |
+|------|-----|
+| 흔적 | 가이드 파일 읽기, 가이드를 연 셸 명령, flow 스킬 호출. 트리거 표에 든 경로 문자열은 흔적이 아니다. |
+| 비용 | 세션마다 읽은 위치를 `.cache/flow-entry/` 에 두고 이어 읽는다. 예산이 모자라면 unknown 으로 남긴다. |
+| 자체 점검 | `node scripts/selftest-flow-entry.mjs` |
+| 비활성 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
+
 ## 훅 실행 예산
 
 훅이 하네스 타임아웃에 잘리면 그 호출의 검사는 성립하지 않는다. 잘렸다는 사실도 남지 않아, 가드가 걸려야 할 자리에서 조용히 빠진다.
