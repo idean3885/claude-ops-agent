@@ -35,8 +35,10 @@
  * 비활성: OPS_AGENT_CONFIDENTIAL_DISABLE=1 설정 시 가드 전체 스킵
  */
 import { execSync } from 'child_process';
-import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'fs';
-import { join, dirname } from 'path';
+import {
+  readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync, writeFileSync, openSync, readSync, closeSync, statSync,
+} from 'fs';
+import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
@@ -124,6 +126,20 @@ const REPO_TYPE_DENY_EDIT = '[ops-agent 레포 유형 · 차단] 유형 선언�
 
 // 최종 점검 통과 기록 (#612). 게이트 플래그와 독립이다. 게이트가 열려 있어도 통과 기록은 따로 본다.
 const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
+
+// 플로우 진입 지표 (#769). 막지 않고 세기만 한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
+const FLOW_ENTRY_DISABLE = process.env.OPS_AGENT_FLOW_ENTRY_DISABLE === '1';
+// 훅 본문이 모듈 위쪽에서 돌아 판정 상수도 여기 있어야 한다. 아래로 내리면 초기화 전 접근으로 가드 전체가 내부 오류가 된다.
+// 흔적은 도구 입력 필드에 든 가이드 경로(파일 읽기 · 셸 명령)와 flow 스킬 호출이다.
+// 세션 시작에 주입되는 트리거 표에도 가이드 경로가 문자열로 있어서, 경로만 찾으면 전부 읽음이 된다.
+// 값은 JSON 문자열이라 명령 안의 따옴표가 \" 로 들어 있다. 이스케이프를 건너뛰며 같은 값 안에서만 찾는다.
+const FLOW_ENTRY_RE = /"(?:file_path|command)":"(?:[^"\\]|\\.)*skills\/flow\/(?:SKILL\.md|guides\/)|"skill":"(?:ops-agent:)?flow"/;
+const FLOW_ACTION_RES = [
+  ['commit', /^(?:\S*\/)?git(?:\s+-C\s+\S+)*\s+commit\b/],
+  ['push', /^(?:\S*\/)?git(?:\s+-C\s+\S+)*\s+push\b/],
+  ['pr', /^(?:\S*\/)?gh\s+pr\s+create\b/],
+];
+const FLOW_SCAN_CHUNK = 4 << 20;
 const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
 // `gh pr merge` 가 값을 취하는 플래그. 값이 PR 번호 자리로 읽히지 않게 먼저 걷어낸다.
 const MERGE_VALUE_FLAG = /(?:^|\s)(?:-[btFAR]|--(?:body|body-file|subject|match-head-commit|author-email|repo))(?:\s+|=)(?:"[^"]*"|'[^']*'|\S+)/g;
@@ -201,6 +217,7 @@ if (!DISABLE) {
     if ((hookInput.tool_name || '') === 'Bash') {
       const command = (hookInput.tool_input && hookInput.tool_input.command) || '';
       const cwd = hookInput.cwd || process.cwd();
+      recordFlowEntry(command, hookInput, cwd);
       const result = runConfidentialGuard(command, cwd);
       if (result.blocked) {
         const header = DRYRUN ? '[ops-agent 대외비 가드 · 드라이런]' : '[ops-agent 대외비 가드 · 차단]';
@@ -1165,6 +1182,76 @@ function detectRepoActions(command) {
 // final-check.sh 가 통과 시 남기는 통과 기록을 로컬에서만 확인한다. 네트워크 호출은 없다.
 // 통과 기록의 head 와 로컬 추적 브랜치(refs/remotes/origin/<branch>)를 비교하므로, 푸시로 HEAD 가
 // 바뀌면 값이 어긋나 통과 기록이 무효가 된다. 통과 기록이 없거나 어긋나면 사유를 돌려주고, 통과면 null.
+// ─── 플로우 진입 지표 (#769) ───
+// 요청이 조회에서 커밋 · 머지로 넘어갈 때 플로우에 다시 들어가지 않으면 단계 절차가 빠진다.
+// 커밋 · push · PR 생성 직전에, 그 세션 대화 기록에서 플로우 가이드를 읽은 흔적이 있는지 한 줄 남긴다.
+// 막지 않는다. 시범 지표이고 판정은 사람이 한다. 판정 상수는 위쪽 FLOW_ENTRY_DISABLE 옆에 있다.
+function recordFlowEntry(command, hookInput, cwd) {
+  // 대화 기록이 없는 호출(자체 점검 · 수동 실행)은 세지 않는다. 실제 하네스 입력에는 늘 있다.
+  if (FLOW_ENTRY_DISABLE || !hookInput.transcript_path) return;
+  const actions = [];
+  for (const seg of gateSegments(command)) {
+    for (const [name, re] of FLOW_ACTION_RES) {
+      if (re.test(seg) && !actions.includes(name)) actions.push(name);
+    }
+  }
+  if (!actions.length) return;
+  try {
+    const flow = flowGuideLoaded(hookInput.session_id, hookInput.transcript_path);
+    const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'flow-entry.jsonl');
+    mkdirSync(dirname(file), { recursive: true });
+    appendFileSync(file, JSON.stringify({
+      ts: new Date().toISOString(),
+      session: hookInput.session_id || '',
+      actions,
+      flow,
+      repo: basename(extractCwdFromCommand(command, cwd)),
+    }) + '\n');
+  } catch { /* 기록 실패가 가드 판정을 바꾸지 않는다 */ }
+}
+
+// 대화 기록은 수십 MB 까지 자란다. 세션마다 읽은 위치를 캐시에 두고 그 뒤만 읽는다.
+// 한 번 찾으면 그 세션은 끝까지 loaded 다. 예산이 모자라면 판정하지 않고 unknown 을 남긴다.
+function flowGuideLoaded(sessionId, transcriptPath) {
+  if (!sessionId || !existsSync(transcriptPath)) return 'unknown';
+  const cacheFile = join(homedir(), '.claude', 'ops-agent', '.cache', 'flow-entry', `${sessionId}.json`);
+  let state = { offset: 0, loaded: false };
+  try { state = { ...state, ...JSON.parse(readFileSync(cacheFile, 'utf8')) }; } catch { /* 첫 호출 */ }
+  if (state.loaded) return 'loaded';
+
+  let verdict = 'missed';
+  const fd = openSync(transcriptPath, 'r');
+  try {
+    const size = statSync(transcriptPath).size;
+    if (size < state.offset) state.offset = 0; // 기록이 새로 쓰였다
+    let pos = state.offset;
+    while (pos < size) {
+      if (remainingMs() < 300) { verdict = 'unknown'; break; }
+      const len = Math.min(FLOW_SCAN_CHUNK, size - pos);
+      const buf = Buffer.alloc(len);
+      const n = readSync(fd, buf, 0, len, pos);
+      if (n <= 0) break;
+      // 줄 경계까지만 읽은 것으로 친다. 쓰는 중인 마지막 줄은 다음 호출이 다시 읽는다.
+      let end = buf.lastIndexOf(0x0a, n - 1);
+      if (end < 0) {
+        if (pos + n >= size) break;
+        end = n - 1; // 청크보다 긴 줄
+      }
+      const hit = FLOW_ENTRY_RE.test(buf.toString('utf8', 0, end + 1));
+      pos += end + 1;
+      if (hit) { state.loaded = true; verdict = 'loaded'; break; }
+    }
+    state.offset = pos;
+  } finally {
+    closeSync(fd);
+  }
+  try {
+    mkdirSync(dirname(cacheFile), { recursive: true });
+    writeFileSync(cacheFile, JSON.stringify(state));
+  } catch { /* 캐시가 없으면 다음 호출이 처음부터 읽는다 */ }
+  return verdict;
+}
+
 function appendFinalCheckMetric(rec) {
   try {
     const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'final-check.jsonl');
