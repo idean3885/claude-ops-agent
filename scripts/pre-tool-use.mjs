@@ -447,6 +447,8 @@ if (!DISABLE) {
             `  bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" ${prArg} --notes <파일>\n\n` +
             `노트 파일에는 다음 세 절이 있고 각 본문이 비어 있지 않아야 합니다 (「해당 없음」 한 줄은 허용):\n` +
             `  ## 설계 반영\n  ## 서브 에이전트 산출물\n  ## 교정\n` +
+            `그리고 ## 판단 검토 절에 제로베이스 검토 회차를 한 줄씩 적고, 마지막 회차의 차단 지적이 0건이어야 합니다:\n` +
+            `  - 1회: 차단 2건 · 권장 3건 · 사소 1건\n  - 2회: 차단 0건 · 권장 1건 · 사소 1건\n` +
             `푸시로 HEAD 가 바뀌면 통과 기록은 무효가 되므로 다시 실행합니다.\n` +
             `전체 절차: docs/action-gate.md 「최종 점검 통과 기록」 · 해제: OPS_AGENT_FINAL_CHECK_DISABLE=1`;
           process.stdout.write(JSON.stringify({

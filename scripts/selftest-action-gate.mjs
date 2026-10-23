@@ -368,6 +368,39 @@ function guidanceCase(type, wantMerge) {
 guidanceCase('storage', true);
 guidanceCase('work', false);
 guidanceCase('principle', false);
+// 판단 검토 기록 (#772). 제로베이스 검토를 건너뛴 노트를 통과시키지 않는다. 함수만 불러 쓴다(FINAL_CHECK_LIB=1).
+const reviewDir = mkdtempSync(join(tmpdir(), 'final-check-review-'));
+function reviewCase(name, notes, wantPass, reasonHas = '') {
+  const file = join(reviewDir, `${typeCaseCount}.md`);
+  writeFileSync(file, notes);
+  const res = spawnSync('bash', ['-c', 'set -uo pipefail; FINAL_CHECK_LIB=1 . "$1"; judgment_review_failure "$2"', 'selftest', FC, file], { encoding: 'utf8' });
+  const out = (res.stdout || '').trim();
+  const ok = res.status === 0 && (wantPass ? out === '' : out !== '' && out.includes(reasonHas));
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  판단 검토: ${name} — ${out || '통과'}`);
+}
+reviewCase('2회 만에 차단 0건', '## 판단 검토\n\n- 1회: 차단 2건 · 권장 3건 · 사소 1건\n- 2회: 차단 0건 · 권장 1건 · 사소 2건\n', true);
+reviewCase('1회 차단 0건', '## 판단 검토\n- 1회: 차단 0건 · 권장 0건 · 사소 0건\n', true);
+reviewCase('들여쓴 회차 줄', '## 판단 검토\n  - 1회: 차단 0건 · 권장 2건\n', true);
+reviewCase('절 없음', '## 교정\n해당 없음\n', false, '회차 줄');
+reviewCase('해당 없음 한 줄', '## 판단 검토\n해당 없음\n', false, '회차 줄');
+reviewCase('다른 절의 회차 줄', '## 교정\n- 1회: 차단 0건\n\n## 판단 검토\n했다\n', false, '회차 줄');
+reviewCase('마지막 회차 차단 남음', '## 판단 검토\n- 1회: 차단 3건 · 권장 1건\n- 2회: 차단 1건 · 권장 0건\n', false, '0건이 아니면');
+reviewCase('3회 채우고도 차단 남음', '## 판단 검토\n- 1회: 차단 3건\n- 2회: 차단 2건\n- 3회: 차단 1건\n', false, '0건이 아니면');
+reviewCase('차단 건수 없는 옛 형식', '## 판단 검토\n- 1회: 지적 0건\n', false, '차단 건수가 없다');
+reviewCase('회차 상한은 스킬 몫', '## 판단 검토\n- 1회: 차단 3건\n- 2회: 차단 2건\n- 3회: 차단 1건\n- 4회: 차단 0건\n', true);
+reviewCase('회차 건너뜀', '## 판단 검토\n- 1회: 차단 2건\n- 3회: 차단 0건\n', false, '이어지지 않는다');
+reviewCase('첫 어긋난 줄을 가리킨다', '## 판단 검토\n- 2회: 차단 1건\n- 3회: 차단 0건\n', false, '1번째 줄이 2회');
+{
+  // 진입점 배선. 함수만 부르는 위 케이스는 본 경로에서 h 를 부르지 않아도 통과하므로 소스로 확인한다.
+  const src = readFileSync(FC, 'utf8');
+  const ok = src.includes('review_failure=$(judgment_review_failure "$NOTES")') && src.includes('fail h "판단 검토: $review_failure"') && src.includes('fail h "판단 검토: 노트 파일이 없다"');
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  판단 검토: 진입점이 h 를 판정한다 — ${ok ? '배선 있음' : '배선 없음'}`);
+}
+rmSync(reviewDir, { recursive: true, force: true });
 {
   // 실제 진입점. PR 댓글 옵션은 없어졌으므로 거부되고(gh 호출 전 종료), 스크립트에 댓글 게시 호출이 없다.
   const res = spawnSync('bash', [FC, '7', '--notes', '/dev/null', '--no-comment'], { encoding: 'utf8' });
