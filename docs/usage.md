@@ -92,7 +92,7 @@ flowchart LR
 | `/write` | 글 작성·수정 (계획 → 초고 → 퇴고) | "글 작성", "계획", "초고", "퇴고", "지면 활용" |
 | `/lint` | 교정. 규칙과 대조해 위반 위치를 찾는다 (AI 티·가독성·톤·구두점). | "교정", "검증", "가독성 검사", "지면 활용" |
 | `/expert` | 분야 전문가와 설계 토론 · 실무 문의. 전문가가 근거와 노하우로 의견을 내고 개발자가 반박 | "전문가", "기획 검토" |
-| `/zero-base-review` | 맥락 없는 판단 모델 에이전트가 원천과 대조해 지적만 낸다. 0건까지 최대 3회 | "제로베이스 검토", "제로베이스 체크" |
+| `/zero-base-review` | 맥락 없는 판단 모델 에이전트가 원천과 대조해 심각도(차단 · 권장 · 사소)를 붙인 지적만 낸다. 차단 0건까지 최대 3회. 머지 전 최종 점검이 판단 점검으로 호출한다. | "제로베이스 검토", "제로베이스 체크" |
 | `/planning-sync` | 기획 최신화. 기획을 다시 읽어 스냅샷과 지문으로 증분 비교하고, 디프 드래프트에서 설계 · 기능 변경이 나오면 이슈로 올림 (기획은 읽기만) | "기획 최신화", "기획 업데이트 확인" |
 | `/learn` | 세션 교정에서 사실·절차·취향만 골라 승격 ([레슨런 자산화](lessons.md)) | "learn", "레슨런", "레슨 정리", "교훈" |
 | `/re-pitch` | 전달되지 않은 답변을 다시 던진다 (요약이 아니라 재설명) | "무슨 말인지 모르겠다", "안 와닿는다", "다시 설명" |
@@ -140,7 +140,7 @@ flowchart LR
 | `scripts/pre-merge-check.sh` | 머지 전 버전·CHANGELOG 대조 (검출 시 종료 코드 1) | [action-gate.md](action-gate.md) |
 | `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/issue-body-rules.mjs` | 이슈 본문 구조 룰 정본 (ISS1 · ISS5 · ISS6 · ISS7). 어댑터가 부른다. | [action-gate.md](action-gate.md) |
-| `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 자체 점검 (118건) | [action-gate.md](action-gate.md) |
+| `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 · 판단 검토 자체 점검 (131건) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (50건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보 · 누적 알림) | [terms.md](../config/style-rules/base/terms.md) |
