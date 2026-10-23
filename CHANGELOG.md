@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Changed
+* learning-flow 「how 의 자리」에 사람과 AI 의 역할 분담을 how 생략의 근거로 더함 (#777)
+
 ## [9.34.0] - 2026-10-22
 
 ### Added
