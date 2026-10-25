@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Added
+* 이슈 완료 단계의 소요 시간 기록을 provider 가 정의했을 때만 하도록 바꾸고 GitHub provider 에서 걷어냄 (#781)
+
 ## [9.35.0] - 2026-10-25
 
 ### Added

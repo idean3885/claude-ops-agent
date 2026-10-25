@@ -159,11 +159,8 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 3. 작업 결과 정리:
    - 사용자에게 작업 결과 요약 질문
    - provider의 완료 기록 형식에 따라 본문에 "작업 결과" 섹션 추가
-4. 소요 시간 기록:
-   - 시작 일시 ~ 현재 기준으로 실 작업 시간 계산
-   - 점심(1h), 주말/공휴일 제외
-   - 정수 올림, 일별 분배 형식 (예: `소요 시간: 8h (03/17 4h + 03/18 4h)`)
-5. **대외비 가드 (GATE 0)**: 작업 결과 요약·소요 시간 코멘트 포함 모든 추가 텍스트 검증. 사용자 제공 요약이 핵심 방어 지점 (내부 용어 유입 가능성)
+4. 소요 시간 기록: provider 가 `소요 시간 기록 방법` 을 정의했을 때만 그 형식으로 남긴다. 정의가 없으면 건너뛴다
+5. **대외비 가드 (GATE 0)**: 작업 결과 요약을 포함한 모든 추가 텍스트 검증. 사용자 제공 요약이 핵심 방어 지점 (내부 용어 유입 가능성)
 6. provider의 완료 상태 변경 API 실행 (provider의 dedicated API 사용)
 7. 본문 업데이트 (provider의 PUT API, 기존 cc·태그·본문 보존 필수)
 8. 브랜치가 있었으면 정리, 없었으면 스킵
@@ -193,7 +190,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 | 필드 보존 규칙 | `Known Bugs` 섹션 |
 | 브랜치 패턴 | `Branch Pattern` 섹션 |
 | 완료 기록 형식 | `Issue Lifecycle > complete > 결과 기록 형식` |
-| 소요 시간 형식 | `Issue Lifecycle > complete > 소요 시간 기록 방법` |
+| 소요 시간 형식 (정의된 경우) | `Issue Lifecycle > complete > 소요 시간 기록 방법` |
 | 기본 태그/CC | `Extensions` (있으면 적용) |
 | post-action 확장 | `Extensions` (있으면 실행) |
 
