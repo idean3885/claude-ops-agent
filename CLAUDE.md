@@ -209,6 +209,10 @@ main ────────────────●─────
   node scripts/selftest-build-guard.mjs
   node scripts/selftest-flow-entry.mjs
   ```
+- [ ] **`skills/flow/SKILL.md` 상태 표나 `skills/flow/guides/` 의 절 제목을 고쳤으면 자체 점검을 실행한다.** 상태 표가 없는 절을 가리켜도 단계에 들어가기 전까지 신호가 없다.
+  ```bash
+  node scripts/selftest-flow-routes.mjs
+  ```
 - [ ] **`config/style-rules/metrics/tells_count.py` 를 고쳤으면 자체 점검을 실행한다.** 진단 앵커는 탐지가 무너져도 0 을 내며 조용히 통과한다.
   ```bash
   python3 scripts/selftest-tells-count.py

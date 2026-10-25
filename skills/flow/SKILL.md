@@ -91,11 +91,11 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 |---------|----------|------|--------|
 | 1 | PR merged (`gh pr view --json state` → MERGED) | 정리: 브랜치 삭제 + base 전환 | `guides/issue.md` (complete) |
 | 2 | PR 있음, 초안 (`gh pr view --json isDraft` → true) | 작성자 검토 대기. URL 만 전달한다. 리뷰 요청 준비를 요청받으면 단계 표의 「리뷰 요청 준비」(커밋 합치기 · 본문 대조)를 실행하고, 전환 요청을 받으면 준비 완료로 바꾼다 | `guides/pr.md` (초안으로 생성하고 작성자가 먼저 본다) |
-| 3 | PR 있음, 리뷰 변경요청/대기 | 리뷰 대응 | `guides/pr.md` (resolve) |
+| 3 | PR 있음, 리뷰 변경요청/대기 | 리뷰 대응 | `guides/pr.md` (리뷰 대응) |
 | 4 | PR 있음, approved, 미머지 | 머지 전 최종 점검 → 상황 보고 → 사람의 판단 (ADR-0028). 업무 · 사상 유형은 웹 머지 안내로 끝난다. 저장소 유형만 사용자가 머지를 승인했으면 GATE 3 으로 들어간다. | `guides/pr.md` (머지 전 최종 점검과 상황 보고) |
 | 5 | 커밋 있음, PR 없음 | 커밋 리뷰 + 초안 PR 생성 | `guides/commit.md` → `guides/pr.md` |
 | 6 | 브랜치 dirty | 구현 계속 안내 | `guides/implement.md` |
-| 7 | 브랜치 clean, base와 diff 없음 | 구현 시작 | `guides/implement.md` (변경 영역 분류) → 프로젝트별 구현 규칙 |
+| 7 | 브랜치 clean, base와 diff 없음 | 구현 시작 | `guides/implement.md` (변경 영역을 먼저 나눈다) → 프로젝트별 구현 규칙 |
 | 8 | feat/ 브랜치 아님 | 이슈 탐색/생성 + 브랜치 생성 | `guides/issue.md` (start) |
 
 ## 확인 게이트
