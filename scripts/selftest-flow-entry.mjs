@@ -2,8 +2,8 @@
 /**
  * selftest-flow-entry.mjs — 플로우 진입 지표 자체 점검 (#769).
  *
- * `pre-tool-use.mjs` 를 고쳤으면 이것을 돌린다. 지표는 막지 않고 한 줄만 남기므로,
- * 판정이 무너져도 아무 신호가 없다. 특히 트리거 표의 가이드 경로를 읽음으로 오판하면
+ * `pre-tool-use.mjs` 를 고쳤으면 이것을 돌린다. 커밋 · push 는 한 줄만 남기므로 판정이 무너져도
+ * 아무 신호가 없다. PR 생성 차단(#773)도 같은 판정에 기대므로 함께 본다. 특히 트리거 표의 가이드 경로를 읽음으로 오판하면
  * 모든 세션이 loaded 로 남아 시범 판정이 조용히 틀린다.
  *
  * 임시 HOME 에서 훅을 실제로 실행하고 지표 파일을 읽는다. 사용자의 지표 · 캐시를 건드리지 않는다.
@@ -107,6 +107,25 @@ scenario('cd 뒤 git -C 커밋과 push 를 함께 센다', [OTHER], 'cd /tmp && 
   { flow: 'missed', actions: ['commit', 'push'] });
 scenario('대상 밖 명령은 기록하지 않는다', [OTHER], 'git status && git log --oneline -3', null);
 scenario('따옴표 안 문구는 명령이 아니다', [OTHER], "echo 'git commit -m x'", null);
+
+// PR 생성 차단 (#773). 가이드를 읽지 않은 세션의 PR 생성만 막는다. 커밋 · push 와 읽은 세션은 통과한다.
+function denyCase(name, lines, command, wantDeny) {
+  const home = mkdtempSync(join(tmpdir(), 'flow-entry-'));
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, lines.map(l => l + '\n').join(''));
+    const res = runHook(home, transcript, command, `d${++seq}`);
+    const denied = /"permissionDecision":"deny"/.test(res.stdout || '') && /플로우 진입 · 차단/.test(res.stdout || '');
+    check(name, denied === wantDeny, (res.stdout || '').slice(0, 160));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+const PR = 'gh pr create --base main --title x --body-file b.md';
+denyCase('가이드를 읽지 않은 PR 생성은 막는다', [SESSION_START, OTHER], PR, true);
+denyCase('푸시와 함께 온 PR 생성도 막는다', [OTHER], 'git push -u origin feat/1 && ' + PR, true);
+denyCase('가이드를 읽은 세션의 PR 생성은 통과', [SESSION_START, READ_GUIDE], PR, false);
+denyCase('읽지 않아도 커밋 · push 는 막지 않는다', [OTHER], 'git commit -m x && git push', false);
 
 // 대화 기록이 없는 호출은 세지 않는다. 다른 자체 점검이 사용자 지표에 기록을 남기지 않게 하는 조건이다.
 {
