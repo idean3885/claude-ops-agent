@@ -98,7 +98,7 @@ flowchart LR
 | `/re-pitch` | 전달되지 않은 답변을 다시 던진다 (요약이 아니라 재설명) | "무슨 말인지 모르겠다", "안 와닿는다", "다시 설명" |
 | `/infra-lab` | 클라우드 구성을 만들고 부하를 올려 한계를 관측한 뒤 철거 | "부하 테스트", "인프라 검토", "인프라 설계", "샌드박스" |
 | `/cluster-check` | 살아 있는 클러스터를 조회해 판정하고 보고 (읽기만) | "클러스터 점검", "쿠베 체크", "파드 상태", "장애 조사" |
-| `/transcribe` | 녹음 파일에서 대화록 원문(`.vtt` · `.txt`)과 화자 턴(`.speakers.txt`) 추출. 해석·요약은 소비 프로젝트 | "녹음", "대화록", "녹취", "받아쓰기" |
+| `/transcribe` | 녹음 파일에서 대화록 원문(`.vtt` · `.txt` · `.speakers.txt`)을 추출하고 대응표로 교정한 정리본(`.md`)까지 만든다. 요약 · 해석은 소비 프로젝트 | "녹음", "대화록", "녹취", "받아쓰기" |
 | `/bootstrap` | 스킬이 선언한 외부 의존을 모아 상태 보고. 설치 명령은 건네고 실행은 사용자 | "부트스트랩", "의존 확인", "옵스 업데이트", "플러그인 설치" |
 
 개인 용도로만 쓰는 스킬과 스크립트는 [personal-scope.md](personal-scope.md) 에 따로 적었습니다.
@@ -145,6 +145,7 @@ flowchart LR
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보 · 누적 알림) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |
+| `scripts/selftest-transcribe-cleanup.py` | transcribe 교정(대응표 치환 · 원문 보존 · 덮어쓰기 거부) 자체 점검 | [transcribe](../skills/transcribe/SKILL.md) |
 | `scripts/resolve-manifest.mjs` | 소유자 식별과 org·repo 매니페스트 발견 | [conventions-slot.md](conventions-slot.md) |
 | `config/style-rules/metrics/tells_count.py` | AI 티 지표 측정 | [지표 정의](../config/style-rules/metrics/metrics-spec.md) |
 | `config/style-rules/metrics/length_stats.py` | 유형별 분량 기준값(행) 측정 | [분량 SSOT](../config/style-rules/base/length.md) |

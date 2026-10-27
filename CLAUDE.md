@@ -225,6 +225,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-terms.py
   ```
+- [ ] **`skills/transcribe/cleanup.py` 를 고쳤으면 자체 점검을 실행한다.** 교정은 한 번에 끝내므로 치환이 무너지면 틀린 정리본이 그대로 굳는다.
+  ```bash
+  python3 scripts/selftest-transcribe-cleanup.py
+  ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인
 
