@@ -140,14 +140,16 @@ hook 이 내보내는 검출은 두 종류입니다.
 
 ## 플로우 진입 지표
 
-`pre-tool-use.mjs` 가 커밋 · push · PR 생성 명령을 잡으면, 그 세션 대화 기록에서 플로우 가이드를 읽은 흔적을 찾아 `~/.claude/ops-agent/metrics/flow-entry.jsonl` 에 한 줄 남깁니다. 막지 않습니다. 시범 적용의 지표로 `flow`(loaded · missed · unknown)를 집계합니다 (#769).
+`pre-tool-use.mjs` 가 커밋 · push · PR 생성 명령을 잡으면, 그 세션 대화 기록에서 플로우 가이드를 읽은 흔적을 찾아 `~/.claude/ops-agent/metrics/flow-entry.jsonl` 에 한 줄 남깁니다. `flow`(loaded · missed · unknown)를 집계합니다 (#769).
+
+가이드를 읽지 않은(missed) 세션의 PR 생성은 막습니다. PR 은 공유 표면에 알림이 나가 되돌릴 수 없고, 사용자가 잡은 초안 생략 두 건이 모두 이 상태의 PR 생성이었습니다 (#773). 커밋 · push 는 되돌릴 수 있어 기록만 하고, 판정하지 못한 경우(unknown)는 막지 않습니다. 가이드를 읽으면 그 세션은 끝까지 통과합니다.
 
 | 항목 | 값 |
 |------|-----|
 | 흔적 | 가이드 파일 읽기, 가이드를 연 셸 명령, flow 스킬 호출. 트리거 표에 든 경로 문자열은 흔적이 아니다. |
 | 비용 | 세션마다 읽은 위치를 `.cache/flow-entry/` 에 두고 이어 읽는다. 예산이 모자라면 unknown 으로 남긴다. |
 | 자체 점검 | `node scripts/selftest-flow-entry.mjs` |
-| 비활성 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
+| 비활성 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` (기록과 차단 모두) |
 
 ## 훅 실행 예산
 

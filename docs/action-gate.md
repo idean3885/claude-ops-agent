@@ -1,6 +1,6 @@
 # 차단 규칙 레퍼런스
 
-`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 다섯 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
+`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 여섯 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
 
 이 hook 은 판정만 합니다. 세션 컨텍스트 주입은 `scripts/session-start.mjs` 가 맡습니다.
 
@@ -11,6 +11,7 @@
 | 이슈 생성 가드 | 어댑터를 거치지 않은 `gh issue create` · `gh api …/issues` 생성 | 어댑터(`scripts/gh-issue.sh create`)로 호출 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
 | 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
+| 플로우 진입 | 플로우 가이드를 읽지 않은 세션의 `gh pr create` | 가이드를 읽습니다. 상세는 [hooks-config.md](hooks-config.md) 「플로우 진입 지표」 |
 
 ---
 
@@ -362,5 +363,6 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 이슈 생성 가드 | `OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1` | `OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
+| 플로우 진입 | 없음 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.

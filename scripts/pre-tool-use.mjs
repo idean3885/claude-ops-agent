@@ -29,6 +29,8 @@
  * 4. 최종 점검 통과 기록 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
  *    통과 기록이 있어야 통과한다. 판정은 로컬만이다. 통과 기록 head 와 origin 추적 브랜치를 비교한다.
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
+ * 5. 플로우 진입 (#769 · #773): 커밋 · push · PR 생성 직전에 그 세션의 플로우 가이드 읽음 여부를 기록하고,
+ *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
@@ -127,7 +129,8 @@ const REPO_TYPE_DENY_EDIT = '[ops-agent 레포 유형 · 차단] 유형 선언�
 // 최종 점검 통과 기록 (#612). 게이트 플래그와 독립이다. 게이트가 열려 있어도 통과 기록은 따로 본다.
 const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
 
-// 플로우 진입 지표 (#769). 막지 않고 세기만 한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
+// 플로우 진입 지표 (#769). 커밋 · push 는 세기만 하고, 가이드를 읽지 않은 세션의 PR 생성은 막는다 (#773).
+// 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1 (기록과 차단 모두).
 const FLOW_ENTRY_DISABLE = process.env.OPS_AGENT_FLOW_ENTRY_DISABLE === '1';
 // 훅 본문이 모듈 위쪽에서 돌아 판정 상수도 여기 있어야 한다. 아래로 내리면 초기화 전 접근으로 가드 전체가 내부 오류가 된다.
 // 흔적은 도구 입력 필드에 든 가이드 경로(파일 읽기 · 셸 명령)와 flow 스킬 호출이다.
@@ -140,6 +143,10 @@ const FLOW_ACTION_RES = [
   ['pr', /^(?:\S*\/)?gh\s+pr\s+create\b/],
 ];
 const FLOW_SCAN_CHUNK = 4 << 20;
+const FLOW_PR_DENY = '[ops-agent 플로우 진입 · 차단] 이 세션은 플로우 가이드를 읽지 않고 PR 을 만듭니다 (#773).\n'
+  + 'PR 생성의 초안 · 본문 · 리뷰 요청 순서는 가이드에 있습니다. 먼저 읽고 가이드 절차(초안 생성)대로 다시 만듭니다:\n'
+  + '  ~/.claude/ops-agent/current/skills/flow/guides/pr.md\n'
+  + '읽으면 이 세션은 끝까지 통과합니다. 비활성: OPS_AGENT_FLOW_ENTRY_DISABLE=1';
 const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
 // `gh pr merge` 가 값을 취하는 플래그. 값이 PR 번호 자리로 읽히지 않게 먼저 걷어낸다.
 const MERGE_VALUE_FLAG = /(?:^|\s)(?:-[btFAR]|--(?:body|body-file|subject|match-head-commit|author-email|repo))(?:\s+|=)(?:"[^"]*"|'[^']*'|\S+)/g;
@@ -217,7 +224,15 @@ if (!DISABLE) {
     if ((hookInput.tool_name || '') === 'Bash') {
       const command = (hookInput.tool_input && hookInput.tool_input.command) || '';
       const cwd = hookInput.cwd || process.cwd();
-      recordFlowEntry(command, hookInput, cwd);
+      const flowEntry = recordFlowEntry(command, hookInput, cwd);
+      // PR 생성은 공유 표면에 알림이 나가 되돌릴 수 없다. 가이드(초안 생성 · 본문 규칙)를 읽지 않은 세션이면 막는다.
+      // 판정하지 못한 경우(unknown)는 막지 않는다. 커밋 · push 는 되돌릴 수 있어 세기만 한다 (#773).
+      if (flowEntry && flowEntry.flow === 'missed' && flowEntry.actions.includes('pr')) {
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: FLOW_PR_DENY },
+        }));
+        process.exit(0);
+      }
       const result = runConfidentialGuard(command, cwd);
       if (result.blocked) {
         const header = DRYRUN ? '[ops-agent 대외비 가드 · 드라이런]' : '[ops-agent 대외비 가드 · 차단]';
@@ -1187,19 +1202,20 @@ function detectRepoActions(command) {
 // ─── 플로우 진입 지표 (#769) ───
 // 요청이 조회에서 커밋 · 머지로 넘어갈 때 플로우에 다시 들어가지 않으면 단계 절차가 빠진다.
 // 커밋 · push · PR 생성 직전에, 그 세션 대화 기록에서 플로우 가이드를 읽은 흔적이 있는지 한 줄 남긴다.
-// 막지 않는다. 시범 지표이고 판정은 사람이 한다. 판정 상수는 위쪽 FLOW_ENTRY_DISABLE 옆에 있다.
+// 판정 { actions, flow } 를 돌려준다. 차단 여부는 호출부가 정한다. 판정 상수는 위쪽 FLOW_ENTRY_DISABLE 옆에 있다.
 function recordFlowEntry(command, hookInput, cwd) {
   // 대화 기록이 없는 호출(자체 점검 · 수동 실행)은 세지 않는다. 실제 하네스 입력에는 늘 있다.
-  if (FLOW_ENTRY_DISABLE || !hookInput.transcript_path) return;
+  if (FLOW_ENTRY_DISABLE || !hookInput.transcript_path) return null;
   const actions = [];
   for (const seg of gateSegments(command)) {
     for (const [name, re] of FLOW_ACTION_RES) {
       if (re.test(seg) && !actions.includes(name)) actions.push(name);
     }
   }
-  if (!actions.length) return;
+  if (!actions.length) return null;
+  let flow = 'unknown';
   try {
-    const flow = flowGuideLoaded(hookInput.session_id, hookInput.transcript_path);
+    flow = flowGuideLoaded(hookInput.session_id, hookInput.transcript_path);
     const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'flow-entry.jsonl');
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(file, JSON.stringify({
@@ -1210,6 +1226,7 @@ function recordFlowEntry(command, hookInput, cwd) {
       repo: basename(extractCwdFromCommand(command, cwd)),
     }) + '\n');
   } catch { /* 기록 실패가 가드 판정을 바꾸지 않는다 */ }
+  return { actions, flow };
 }
 
 // 대화 기록은 수십 MB 까지 자란다. 세션마다 읽은 위치를 캐시에 두고 그 뒤만 읽는다.
