@@ -240,7 +240,7 @@ node scripts/selftest-action-gate.mjs
 
 훅 판정 23건 · 개방 안내 9건 · 최종 점검 끝 안내 4건 · 주장 검증 18건 · 이슈 생성 가드 19건을 포함해 136건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 실행합니다. 동거 검사는 게이트가 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다. 이슈 생성 가드 케이스는 대외비 키워드 · 사내 호스트를 임시 설정(`OPS_AGENT_CONFIDENTIAL_CONFIG_PATH`)으로 주입해 사용자 로컬 설정에 기대지 않습니다.
 
-어댑터 자체(본문 구조 · 계약 · 시작 체인)는 `node scripts/selftest-issue-adapter.mjs` 가 50건을 봅니다. 가짜 `gh` · `git` 을 PATH 앞에 두고 호출 기록으로 판정하며 네트워크를 쓰지 않습니다.
+어댑터 자체(본문 구조 · 계약 · 시작 체인)는 `node scripts/selftest-issue-adapter.mjs` 가 54건을 봅니다. 가짜 `gh` · `git` 을 PATH 앞에 두고 호출 기록으로 판정하며 네트워크를 쓰지 않습니다.
 
 통과 기록 판정은 임시 HOME 과 임시 레포의 origin 추적 브랜치로 6건을 봅니다(없음 · 일치 · head 불일치 · 다른 PR · 브랜치명 · 값 플래그). 동거 검사 케이스는 통과 기록 검사를 끄고(`OPS_AGENT_FINAL_CHECK_DISABLE=1`) 실행합니다.
 

@@ -74,6 +74,7 @@ case "$1 $2" in
   "issue view") printf '%s\\n' $FAKE_ISSUE_LABELS;;
   "issue edit") [ "$FAKE_GH_FAIL" = edit ] && exit 1; exit 0;;
   "issue comment") [ "$FAKE_GH_FAIL" = comment ] && exit 1; exit 0;;
+  "issue develop") [ "$FAKE_GH_FAIL" = develop ] && exit 1; exit 0;;
   *) exit 0;;
 esac
 `);
@@ -136,19 +137,24 @@ adapterCase('-R 이 라벨 · 생성 명령에 전달된다', [...CREATE, '-R', 
 adapterCase('--start 는 담당자 · 시작 코멘트', [...CREATE, '--start'], 0, { logHas: ['gh issue edit 42 --add-assignee @me', 'gh issue comment 42 --body 작업 시작: '], logNot: ['git '], json: { start: 'started', number: '42', type: 'feat' } });
 adapterCase('생성 실패는 종료 2', [...CREATE, '--start'], 2, { env: { FAKE_GH_FAIL: 'create' }, json: { status: 'error' } });
 adapterCase('생성 뒤 시작 실패는 종료 3 + 번호', [...CREATE, '--start'], 3, { env: { FAKE_GH_FAIL: 'comment' }, json: { status: 'error', number: '42', start: 'failed', step: 'start' } });
-adapterCase('--worktree 는 fetch 뒤 워크트리 분기', [...CREATE, '--start', '--worktree'], 0, { logHas: ['git fetch origin', 'git worktree add ../proj-feat-42 -b feat/42 origin/main'], json: { branch: 'feat/42', worktree: '../proj-feat-42' } });
-adapterCase('--checkout 은 직접 체크아웃', [...CREATE, '--start', '--checkout', '--base', 'develop'], 0, { logHas: ['git fetch origin', 'git checkout -b feat/42 origin/develop'], logNot: ['worktree add'], json: { branch: 'feat/42' } });
-adapterCase('--branch 가 기본 이름을 덮는다', [...CREATE, '--start', '--worktree', '--branch', 'feature/42'], 0, { logHas: ['-b feature/42 origin/main'] });
+adapterCase('--worktree 는 이슈 연결 브랜치를 만들고 그 브랜치로 워크트리', [...CREATE, '--start', '--worktree'], 0, { logHas: ['gh issue develop 42 --name feat/42 --base main', 'git fetch origin', 'git worktree add ../proj-feat-42 -b feat/42 --track origin/feat/42'], json: { branch: 'feat/42', worktree: '../proj-feat-42' } });
+adapterCase('--checkout 은 이슈 연결 브랜치로 직접 체크아웃', [...CREATE, '--start', '--checkout', '--base', 'develop'], 0, { logHas: ['gh issue develop 42 --name feat/42 --base develop', 'git fetch origin', 'git checkout -b feat/42 --track origin/feat/42'], logNot: ['worktree add'], json: { branch: 'feat/42' } });
+adapterCase('--branch 가 기본 이름을 덮는다', [...CREATE, '--start', '--worktree', '--branch', 'feature/42'], 0, { logHas: ['--name feature/42 --base main', '-b feature/42 --track origin/feature/42'] });
+adapterCase('이슈 연결 브랜치 생성 실패는 종료 3 (생성 뒤)', [...CREATE, '--start', '--worktree'], 3, { env: { FAKE_GH_FAIL: 'develop' }, logNot: ['worktree add'], json: { start: 'failed' } });
+adapterCase('start: -R 이 이슈 연결 브랜치 생성에 전달된다', ['start', '42', '--type', 'docs', '-R', 'o/r', '--worktree'], 0, { logHas: ['gh issue develop 42 -R o/r --name docs/42'] });
+adapterCase('브랜치 없는 시작은 이슈 연결 브랜치를 만들지 않는다', [...CREATE, '--start'], 0, { logNot: ['issue develop'] });
 adapterCase('fetch 순서: worktree add 앞', [...CREATE, '--start', '--worktree'], 0);
 {
   const r = run([...CREATE, '--start', '--worktree']);
   const ok = r.log.indexOf('git fetch origin') >= 0 && r.log.indexOf('git fetch origin') < r.log.indexOf('git worktree add');
   report(ok, '어댑터', 'fetch 가 worktree add 앞에 온다');
+  const dev = r.log.indexOf('gh issue develop');
+  report(dev >= 0 && dev < r.log.indexOf('git fetch origin'), '어댑터', '이슈 연결 브랜치를 만든 뒤 fetch 한다');
 }
 adapterCase('git 실패는 종료 3 (생성 뒤)', [...CREATE, '--start', '--worktree'], 3, { env: { FAKE_GIT_FAIL: '1' }, json: { start: 'failed' } });
 adapterCase('--worktree 는 --start 와 함께만', [...CREATE, '--no-start', 'x', '--worktree'], 1, { logNot: ['gh issue create'] });
 // start 단독
-adapterCase('start: 타입 라벨에서 읽는다', ['start', '42', '--worktree'], 0, { env: { FAKE_ISSUE_LABELS: 'fix priority/high' }, logHas: ['-b fix/42 origin/main'], json: { type: 'fix' } });
+adapterCase('start: 타입 라벨에서 읽는다', ['start', '42', '--worktree'], 0, { env: { FAKE_ISSUE_LABELS: 'fix priority/high' }, logHas: ['--name fix/42 --base main', '-b fix/42 --track origin/fix/42'], json: { type: 'fix' } });
 adapterCase('start: 타입 라벨 둘 이상은 거부', ['start', '42'], 1, { env: { FAKE_ISSUE_LABELS: 'fix feat' }, logNot: ['issue edit'] });
 adapterCase('start: 타입 라벨 없음은 거부', ['start', '42'], 1, { env: { FAKE_ISSUE_LABELS: 'priority/high' }, logNot: ['issue edit'] });
 adapterCase('start: --type 명시는 라벨을 읽지 않는다', ['start', '42', '--type', 'docs'], 0, { logNot: ['issue view'], json: { type: 'docs' } });

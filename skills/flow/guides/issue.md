@@ -145,8 +145,9 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
    - **Yes**: 브랜치명·베이스를 확정하기 전에 [레슨런 인덱스 대조](#대조-판단-지점마다) 를 수행하고 `대조 N건 / 걸림 M건` 을 적는다. 그다음 provider의 브랜치 패턴과 리모트 머지 이력에 남은 접두를 대조해 브랜치명을 정한다. 접두가 provider 패턴과 다르면 어댑터에 `--branch` 로 넘긴다.
      - 워크트리 (권장): `--worktree`. 현재 브랜치에 고유 커밋이 있으면 워크트리로 한다 ([이슈 불일치 감지](../SKILL.md#이슈-불일치-감지)).
      - 직접 체크아웃: `--checkout`
+     - **PR 이 여럿인 이슈**: 어댑터의 브랜치는 이슈에 연결되고, 연결된 PR 이 머지되면 이슈가 닫힌다. 그래서 「이 이슈를 PR 몇 개로 나누는가」를 먼저 정한다. 여럿이면 브랜치 인자 없이 시작하고, 앞 PR 의 브랜치는 직접 분기해 본문에 `Refs #{번호}` 를 단다. 마지막 PR 의 브랜치만 `gh issue develop {번호} --name {브랜치} --base {base}` 로 만들고, `git fetch origin` 뒤 `--track origin/{브랜치}` 로 연다. 어댑터를 다시 부르면 담당자 · 시작 기록이 중복된다.
    - **No**: 브랜치 인자 없이
-6. **어댑터로 시작**: provider 의 시작 어댑터 한 호출 (github: `scripts/gh-issue.sh start <번호> [--worktree|--checkout] [--base <브랜치>] [--branch <이름>]`). 어댑터가 상태 전환 · 담당자 · 시작 일시 기록 · (코드 작업이면) `git fetch origin` 뒤 `origin/{base}` 분기를 이어서 한다. 시작 일시 텍스트는 어댑터가 만들고 대외비 가드(GATE 0)는 어댑터 호출에 적용된다.
+6. **어댑터로 시작**: provider 의 시작 어댑터 한 호출 (github: `scripts/gh-issue.sh start <번호> [--worktree|--checkout] [--base <브랜치>] [--branch <이름>]`). 어댑터가 상태 전환 · 담당자 · 시작 일시 기록 · (코드 작업이면) 이슈 연결 브랜치를 원격에 만들고(github: `gh issue develop`) `git fetch origin` 뒤 그 브랜치를 여는 일을 이어서 한다. 시작 일시 텍스트는 어댑터가 만들고 대외비 가드(GATE 0)는 어댑터 호출에 적용된다.
 7. **Extensions 실행**: provider에 post-start Extensions이 정의되어 있으면 실행
 
 ### `/issue complete`
