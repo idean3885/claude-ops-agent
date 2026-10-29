@@ -88,7 +88,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 ## 워크트리 분기
 
 분기 판단:
-- 같은 이슈의 단일 PR → 일반 브랜치
+- 이슈 작업 → 워크트리가 기본. 단일 PR · 단일 레포여도 같다. 직접 체크아웃은 사용자가 지시할 때만 한다.
 - 같은 레포의 여러 PR 병렬 검토 → `scripts/worktree-create.sh`
 - 단발 isolation (실험·임시 빌드) → `Agent` 도구 isolation
 
