@@ -49,6 +49,7 @@
 - 설계 문서 (Markdown)
 - 다이어그램 (Mermaid 임베딩, 상세 시 PlantUML + SVG)
 - 미확인 전제 목록과 PoC 결과 링크 (PoC 대상이 있을 때)
+- 결정 기록 (원천이 모호해 설계 단계에서 정한 것. 자리 · 형식은 [architecture.md](../../../config/style-rules/extensions/architecture.md) AR15)
 - 프로필에 정의된 추가 산출물 (있는 경우)
 
 ## 규칙
