@@ -21,7 +21,9 @@ state 파일 이름의 `org-flow-` 접두는 멀티레포 오케스트레이션�
 
 ## 주의
 
-워크트리를 만든 레포에서 `scripts/worktree-cleanup.sh` 를 돌리면 bare clone 까지 지운다. 다른 워크트리가 그 clone 을 공유하고 있으면 함께 끊긴다. 정리 전에 남은 워크트리를 확인한다.
+워크트리를 만든 레포에서 `scripts/worktree-cleanup.sh` 를 돌리면 bare clone 까지 지운다. 다른 티켓의 워크트리가 그 clone 을 쓰고 있으면 clone 은 남기고 `clone_kept` 로 보고한다.
+
+정리 스크립트가 지키는 것은 넷이다. 커밋하지 않은 변경이 있으면 아무것도 지우지 않고 `dirty` 로 끝난다. 정규 clone(메인 레포)은 지우지 않는다. 다른 티켓이 쓰는 bare clone 도 지우지 않는다. bare clone 이 권한 문제로 남으면 쓰기 권한을 주고 한 번 더 지운 뒤, 그래도 남으면 실패로 보고한다. 점검은 `bash scripts/selftest-worktree-cleanup.sh`.
 
 ```bash
 git worktree list

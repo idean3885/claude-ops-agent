@@ -333,6 +333,8 @@ clone-on-demand: 레포가 없으면 bare clone → 워크트리 생성. vcs.xml
 
 프로젝트별 완료 조건 확인 (빌드, 테스트, 린트 등).
 
+변경이 두 레포 이상에 걸치고 그 사이에 API 가 있으면 계약도 대조한다. 호출하는 쪽과 받는 쪽의 경로 · 요청 필드 · 응답 필드가 같은지 본다. 레포마다의 빌드 · 테스트는 각자 통과해도, 둘 사이의 어긋남은 어느 한쪽 테스트에도 잡히지 않는다.
+
 **Step 2: 각 레포 커밋/초안 PR**
 
 변경 있는 레포마다 해당 레포의 `ops-agent:flow` commit → PR 위임. 커밋 메시지는 기능 변경(What) 기술. PR 은 초안으로 생성한다.
@@ -359,11 +361,11 @@ PR 베이스는 `repos.<repo>.parentBranch` 가 있으면 그것, 없으면 `rep
 
 모든 관련 레포의 PR 머지 확인.
 
-**Step 2: dirty 워크트리 사전 게이트 (권장)**
+**Step 2: dirty 워크트리 사전 게이트 (GATE)**
 
-cleanup 은 `git worktree remove --force` + `shutil.rmtree(ignore_errors=True)` 로 untracked·modified 파일을 무조건 삭제한다. 진입 전 현재 티켓의 워크트리만 대상으로 dirty 검사 권장 (`git status --porcelain` 비어 있어야 PASS).
+cleanup 은 `git worktree remove --force` 와 `rmtree` 로 untracked · modified 파일을 백업 없이 지운다. 그래서 `worktree-cleanup.sh` 가 지우기 전에 현재 티켓의 워크트리를 검사하고, 하나라도 커밋하지 않은 변경이 있으면 아무것도 지우지 않고 `status: dirty` (종료 코드 3)로 끝난다.
 
-dirty 발견 시 finish 호출 금지: 사용자 검토 후 명시적 커밋/푸시 또는 폐기 동의 필요.
+dirty 로 끝나면 파일 목록을 사용자에게 보고하고, 커밋 · 푸시하거나 사용자가 직접 폐기한 뒤 다시 실행한다. 자동 폐기(`git restore` · `git clean` · `--force`)는 하지 않는다. 스크립트에도 그 옵션을 두지 않는다.
 
 **Step 3: ops-agent:flow 위임 (GATE)**
 

@@ -226,6 +226,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-terms.py
   ```
+- [ ] **`scripts/worktree-cleanup.sh` 를 고쳤으면 자체 점검을 실행한다.** 정리는 백업 없이 지우므로 지우지 말아야 할 것을 지우는 결함은 실행 뒤에야 드러난다.
+  ```bash
+  bash scripts/selftest-worktree-cleanup.sh
+  ```
 - [ ] **`skills/transcribe/cleanup.py` 를 고쳤으면 자체 점검을 실행한다.** 교정은 한 번에 끝내므로 치환이 무너지면 틀린 정리본이 그대로 굳는다.
   ```bash
   python3 scripts/selftest-transcribe-cleanup.py
