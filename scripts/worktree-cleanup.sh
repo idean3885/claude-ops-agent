@@ -16,6 +16,7 @@
 #
 # 출력: JSON
 #   기본 모드: {status, removed[], failed[], state_deleted, violations}
+#     커밋하지 않은 변경이 있으면 아무것도 지우지 않고 {status:"dirty", dirty[]} 로 끝난다 (종료 코드 3)
 #   sweep 모드: {status, mode:"sweep-stale", apply, stale_states[], orphan_bare_clones[]}
 
 set -euo pipefail
@@ -123,7 +124,9 @@ for entry in sorted(os.listdir(project_root)):
     wt_paths = [
         line.split(" ", 1)[1]
         for line in r.stdout.splitlines()
-        if line.startswith("worktree ") and line.split(" ", 1)[1] != bare_path
+        if line.startswith("worktree ")
+        # why: git 은 실제 경로를 보고한다. 심볼릭 링크 경로와 그대로 비교하면 bare 자신을 활성 워크트리로 오인한다
+        and os.path.realpath(line.split(" ", 1)[1]) != os.path.realpath(bare_path)
     ]
     if wt_paths:
         continue  # 활성 워크트리 있음
@@ -207,6 +210,7 @@ repos = state["repos"]
 
 removed = []
 failed = []
+kept_clones = set()  # 다른 활성 워크트리가 남아 일부러 지우지 않은 bare clone
 
 
 def is_bare_clone(git_dir):
@@ -232,6 +236,26 @@ def resolve_git_dir(repo_name):
     if os.path.isdir(normal_dir):
         return normal_dir
     return None
+
+
+# 0. 사전 게이트: 지우기 전에 워크트리에 커밋하지 않은 변경이 있는지 본다.
+# why: 아래 단계는 --force 와 rmtree 로 untracked · modified 파일을 백업 없이 지운다.
+#      하나라도 dirty 면 아무것도 지우지 않고 거부한다. 자동 폐기 옵션은 두지 않는다
+dirty = []
+for repo_name, repo_info in repos.items():
+    worktree_abs = os.path.join(project_root, repo_info["worktree"])
+    if not os.path.isdir(worktree_abs):
+        continue
+    r = subprocess.run(["git", "status", "--porcelain"],
+                       cwd=worktree_abs, capture_output=True, text=True)
+    if r.stdout.strip():
+        dirty.append({"repo": repo_name, "worktree": repo_info["worktree"],
+                      "files": r.stdout.strip().splitlines()})
+if dirty:
+    print(json.dumps({"status": "dirty", "ticket": ticket, "dirty": dirty,
+                      "message": "커밋하지 않은 변경이 있어 정리하지 않았다. 커밋 · 푸시하거나 직접 폐기한 뒤 다시 실행한다"},
+                     ensure_ascii=False))
+    sys.exit(0)
 
 
 for repo_name, repo_info in repos.items():
@@ -277,7 +301,10 @@ for repo_name, repo_info in repos.items():
         removed.append({"repo": repo_name, "branch": branch, "status": "no_git_dir"})
 
     # 3. bare clone 정리: 다른 활성 워크트리가 없으면 삭제
-    if git_dir:
+    # why: 정규 clone 은 사용자의 메인 레포라 지우지 않는다. bare 여부는 이름이 아니라 git 으로 확정한다
+    if git_dir and not is_bare_clone(git_dir):
+        removed.append({"repo": repo_name, "git_dir": os.path.basename(git_dir), "status": "main_repo_preserved"})
+    elif git_dir:
         r = subprocess.run(
             ["git", "worktree", "list", "--porcelain"],
             cwd=git_dir, capture_output=True, text=True
@@ -285,11 +312,25 @@ for repo_name, repo_info in repos.items():
         wt_paths = [
             line.split(" ", 1)[1]
             for line in r.stdout.splitlines()
-            if line.startswith("worktree ") and line.split(" ", 1)[1] != git_dir
+            if line.startswith("worktree ")
+            # why: git 은 실제 경로를 보고한다. 심볼릭 링크 경로와 그대로 비교하면 bare 자신을 활성 워크트리로 오인한다
+            and os.path.realpath(line.split(" ", 1)[1]) != os.path.realpath(git_dir)
         ]
         if not wt_paths:
             shutil.rmtree(git_dir, ignore_errors=True)
-            removed.append({"repo": repo_name, "git_dir": os.path.basename(git_dir), "status": "clone_deleted"})
+            # why: ignore_errors 는 권한 · 잠금 실패를 조용히 묻는다. 남았으면 쓰기 권한을 주고 한 번 더 지운다
+            if os.path.exists(git_dir):
+                subprocess.run(["chmod", "-R", "u+w", git_dir], capture_output=True)
+                shutil.rmtree(git_dir, ignore_errors=True)
+            if os.path.exists(git_dir):
+                failed.append({"repo": repo_name, "git_dir": os.path.basename(git_dir),
+                               "error": "bare clone 삭제 실패 (권한 재시도 후에도 남음)"})
+            else:
+                removed.append({"repo": repo_name, "git_dir": os.path.basename(git_dir), "status": "clone_deleted"})
+        else:
+            # 다른 티켓이 같은 bare clone 을 쓰고 있다. 남기는 것이 정상이다
+            kept_clones.add(repo_name)
+            removed.append({"repo": repo_name, "git_dir": os.path.basename(git_dir), "status": "clone_kept"})
 
 # 4. 빈 워크트리 디렉토리 정리 — 현재 티켓이 비운 레포 디렉토리만
 worktree_root = os.path.join(project_root, "worktrees")
@@ -341,7 +382,7 @@ for repo_name, repo_info in repos.items():
     if os.path.exists(worktree_abs):
         violations.append(f"잔존 워크트리: {repo_info['worktree']}")
     bare_path = os.path.join(project_root, f"{repo_name}.git")
-    if os.path.isdir(bare_path):
+    if os.path.isdir(bare_path) and repo_name not in kept_clones:
         violations.append(f"잔존 bare repo: {repo_name}.git")
 
 result = {
@@ -357,4 +398,4 @@ PYEOF
 )
 
 echo "$RESULT"
-echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(1 if d['status']=='error' else 0)"
+echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit({'error':1,'dirty':3}.get(d['status'],0))"
