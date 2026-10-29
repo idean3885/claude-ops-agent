@@ -16,8 +16,10 @@
 #   --structure  본문 구조. 기본값은 fix → iss1, 그 외 → iss5 (extensions/issue.md 「필수 구조」 절)
 #   --start      생성 직후 start 로 담당자 · 시작 코멘트 · (코드 작업이면) 브랜치
 #   --no-start   지금 착수하지 않는 이슈(백로그 · 후속). 사유를 출력에 남긴다
-#   --worktree   `../{프로젝트}-{타입}-{번호}` 워크트리를 `origin/{base}` 에서 분기 (권장)
-#   --checkout   현재 작업 트리에서 `origin/{base}` 로 직접 체크아웃
+#   --worktree   `../{프로젝트}-{타입}-{번호}` 워크트리를 이슈에 연결된 브랜치로 연다 (권장)
+#   --checkout   현재 작업 트리에서 이슈에 연결된 브랜치로 직접 체크아웃
+#                브랜치는 `gh issue develop` 이 `origin/{base}` 에서 원격에 만든다. 이슈에서 만든 브랜치라
+#                그 브랜치의 PR 이 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다 (#813)
 #   --branch     브랜치 이름. 기본 `{타입}/{번호}`. 리모트 머지 이력의 접두가 provider 패턴과 다를 때 넘긴다
 #
 # 종료 코드: 0 성공, 1 인자 · 본문 검사 실패(생성 안 됨), 2 gh · git 오류, 3 생성됐으나 시작 실패
@@ -100,14 +102,17 @@ cmd_start() {
   if [ -n "$MODE" ]; then
     local PROJECT
     PROJECT="$(basename "$(git rev-parse --show-toplevel)")" || err_json 2 "git 레포가 아니다" number="$NUMBER"
+    # why: 로컬에서 만든 브랜치는 이슈와 이어지지 않는다. 이슈에서 만든 브랜치만 PR 이 이슈에 자동 연결된다
+    gh issue develop "$NUMBER" ${R[@]+"${R[@]}"} --name "$BRANCH" --base "$BASE" >/dev/null \
+      || err_json 2 "이슈 연결 브랜치 생성 실패: $BRANCH" number="$NUMBER" branch="$BRANCH"
     git fetch origin >/dev/null 2>&1 || err_json 2 "git fetch origin 실패" number="$NUMBER"
     if [ "$MODE" = worktree ]; then
       local WT="../${PROJECT}-${TYPE}-${NUMBER}"
-      git worktree add "$WT" -b "$BRANCH" "origin/$BASE" >/dev/null \
+      git worktree add "$WT" -b "$BRANCH" --track "origin/$BRANCH" >/dev/null \
         || err_json 2 "git worktree add 실패: $WT" number="$NUMBER" branch="$BRANCH"
       out+=(branch="$BRANCH" worktree="$WT")
     else
-      git checkout -b "$BRANCH" "origin/$BASE" >/dev/null \
+      git checkout -b "$BRANCH" --track "origin/$BRANCH" >/dev/null \
         || err_json 2 "git checkout -b 실패: $BRANCH" number="$NUMBER" branch="$BRANCH"
       out+=(branch="$BRANCH")
     fi

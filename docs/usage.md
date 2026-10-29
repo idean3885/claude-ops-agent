@@ -141,7 +141,7 @@ flowchart LR
 | `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/issue-body-rules.mjs` | 이슈 본문 구조 룰 정본 (ISS1 · ISS5 · ISS6 · ISS7). 어댑터가 부른다. | [action-gate.md](action-gate.md) |
 | `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 · 주장 검증 자체 점검 (136건) | [action-gate.md](action-gate.md) |
-| `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (50건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
+| `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (54건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보 · 누적 알림) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |
