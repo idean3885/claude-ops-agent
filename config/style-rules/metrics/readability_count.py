@@ -8,7 +8,7 @@
   P2 문단 2-4문장 · P4 산문 사이 단문 문단 · P7 산문 5문단 연속
   V2 시각 요소 없이 15-20문장 · L1 목록 3-7항목 · L4 테이블 열 5 이하
   H1 단일 H1 · H2 레벨 건너뛰기 · C1 코드 언어 명시
-  PN7 서술 문장 종결 부호 (정본은 `base/punctuation.md`)
+  PN7 서술 문장 종결 부호 · PN8 물결표 취소선 (정본은 `base/punctuation.md`)
 
 미커버 (`부분`·`불가`): P1 P3 P5 P8 P10 P11 H4 L2 L3 C2 V1 V3 V4 CJ3
   기계가 의도를 읽어야 하는 항목이다. 구현하면 과검출로 신뢰가 떨어진다.
@@ -19,6 +19,7 @@
 """
 import re
 import sys
+import unicodedata
 import pathlib
 
 # 상한값 정본: base/readability.md
@@ -35,6 +36,145 @@ LIST_ITEM = re.compile(r"^(?:[-*]\s|\d+\.\s)")
 UNQUOTE = re.compile(r"`[^`]*`|「[^」]*」|\]\([^)]*\)")
 PREDICATE_END = re.compile(r"[가-힣](?:(?<!과)다|니까)\**(?:\s*\([^()]*\))?$")
 BR = re.compile(r"<br\s*/?>")
+# PN8: GFM 은 한 인라인 범위(문단 · 제목 · 표 셀 · 목록 항목 문단) 안의 물결표 한 쌍을 취소선으로 렌더한다.
+# 블록 분류는 위 blocks() 와 따로 한다. 인라인 범위가 GitHub 파서와 같아야 과검출 · 놓침이 없다.
+CODE_SPAN = re.compile(r"`[^`]*`")
+TILDE = re.compile(r"(?<!~)~(?!~)")
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+# CommonMark HTML 블록: 주석 · 블록 태그(6형)로 시작하는 줄, 또는 태그 하나만 있는 줄(7형). 인라인 태그로 시작하는 문단은 아니다.
+BLOCK_TAGS = (
+    "address|article|aside|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|"
+    "figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|main|menu|nav|ol|p|pre|script|"
+    "section|style|summary|table|tbody|td|textarea|tfoot|th|thead|title|tr|ul"
+)
+HTML_BLOCK = re.compile(rf"^\s*(?:<!--|</?(?:{BLOCK_TAGS})(?:\s|/?>|$)|</?[A-Za-z][\w-]*(?:\s[^>]*)?/?>\s*$)", re.I)
+LIST_MARK = re.compile(r"^(\s*)(?:[-*+]|\d+[.)])\s+")
+TABLE_SEP = re.compile(r"^\s*\|[\s:|-]+\|?\s*$")
+URL = re.compile(r"<https?://[^>]*>|https?://[^\s)>]+|<!--.*?-->")
+# 링크 · 강조는 물결표보다 먼저 묶여 안팎의 물결표가 짝을 이루지 못한다. 안쪽은 따로 본다.
+NESTED = re.compile(r"!?\[([^\]]*)\]\([^)]*\)|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*")
+ASCII_PUNCT = set("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+
+
+def _punct(ch):
+    # GitHub(cmark-gfm) 은 ASCII 구두점과 유니코드 P 범주만 구두점으로 본다. 그 밖의 기호(→ ×)는 글자로 본다.
+    return ch in ASCII_PUNCT or unicodedata.category(ch).startswith("P")
+
+
+def _inline_units(text):
+    """인라인 범위 하나를 링크 · 강조 안쪽과 바깥으로 나눈다."""
+    text = URL.sub(" ", CODE_SPAN.sub("X", text))
+    inner = []
+
+    def keep(m):
+        inner.append(next(g for g in m.groups() if g is not None))
+        return "X"
+
+    return [NESTED.sub(keep, text)] + inner
+
+
+def strikes(text):
+    """인라인 범위 하나에 취소선으로 렌더될 물결표 쌍이 있는가.
+
+    여닫는 조건은 CommonMark 의 left · right-flanking 이다. 문자열 끝은 공백으로 본다.
+    역슬래시가 홀수 개 앞서면 이스케이프다.
+    """
+    for s in _inline_units(text):
+        opens, closes = [], []
+        for m in TILDE.finditer(s):
+            i = m.start()
+            if (i - len(s[:i].rstrip("\\"))) % 2:
+                continue
+            prev = s[i - 1] if i > 0 else " "
+            nxt = s[i + 1] if i + 1 < len(s) else " "
+            if not nxt.isspace() and (not _punct(nxt) or prev.isspace() or _punct(prev)):
+                opens.append(i)
+            if not prev.isspace() and (not _punct(prev) or nxt.isspace() or _punct(nxt)):
+                closes.append(i)
+        if any(c > o for o in opens for c in closes):
+            return True
+    return False
+
+
+def _starts_block(ln):
+    return bool(LIST_MARK.match(ln) or FENCE.match(ln) or re.match(r"^\s*[#>|]", ln))
+
+
+def _units(lines, base):
+    """(시작 줄 번호, 인라인 범위, 줄 수) 목록. 인용 · 목록 항목은 안쪽을 다시 나눈다."""
+    out, i, n = [], 0, len(lines)
+    while i < n:
+        ln, s = lines[i], lines[i].strip()
+        if not s:
+            i += 1
+            continue
+        m = FENCE.match(ln)
+        if m:
+            mark, i = m.group(1), i + 1
+            while i < n and not lines[i].strip().startswith(mark):
+                i += 1
+            i += 1
+            continue
+        if HTML_BLOCK.match(ln) or ln.startswith("    "):
+            # HTML 블록 · 들여쓴 코드 블록은 빈 줄까지 인라인으로 렌더되지 않는다
+            while i < n and lines[i].strip():
+                i += 1
+            continue
+        if s.startswith(">"):
+            j = i
+            while j < n and lines[j].strip().startswith(">"):
+                j += 1
+            out += _units([re.sub(r"^\s*>\s?", "", x) for x in lines[i:j]], base + i)
+            i = j
+            continue
+        if s.startswith("#"):
+            out.append((base + i, s.lstrip("#"), 1))
+            i += 1
+            continue
+        if s.startswith("|"):
+            while i < n and lines[i].strip().startswith("|"):
+                if not TABLE_SEP.match(lines[i]):
+                    out += [(base + i, c, 1) for c in lines[i].strip().strip("|").split("|")]
+                i += 1
+            continue
+        m = LIST_MARK.match(ln)
+        if m:
+            # 항목의 이어지는 줄(들여쓴 줄 · lazy 줄)은 같은 문단이다. 빈 줄 뒤 들여쓴 줄은 항목 안의 블록이다.
+            width = len(m.group(0))
+            j, body = i + 1, [ln[width:]]
+            while j < n and lines[j].strip() and not _starts_block(lines[j]):
+                body.append(lines[j])
+                j += 1
+            out.append((base + i, " ".join(x.strip() for x in body), j - i))
+            k = j
+            while k < n and (not lines[k].strip() or lines[k].startswith(" " * width)):
+                k += 1
+            while k > j and not lines[k - 1].strip():
+                k -= 1
+            if k > j:
+                out += _units([x[width:] for x in lines[j:k]], base + j)
+            i = max(j, k)
+            continue
+        j = i + 1
+        while j < n and lines[j].strip() and not _starts_block(lines[j]):
+            j += 1
+        out.append((base + i, " ".join(x.strip() for x in lines[i:j]), j - i))
+        i = j
+    return out
+
+
+def pn8(text):
+    """취소선으로 렌더될 물결표 쌍이 있는 인라인 범위에서, 물결표가 있는 줄마다 (줄, 규칙, 안내).
+
+    why: 범위의 첫 줄만 내면, 기존 줄의 홑 물결표에 PR 이 덧붙인 줄이 짝을 이룰 때 최종 점검이
+    그 검출을 「기존 줄」로 분류해 통과시킨다.
+    """
+    lines = text.split("\n")
+    hits = set()
+    for start, unit, n in _units(lines, 0):
+        if strikes(unit):
+            hits.update(k for k in range(start, start + n) if TILDE.search(CODE_SPAN.sub("", lines[k])))
+    return [(k + 1, "PN8", "물결표 한 쌍이 취소선으로 렌더된다. 역슬래시로 이스케이프한다") for k in sorted(hits)]
 
 
 def unterminated(text, cell=False):
@@ -90,8 +230,9 @@ def blocks(text):
 
 
 def check(path):
-    bs = blocks(pathlib.Path(path).read_text())
-    hits, prose_run, since_visual, h1, prev_level = [], 0, 0, 0, 0
+    text = pathlib.Path(path).read_text()
+    bs = blocks(text)
+    hits, prose_run, since_visual, h1, prev_level = pn8(text), 0, 0, 0, 0
 
     for idx, (kind, line, body, lang) in enumerate(bs):
         if kind == "heading":

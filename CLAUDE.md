@@ -218,6 +218,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-tells-count.py
   ```
+- [ ] **`config/style-rules/metrics/readability_count.py` 를 고쳤으면 자체 점검을 실행한다.** 물결표 취소선은 렌더해야 보이는 결함이라 검출이 무너져도 신호가 없다.
+  ```bash
+  python3 scripts/selftest-readability-count.py
+  ```
 - [ ] **`config/style-rules/forbidden-words.json` 을 고쳤으면 자체 점검을 실행한다.** 패턴을 좁히면 정탐이 함께 빠져도 신호가 없다.
   ```bash
   python3 scripts/selftest-forbidden-words.py
