@@ -74,7 +74,7 @@ bash ~/.claude/ops-agent/current/scripts/gh-issue.sh start {이슈번호} [--typ
 - 어댑터가 `gh issue develop {번호} --name {브랜치} --base {base}` 로 이슈에 연결된 브랜치를 원격에 만들고, `git fetch origin` 뒤 그 브랜치를 연다. 브랜치 이름만으로는 이슈와 연결되지 않는다 (#813).
 - **워크트리 (권장)**: `--worktree` → `git worktree add ../{프로젝트}-{타입}-{번호} -b {브랜치} --track origin/{브랜치}`
 - **직접 체크아웃**: `--checkout` → `git checkout -b {브랜치} --track origin/{브랜치}`
-- 연결된 브랜치의 PR 은 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다. PR 이 여러 개인 이슈는 브랜치 인자 없이 `start` 하고, 앞 PR 의 브랜치는 직접 분기해 본문에 `Refs #{이슈번호}` 를 단다. 마지막 PR 의 브랜치만 `gh issue develop {번호} --name {브랜치} --base {base}` 로 만들고 fetch 뒤 추적 브랜치로 연다 (`skills/flow/guides/issue.md` 「/issue start」 5번).
+- 연결된 브랜치의 PR 은 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다. 이슈와 PR 은 1:1 이다 ([ADR-0032](../docs/adr/0032-one-issue-one-pr-review-design-not-code.md)).
 
 ### complete
 
@@ -108,7 +108,7 @@ gh pr list --state merged --limit 10 --json baseRefName --jq '.[].baseRefName' |
 - 구현 접근 요약. 클래스·yaml 키·파일 경로 등 기법은 여기에만.
 ```
 > 규칙 (상세: `skills/flow/guides/pr.md`):
-> - GitHub Issues 레포는 이슈에서 만든 브랜치가 PR 을 이슈에 연결한다. 본문 첫 줄 링크와 `Closes #` 를 두지 않는다. 같은 이슈의 앞 PR 만 `Refs #{이슈번호}` 를 단다.
+> - GitHub Issues 레포는 이슈에서 만든 브랜치가 PR 을 이슈에 연결한다. 본문 첫 줄 링크와 `Closes #` 를 두지 않는다.
 > - 외부 트래커를 쓰는 레포(GHE 등)는 첫 줄에 이슈/티켓 링크를 두고 `Closes` 를 쓰지 않는다.
 > - **자가 검증 표·변경 파일 표·커밋 내역 표는 넣지 않는다** (CI·`Files changed`·git log 에 이미 표시).
 
