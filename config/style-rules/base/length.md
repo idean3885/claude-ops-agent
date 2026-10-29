@@ -4,10 +4,10 @@
 
 > **분리 구조**: 이 파일은 문서 하나의 총량과 채움 여부만 다룬다.
 > - 문단·문장 단위 구조 → [`readability.md`](./readability.md) (P/H/L/C/V/K/B)
-> - 저자 톤 → [`tone.md`](./tone.md) (T1~)
-> - 한국어 구두점 → [`punctuation.md`](./punctuation.md) (PN1~PN7)
-> - AI 티 분류 → [`ai-tells.md`](./ai-tells.md) (A~K)
-> - 문서의 목적과 범위 → [`purpose.md`](./purpose.md) (PU1~PU5)
+> - 저자 톤 → [`tone.md`](./tone.md) (T1\~)
+> - 한국어 구두점 → [`punctuation.md`](./punctuation.md) (PN1\~PN8)
+> - AI 티 분류 → [`ai-tells.md`](./ai-tells.md) (A\~K)
+> - 문서의 목적과 범위 → [`purpose.md`](./purpose.md) (PU1\~PU5)
 > - 어시스턴트 대화 응답·진행 서술 분량 → 이 SSOT 의 범위 밖.
 >   `~/.claude/CLAUDE.md` 의 「어시스턴트 발화 분량」 이 담당한다 (미러 대상 아님).
 >   범위 밖인 것은 **분량뿐이다.** 대화 응답의 용어 선택은 `tone.md` 「적용 범위」 가 담당한다

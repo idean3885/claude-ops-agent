@@ -4,11 +4,11 @@
 
 > **분리 구조**: 다른 base 파일은 쓴 것을 판정한다. 이 파일은 쓰기 전에 판정한다.
 > - 문단·문장 단위 구조 → [`readability.md`](./readability.md) (P/H/L/C/V/K/B)
-> - 저자 톤 → [`tone.md`](./tone.md) (T1~)
-> - 한국어 구두점 → [`punctuation.md`](./punctuation.md) (PN1~PN7)
-> - AI 티 분류 → [`ai-tells.md`](./ai-tells.md) (A~K)
-> - 문서 총량 → [`length.md`](./length.md) (LN1~LN2)
-> - 에이전트가 읽는 문서 → [`authoring.md`](./authoring.md) (AU1~AU6)
+> - 저자 톤 → [`tone.md`](./tone.md) (T1\~)
+> - 한국어 구두점 → [`punctuation.md`](./punctuation.md) (PN1\~PN8)
+> - AI 티 분류 → [`ai-tells.md`](./ai-tells.md) (A\~K)
+> - 문서 총량 → [`length.md`](./length.md) (LN1\~LN2)
+> - 에이전트가 읽는 문서 → [`authoring.md`](./authoring.md) (AU1\~AU6)
 
 > **왜 별도 축인가**: 표현·구조·총량 규범을 전부 통과한 문서가 "무엇을 하려는 문서인지 모르겠다"로 반려된다.
 > 기존 규칙은 쓴 것을 다루고 무엇을 쓸지는 다루지 않는다. 반려 시점이 완성 후라 교정이 아니라 재작성이 된다.
