@@ -4,7 +4,7 @@
     python3 scripts/terms.py check [목록 경로]      항목 형식 · 문장 시험 예문 검사. 위반이면 종료 코드 1
     python3 scripts/terms.py collect <트랜스크립트>  어시스턴트 응답의 용어: · 차이: · 나눔: 줄을 JSON 으로 낸다
     python3 scripts/terms.py stats [목록 경로] [트랜스크립트 디렉토리]
-                                                   항목별 사용 세션 · 오답 · 정답률과 제거 후보 · 누적 알림을 JSON 으로 낸다
+                                                   항목별 사용 세션 · 오답 · 정답률과 제거 후보를 JSON 으로 낸다
 
 규칙 정본: config/style-rules/base/terms.md
 """
@@ -26,18 +26,16 @@ FENCE_LINE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
 DEFAULT_TRANSCRIPTS = os.path.expanduser("~/.claude/projects")
 # 등재 직후 한 번 맞게 쓴 것만으로 100% 가 되지 않게, 서로 다른 세션에서 이만큼 써야 제거 후보다
 MIN_USE_SESSIONS = 3
-# 항목당 6~7줄이라 약 100줄. 한 번에 훑어 판정할 수 있는 크기의 상한이다
-LIST_LIMIT = 15
 SYSTEM_BLOCK = re.compile(r"<(system-reminder|local-command-[a-z]+|command-[a-z]+)>.*?</\1>", re.S)
 CORRECTION_TARGET = re.compile(r"→\s*「([^」]+)」")
 
 
-def parse_entries(text: str) -> list[tuple[str, dict[str, str]]]:
-    body = text.split("\n## 항목\n", 1)
+def parse_entries(text: str, section: str = "항목") -> list[tuple[str, dict[str, str]]]:
+    body = text.split(f"\n## {section}\n", 1)
     if len(body) < 2:
         return []
     entries: list[tuple[str, dict[str, str]]] = []
-    for line in body[1].splitlines():
+    for line in body[1].split("\n## ", 1)[0].splitlines():
         if line.startswith("### "):
             entries.append((line[4:].strip(), {}))
         elif entries and line.startswith("- ") and ": " in line:
@@ -47,11 +45,13 @@ def parse_entries(text: str) -> list[tuple[str, dict[str, str]]]:
 
 
 def check(text: str) -> list[str]:
-    entries = parse_entries(text)
-    if not entries:
-        return ["「## 항목」 절에 항목이 없다"]
+    learning, learned_entries = parse_entries(text), parse_entries(text, "익힌 항목")
+    # 마지막 항목을 옮기면 「## 항목」 이 빈다. 두 절이 모두 비었을 때만 목록이 없는 것이다
+    if not learning and not learned_entries:
+        return ["「## 항목」 · 「## 익힌 항목」 절에 항목이 없다"]
     problems = []
-    for title, fields in entries:
+    learned_titles = {title for title, _ in learned_entries}
+    for title, fields in learning + learned_entries:
         for name in REQUIRED_FIELDS:
             if not fields.get(name):
                 problems.append(f"{title}: 「{name}」 없음")
@@ -67,6 +67,13 @@ def check(text: str) -> list[str]:
         registered = fields.get("등재", "")
         if registered and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", registered):
             problems.append(f"{title}: 등재일 형식은 YYYY-MM-DD")
+        learned = fields.get("익힘", "")
+        if title in learned_titles and not learned:
+            problems.append(f"{title}: 「익힘」 없음")
+        if title not in learned_titles and learned:
+            problems.append(f"{title}: 「익힘」 이 있으면 「## 익힌 항목」으로 옮긴다")
+        if learned and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", learned):
+            problems.append(f"{title}: 익힘 날짜 형식은 YYYY-MM-DD")
     return problems
 
 
@@ -172,8 +179,6 @@ def stats(text: str, transcript_dir: str) -> dict:
     return {
         "entries": report,
         "count": len(entries),
-        "limit": LIST_LIMIT,
-        "overLimit": len(entries) > LIST_LIMIT,
         "removable": [r["title"] for r in report if r["removable"]],
     }
 

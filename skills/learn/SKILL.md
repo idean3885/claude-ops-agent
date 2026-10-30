@@ -98,10 +98,10 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 세션의 용어 교정 줄(`용어:` · `차이:` · `나눔:`)은 레슨이 아니라 표준 용어 목록([config/style-rules/base/terms.md](../../config/style-rules/base/terms.md))으로 간다. 추측할 수 없는 취향을 정본에 올리는 자리다.
 
 1. `python3 ~/.claude/ops-agent/current/scripts/terms.py collect <세션 트랜스크립트>` 로 교정 줄을 모은다.
-2. 줄마다 목록과 대조한다. 이미 있으면 넘어가고, 사용자가 다른 말을 골랐으면 그 항목을 고친다.
+2. 줄마다 목록과 대조한다. 이미 있으면 넘어가고, 사용자가 다른 말을 골랐으면 그 항목을 고친다. 「## 익힌 항목」에 있으면 다시 헷갈린 것이므로 「## 항목」으로 되돌리는 안을 낸다. 되돌릴 때 `익힘` 줄을 지우고 `등재` 를 되돌린 날로 바꾼다 (terms.md 「제거 조건」).
 3. 없는 것은 문장 시험을 거친 글 예문 · 말 예문을 붙여 등재안을 낸다. 말로 해서 어색하면 다른 말을 다시 고른다.
 4. 사람 확인 뒤 ops-agent 워킹 카피의 목록에 등재하고 `python3 ~/.claude/ops-agent/current/scripts/terms.py check <고친 목록 경로>` 를 통과시킨다.
-5. `python3 ~/.claude/ops-agent/current/scripts/terms.py stats` 로 항목별 정답률을 집계한다. `removable` 항목은 제거안으로, `overLimit` 이면 항목별 정답률 · 사용 세션 수를 붙여 정리 논의를 올린다. 제거도 사람 확인 뒤에 한다.
+5. `python3 ~/.claude/ops-agent/current/scripts/terms.py stats` 로 항목별 정답률을 집계한다. `removable` 항목은 「## 익힌 항목」으로 옮기는 안으로 낸다. 옮기는 것도 사람 확인 뒤에 한다.
 
 공개할 수 없는 사내 용어는 목록에 올리지 않고 판정 요약에 남긴다.
 
