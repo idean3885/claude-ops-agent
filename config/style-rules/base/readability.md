@@ -739,7 +739,7 @@ A~K 항목은 `ai-tells.md` 분류 SSOT를 본다.
 | BQ1 | Blockquote 개행 | 가능 | prompt blockquote에서 문장 종결 후 `<br>`이 있는가? |
 | LB1 | 렌더 개행 | 부분 | 렌더된 문단 · 표 셀 · HTML 에서 생각이 다른 문장이 한 줄로 이어지는가? |
 | SC1 | 자기 완결 | 부분 | 용어가 첫 등장에 정의되는가? 문서 밖 맥락에 기대는 표현(「그대로」 · 「위 구성」)이 있는가? |
-| T1~T16 | 저자 톤 |—| `tone.md` 참조 |
+| T 계열 | 저자 톤 |—| `tone.md` 참조 |
 | PN1\~PN8 | 한국어 구두점 |—| `punctuation.md` 참조 |
 | A~K | AI 티 분류 |—| `ai-tells.md` 참조 |
 | LN1~LN2 | 산출물 분량 |—| `length.md` 참조 (톤·AI 티 교정 후 마지막에 적용) |
