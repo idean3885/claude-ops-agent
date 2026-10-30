@@ -156,7 +156,7 @@ main ────────────────●─────
 
 머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (마켓플레이스 update + 활성 세션 경로 복원).
 
-작업 단위는 이슈 하나당 PR 하나다. 여러 이슈를 한 PR 에 담지 않는다. 한 머지가 여러 이슈에 걸치면 이슈 단위로 되돌릴 수 없다 ([ADR-0032](docs/adr/0032-one-issue-one-pr-review-design-not-code.md)).
+이슈 하나는 PR 하나다. 여러 이슈를 한 PR 에 담지 않는다. 한 머지가 여러 이슈에 걸치면 이슈 단위로 되돌릴 수 없다 ([ADR-0032](docs/adr/0032-one-issue-one-pr-review-design-not-code.md)).
 
 ### 수정 플로우
 
