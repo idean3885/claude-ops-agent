@@ -1,6 +1,6 @@
 {
   "name": "ops-agent",
-  "version": "9.41.0",
+  "version": "9.42.0",
   "description": "The developer decides; the AI advises and executes, and its work is checked against recorded decisions and tests.",
   "author": {
     "name": "idean3885"
