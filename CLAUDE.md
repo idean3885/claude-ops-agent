@@ -56,7 +56,7 @@ issue · spec · implement · commit · pr 은 별도 스킬이 아니라 `/flow
 
 1. **명세 우선**: 코드 작성 전 명세 문서 먼저
 2. **동기화 유지**: 문서와 코드는 항상 일치
-3. **읽히는 흐름**: 협업 흐름은 누가 봐도 읽히는 쪽에 맞춘다. 기준점은 대세, 깊이는 팀 수준, 자체 규칙은 부득이할 때만 ([ADR-0031](docs/adr/0031-collaboration-flow-follows-what-everyone-reads.md))
+3. **읽히는 흐름**: 협업 흐름은 누가 봐도 읽히는 쪽에 맞춘다. 기준점은 컨벤션, 깊이는 팀 수준, 자체 규칙은 부득이할 때만 ([ADR-0031](docs/adr/0031-collaboration-flow-follows-what-everyone-reads.md))
 
 ## 검증
 
