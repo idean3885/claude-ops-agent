@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -108,10 +110,52 @@ expect("사용 세션이 셋 미만이면 정답률 100% 여도 제거 후보가
        by_title["포트 계약 · HTTP 상태"]["useSessions"] == 2 and not by_title["포트 계약 · HTTP 상태"]["removable"])
 expect("제거 후보 목록", report["removable"] == ["플러시 · 커밋"])
 
-many = HEAD + "".join(entry(f"용어{i}", f"용어{i}", "") for i in range(terms.LIST_LIMIT))
+LEARNED = VALID + """
+## 익힌 항목
+
+### RACI
+- 섞어 쓴 말: RaCI
+- 구분: 책임 배정표
+- 글: 「역할은 RACI 로 나눴다.」
+- 말: 「역할은 RACI 로 나눴어요.」
+- 등재: 2026-10-22
+- 익힘: 2026-10-30
+"""
+expect("익힌 항목은 학습 중 항목으로 읽지 않는다", [t for t, _ in terms.parse_entries(LEARNED)] == ["스키마 · 테이블 정의"])
+expect("익힌 항목 절을 따로 읽는다", [t for t, _ in terms.parse_entries(LEARNED, "익힌 항목")] == ["RACI"])
+expect("익힌 항목도 형식 검사를 받는다", any("RACI: 「말」 없음" in p for p in terms.check(LEARNED.replace("- 말: 「역할은 RACI 로 나눴어요.」\n", ""))))
+expect("익힘 날짜 형식", any("익힘" in p for p in terms.check(LEARNED.replace("익힘: 2026-10-30", "익힘: 10/30"))))
+expect("학습 중 항목에 익힘 날짜가 있으면 실패 (옮기지 않음)", any("「## 익힌 항목」으로 옮긴다" in p for p in terms.check(VALID + "- 익힘: 2026-10-30\n")))
+ONLY_LEARNED = LEARNED.replace(VALID[len(HEAD):], "")
+expect("학습 중 항목이 비어도 익힌 항목만 있으면 통과", terms.check(ONLY_LEARNED) == [])
+expect("학습 중 항목이 비어도 익힌 항목은 형식 검사를 받는다", any("RACI: 「말」 없음" in p for p in terms.check(ONLY_LEARNED.replace("- 말: 「역할은 RACI 로 나눴어요.」\n", ""))))
+expect("익힌 항목은 익힘 날짜가 있어야 한다", any("RACI: 「익힘」 없음" in p for p in terms.check(LEARNED.replace("- 익힘: 2026-10-30\n", ""))))
 with tempfile.TemporaryDirectory() as empty:
-    expect("상한 이하면 누적 알림 없음", not terms.stats(many, empty)["overLimit"])
-    expect("상한을 넘으면 누적 알림", terms.stats(many + entry("하나 더", "하나 더", ""), empty)["overLimit"])
+    expect("익힌 항목은 집계하지 않는다", [r["title"] for r in terms.stats(LEARNED, empty)["entries"]] == ["스키마 · 테이블 정의"])
+    expect("개수 상한 표시는 없다", not {"limit", "overLimit"} & terms.stats(LEARNED, empty).keys())
+
+# 세션 시작 주입은 실제 진입점을 실행해 본다. 주입되는 것은 원천의 학습 중 항목이다
+# 훅은 플러그인 루트의 git 설정을 맞추므로 저장소가 아니라 임시 사본에서 실행한다
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+with open(os.path.join(root, "config", "style-rules", "base", "terms.md"), encoding="utf-8") as source:
+    source_text = source.read()
+with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as plugin:
+    for rel in (("scripts", "session-start.mjs"), ("config", "style-rules", "base", "terms.md")):
+        os.makedirs(os.path.join(plugin, *rel[:-1]), exist_ok=True)
+        shutil.copy(os.path.join(root, *rel), os.path.join(plugin, *rel))
+    run = subprocess.run(["node", os.path.join(plugin, "scripts", "session-start.mjs")],
+                         input=json.dumps({"cwd": home}), capture_output=True, text=True,
+                         env={**os.environ, "HOME": home}, timeout=60)
+context = json.loads(run.stdout)["hookSpecificOutput"]["additionalContext"] if run.returncode == 0 else ""
+section = context.split("[표준 용어", 1)[1].split("\n\n", 1)[0] if "[표준 용어" in context else ""
+learning = terms.parse_entries(source_text)
+expect("머리줄은 걸리면 원천의 항목을 읽고 교정하라고 안내한다", "원천의 그 항목(구분 · 예문)을 읽고 교정한다" in section)
+expect("주입은 항목마다 「표준 용어: 섞어 쓴 말」 한 줄",
+       bool(learning) and all(f"- {t}: {f['섞어 쓴 말']}" in section for t, f in learning))
+expect("주입에 구분은 넣지 않는다 (교정할 때 원천에서 연다)",
+       bool(section) and not any(f["구분"] in section for _, f in learning))
+expect("익힌 항목은 주입하지 않는다",
+       bool(section) and not any(f"- {t}: " in section for t, _ in terms.parse_entries(source_text, "익힌 항목")))
 
 print(f"\n{'전부 통과' if not failures else f'{failures}건 실패'}")
 sys.exit(1 if failures else 0)
