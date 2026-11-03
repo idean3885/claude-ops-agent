@@ -106,7 +106,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 [Semantic Versioning](https://semver.org/) 기준.
 
-**변경은 `Unreleased` 에 쌓고, 버전은 사용자가 끊을 때 올린다.** PR 하나마다 올리지 않는다.
+**변경은 `Unreleased` 에 쌓고, PR 이 머지되면 바로 릴리즈를 끊는다.** PR 안에서는 버전을 올리지 않는다. 병행 세션끼리 같은 번호가 부딪히기 때문이다. 릴리즈를 미루면 머지됐지만 릴리즈 전인 규칙이 설치본에 없어, 다른 세션이 옛 규칙으로 작업한다 (#870).
 
 체인지로그는 [Keep a Changelog 1.1.0](https://keepachangelog.com/ko/1.1.0/) 을 따른다. 그 규격이 `Unreleased` 를 권하는 근거는 릴리즈 시점의 작성 부담 제거, 다음 버전 예고, 몰아 쓰지 않기, 워크플로 편입 넷이다.
 
@@ -120,7 +120,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 ```bash
 ./scripts/bump-version.sh add "<changelog_entry>" [category]   # 작업 때마다
-./scripts/bump-version.sh release <version>                    # 사용자가 끊을 때
+./scripts/bump-version.sh release <version>                    # PR 머지 직후
 ```
 
 `release` 가 갱신하는 4곳이다. 수동 편집하면 어긋나 캐시 경로 해석이 깨진다.
@@ -148,7 +148,7 @@ main ────────────────●─────
 - PR 타겟: `main` 직접
 - 이슈 플로우 동일 적용: `/flow` 단일 진입 (issue → spec → 구현 → commit → pr)
 
-반영 경로: 워크트리 → `bump-version.sh add` → 커밋 → PR → 웹 머지. main 직접 push 는 하지 않는다. 릴리즈는 별도이고 사용자가 시점을 정한다.
+반영 경로: 워크트리 → `bump-version.sh add` → 커밋 → PR → 웹 머지 → 릴리즈 PR(`release/<버전>`, `bump-version.sh release`) → 웹 머지. main 직접 push 는 하지 않는다. 머지 알림을 받으면 묻지 않고 릴리즈 PR 을 만든다. 버전은 위 SemVer 기준으로 정한다.
 
 로컬 `gh pr merge` 를 쓸 때는 `./scripts/pre-merge-check.sh <브랜치> main` 을 앞에 물린다. 브랜치가 타겟보다 오래된 베이스 위에 있으면 머지가 버전을 뒤로 밀어낸다. 검출 시 종료 코드 1 이라 `&&` 체인이 멈춘다. 한시 권한 대상 행위를 다른 명령과 한 블록에 두면 훅이 차단한다 (ADR 0011).
 
