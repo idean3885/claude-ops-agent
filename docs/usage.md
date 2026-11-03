@@ -59,15 +59,18 @@ flowchart LR
   T -->|"공개 표면 쓰기"| C["대외비 가드"]
   T -->|"커밋·PR 본문"| H["What 가드"]
   T -->|"이슈 생성"| I["이슈 생성 가드"]
+  T -->|"PR 생성"| D["초안 PR 가드"]
   T -->|"머지·릴리즈·삭제"| A["한시 권한"]
   T -->|"문서 편집"| E["편집 후 자가 점검"]
   C -->|히트| X["차단"]
   H -->|히트| X
   I -->|직접 호출| X
+  D -->|초안 아님| X
   A -->|미허용| X
   C -->|통과| OK["실행"]
   H -->|통과| OK
   I -->|어댑터| OK
+  D -->|초안| OK
   A -->|허용| OK
   E --> OK
   OK --> S["Stop<br/>응답 스캔 → 다음 턴 통지"]
@@ -140,7 +143,7 @@ flowchart LR
 | `scripts/pre-merge-check.sh` | 머지 전 버전·CHANGELOG 대조 (검출 시 종료 코드 1) | [action-gate.md](action-gate.md) |
 | `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/issue-body-rules.mjs` | 이슈 본문 구조 룰 정본 (ISS1 · ISS5 · ISS6 · ISS7). 어댑터가 부른다. | [action-gate.md](action-gate.md) |
-| `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 · 주장 검증 자체 점검 (136건) | [action-gate.md](action-gate.md) |
+| `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 · 초안 PR 가드 · 주장 검증 자체 점검 (151건) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (54건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/selftest-worktree-cleanup.sh` | 워크트리 정리의 안전장치(dirty 거부 · 정규 clone 보존 · bare clone 삭제) 자체 점검, 실제 git | [worktree.md](worktree.md) |

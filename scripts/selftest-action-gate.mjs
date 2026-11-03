@@ -431,7 +431,7 @@ const internalWordBody = bodyOf('internal-word.md', '## What\nSELFTEST_INTERNAL_
 const homeWordBody = bodyOf('home-word.md', '## What\nSELFTEST_HOME_WORD 를 다룬다\n\n## Why\n- 사실 1\n- 사실 2\n- 기존 기록: 없음 · docs\n');
 const ADAPTER = 'bash ~/.claude/ops-agent/current/scripts/gh-issue.sh';
 const ISSUE_DENY = '이슈 생성 가드';
-function issueCase(name, want, command, { env = {}, reasonHas = '' } = {}) {
+function issueCase(name, want, command, { env = {}, reasonHas = '', label = '이슈 생성 가드' } = {}) {
   const res = spawnSync('node', [hook], {
     input: JSON.stringify({ tool_name: 'Bash', cwd: storageRepo, session_id: 'selftest', tool_input: { command } }),
     encoding: 'utf8',
@@ -447,7 +447,7 @@ function issueCase(name, want, command, { env = {}, reasonHas = '' } = {}) {
   } catch { /* 출력 없음 = 통과 */ }
   const ok = got === want && (!reasonHas || reason.includes(reasonHas));
   if (!ok) failed++;
-  console.log(`${ok ? '  OK' : '  XX'}  이슈 생성 가드: ${name} — want ${want}, got ${got}${reason ? ` · ${reason.split('\n')[0]}` : ''}`);
+  console.log(`${ok ? '  OK' : '  XX'}  ${label}: ${name} — want ${want}, got ${got}${reason ? ` · ${reason.split('\n')[0]}` : ''}`);
 }
 const ISSUE_CASES = [
   ['gh issue create 직접 호출', 'deny', 'gh issue create --title "x" --body "y"', { reasonHas: ISSUE_DENY }],
@@ -473,8 +473,30 @@ const ISSUE_CASES = [
   ['어댑터 -R 사내 호스트 + 사내 용어', 'pass', `${ADAPTER} create --title "x" --body-file ${internalWordBody} --type feat -R ghe.selftest.internal/o/r --start`],
 ];
 for (const [name, want, command, opts] of ISSUE_CASES) issueCase(name, want, command, opts);
+
+// 초안 PR 가드 (#876). 초안 플래그 없는 PR 생성은 거부한다. 훅 호출 방식이 같아 issueCase 로 돌린다. 플로우 진입 가드는 끈다.
+const PR_DRAFT_DENY = '초안 PR 가드';
+const PR_GUIDE = 'guides/pr.md';
+const PR_DRAFT_CASES = [
+  ['초안 플래그 없음 · 가이드로 보낸다', 'deny', 'gh pr create --base develop --title "x" --body-file b.md', { reasonHas: PR_GUIDE }],
+  ['-fd 결합', 'pass', 'gh pr create -fd --base main'],
+  ['create 앞 -R', 'deny', 'gh pr -R o/r create --title "x" --body "y"', { reasonHas: PR_DRAFT_DENY }],
+  ['create 앞 -R + --draft', 'pass', 'gh pr -R o/r create --draft --title "x" --body "y"'],
+  ['env 접두', 'deny', 'env GH_HOST=ghe.selftest.internal gh pr create --title "x" --body "y"', { reasonHas: PR_DRAFT_DENY }],
+  ['--draft', 'pass', 'gh pr create --draft --base develop --title "x" --body-file b.md'],
+  ['-d', 'pass', 'gh pr create -d --base main --title "x" --body "y"'],
+  ['--draft=true', 'pass', 'gh pr create --draft=true --title "x" --body "y"'],
+  ['제목에만 --draft', 'deny', 'gh pr create --title "add --draft flag" --body "y"', { reasonHas: PR_DRAFT_DENY }],
+  ['환경 변수 접두', 'deny', 'GH_HOST=ghe.selftest.internal gh pr create --title "x" --body "y"', { reasonHas: PR_DRAFT_DENY }],
+  ['뒤에 붙인 생성', 'deny', 'git push -u origin fix/1 && gh pr create --title "x" --body "y"', { reasonHas: PR_DRAFT_DENY }],
+  ['준비 완료 전환은 대상 아님', 'pass', 'gh pr ready 12'],
+  ['문구 검색', 'pass', "grep -n 'gh pr create' skills/flow/guides/pr.md"],
+  ['드라이런은 통과', 'pass', 'gh pr create --title "x" --body "y"', { env: { OPS_AGENT_PR_DRAFT_GUARD_DRYRUN: '1' } }],
+  ['비활성은 통과', 'pass', 'gh pr create --title "x" --body "y"', { env: { OPS_AGENT_PR_DRAFT_GUARD_DISABLE: '1' } }],
+];
+for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, command, { ...opts, label: PR_DRAFT_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
 rmSync(issueHome, { recursive: true, force: true });
 rmSync(storageRepo, { recursive: true, force: true });
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length}건 전부 통과`);
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);
