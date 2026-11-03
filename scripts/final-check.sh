@@ -149,7 +149,7 @@ unresolved=$(gh api graphql -F owner="$owner" -F name="$name" -F pr="$PR" -f que
     } }
   }' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved|not)] | length' 2>/dev/null || echo "?")
 if [ "$unresolved" != "0" ]; then
-  fail b "미해결 리뷰 스레드: $unresolved"
+  fail b "미해결 리뷰 스레드: $unresolved. 작성자가 웹에서 답글을 확인하고 스레드를 닫는다 (PR 가이드 「리뷰 대응」)"
 fi
 
 # c. CodeRabbit: 마지막 리뷰가 HEAD 에 달렸는가. 아니면 바뀐 부분을 자체 검증했다는 기록이 있어야 한다.
