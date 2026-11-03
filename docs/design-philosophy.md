@@ -65,7 +65,7 @@ AI 에게 코드를 맡기면서 제 역할이 "코드 작성"에서 "의사결�
 | `lint-posttool.sh` | PostToolUse (Edit/Write) | 문서 편집 후 자가 점검 유도 (마커 opt-in, `_posts/` 는 무조건) |
 | `pre-tool-use.mjs` | PreToolUse | 퍼블릭 표면으로 가는 대외비 키워드 하드 차단 |
 
-**스킬**: 워크플로우 순서를 강제합니다. `flow`(이슈 → spec → 구현 → commit → PR), `write → lint → publish`, `expert`(결정 전에 분야 전문가와 토론). 직접 호출하지 않고 자연어 트리거로 이어지므로, 순서를 사람이 기억하지 않아도 됩니다.
+**스킬**: 워크플로우 순서를 강제합니다. `flow`(이슈 → spec → 구현 → commit → PR), `write → lint → publish`, `expert`(결정 전에 분야 전문가의 판단을 받고, 개발자가 「토론」 · 「논의」를 요청하면 토론). 직접 호출하지 않고 자연어 트리거로 이어지므로, 순서를 사람이 기억하지 않아도 됩니다.
 
 ## 결정 3. 표현 가드: 차단 대신 자가 대조
 
