@@ -12,6 +12,7 @@
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
 | 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
 | 플로우 진입 | 플로우 가이드를 읽지 않은 세션의 `gh pr create` | 가이드를 읽습니다. 상세는 [hooks-config.md](hooks-config.md) 「플로우 진입 지표」 |
+| 초안 PR 가드 | 초안 플래그(`--draft` · `-d`) 없는 `gh pr create`. 최상위 명령만 봅니다 (「한계」) | 초안으로 만듭니다. 준비 완료 전환은 작성자가 합니다 (#876) |
 
 ---
 
@@ -238,7 +239,7 @@
 node scripts/selftest-action-gate.mjs
 ```
 
-훅 판정 23건 · 개방 안내 9건 · 최종 점검 끝 안내 4건 · 주장 검증 18건 · 이슈 생성 가드 19건을 포함해 136건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 실행합니다. 동거 검사는 게이트가 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다. 이슈 생성 가드 케이스는 대외비 키워드 · 사내 호스트를 임시 설정(`OPS_AGENT_CONFIDENTIAL_CONFIG_PATH`)으로 주입해 사용자 로컬 설정에 기대지 않습니다.
+훅 판정 23건 · 개방 안내 9건 · 최종 점검 끝 안내 4건 · 주장 검증 18건 · 이슈 생성 가드 19건 · 초안 PR 가드 15건을 포함해 151건을 봅니다. 훅 판정은 갈래를 전부 열어(`OPS_AGENT_ACTION_GATE_ALLOW=1`) 실행합니다. 동거 검사는 게이트가 열린 상태에서만 발동하고, 그 상태가 사고가 난 조건입니다. 이슈 생성 가드 케이스는 대외비 키워드 · 사내 호스트를 임시 설정(`OPS_AGENT_CONFIDENTIAL_CONFIG_PATH`)으로 주입해 사용자 로컬 설정에 기대지 않습니다.
 
 어댑터 자체(본문 구조 · 계약 · 시작 체인)는 `node scripts/selftest-issue-adapter.mjs` 가 54건을 봅니다. 가짜 `gh` · `git` 을 PATH 앞에 두고 호출 기록으로 판정하며 네트워크를 쓰지 않습니다.
 
@@ -361,6 +362,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 대외비 가드 | `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` | `OPS_AGENT_CONFIDENTIAL_DISABLE=1` |
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
 | 이슈 생성 가드 | `OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1` | `OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1` |
+| 초안 PR 가드 | `OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1` | `OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 | 플로우 진입 | 없음 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |

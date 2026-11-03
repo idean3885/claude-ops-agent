@@ -31,6 +31,8 @@
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
  * 5. 플로우 진입 (#769 · #773): 커밋 · push · PR 생성 직전에 그 세션의 플로우 가이드 읽음 여부를 기록하고,
  *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
+ * 6. 초안 PR (#876): `gh pr create` 에 초안 플래그가 없으면 차단한다. 가이드를 읽었는지가 아니라 규칙을 본다.
+ *    드라이런 OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
@@ -110,6 +112,13 @@ const GH_API_VALUE_FLAGS = new Set([
   '-q', '--jq', '-t', '--template', '--hostname', '--cache',
 ]);
 const GH_API_PARAM_FLAGS = /^(?:-f|--raw-field|-F|--field|--input)(?:=|$)/;
+
+// 초안 PR 가드 (#876): `gh pr create` 에 초안 플래그가 없으면 거부한다. PR 가이드는 초안 생성을 정해 두었고,
+// 플로우 진입 가드(#773)는 가이드를 읽었는지로 추정해 진입 문서만 읽은 세션을 통과시켰다. 규칙을 명령에서 직접 본다.
+const PR_DRAFT_GUARD_DISABLE = process.env.OPS_AGENT_PR_DRAFT_GUARD_DISABLE === '1';
+const PR_DRAFT_GUARD_DRYRUN = process.env.OPS_AGENT_PR_DRAFT_GUARD_DRYRUN === '1';
+// 최상위 생성 명령. `env` 접두와 `create` 앞의 -R/--repo 도 같은 생성이다. 판정은 detectNonDraftPrCreate.
+const PR_CREATE_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*create\b/;
 
 const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
 
@@ -334,6 +343,30 @@ if (!DISABLE) {
             `본문 규칙: config/style-rules/extensions/issue.md · 가이드: skills/flow/guides/issue.md\n` +
             `드라이런: OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1`;
           if (ISSUE_CREATE_GUARD_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+            }));
+            process.exit(0);
+          }
+        }
+      }
+
+      // 초안 PR 가드: PR 은 초안으로 만든다 (#876). 준비 완료 전환(gh pr ready)은 작성자가 정한다.
+      if (!PR_DRAFT_GUARD_DISABLE && remainingMs() <= 0) noteBudgetExceeded('초안 PR 가드');
+      if (!PR_DRAFT_GUARD_DISABLE && remainingMs() > 0) {
+        const prHits = detectNonDraftPrCreate(command);
+        if (prHits.length) {
+          const header = PR_DRAFT_GUARD_DRYRUN
+            ? '[ops-agent 초안 PR 가드 · 드라이런]'
+            : '[ops-agent 초안 PR 가드 · 차단]';
+          const msg = `${header} PR 은 초안으로 만듭니다. 초안 플래그 없는 생성:\n${prHits.map(h => `  - ${h}`).join('\n')}\n\n` +
+            `  gh pr create --draft --base <타겟> --title "<제목>" --body-file <본문파일>\n` +
+            `준비 완료 전환(gh pr ready)과 리뷰 요청은 작성자가 웹에서 변경분을 본 뒤 합니다.\n` +
+            `가이드: ~/.claude/ops-agent/current/skills/flow/guides/pr.md 「초안으로 생성하고 작성자가 먼저 본다」\n` +
+            `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1`;
+          if (PR_DRAFT_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
             process.stdout.write(JSON.stringify({
@@ -981,6 +1014,21 @@ function detectDirectIssueCreate(command) {
   for (const seg of gateSegments(command)) {
     if (/^(?:\S*\/)?gh\s+issue\s+create\b/.test(seg)) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
     else if (/^(?:\S*\/)?gh\s+api\b/.test(seg) && ghApiCreatesIssue(seg)) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
+  }
+  return hits;
+}
+
+// ─── 초안 PR 가드 ───
+// 세그먼트마다 최상위 `gh pr create` 를 보고, 토큰에 초안 플래그(`--draft` · `-d` · `--draft=true` · `-fd` 처럼
+// 불리언 단축 플래그와 붙인 형태)가 없으면 잡는다. `env` 접두와 `create` 앞의 `-R`/`--repo` 도 같은 생성으로 본다.
+// 따옴표 안의 문자열(제목 · 본문)은 한 토큰이라 플래그로 오인하지 않는다. 최상위 명령만 본다 (docs/action-gate.md 「한계」).
+function detectNonDraftPrCreate(command) {
+  const hits = [];
+  for (const seg of gateSegments(command)) {
+    if (!PR_CREATE_RE.test(seg)) continue;
+    const tokens = seg.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/g) || [];
+    const draft = tokens.some(t => t === '--draft' || /^-[few]*d(?:=(?:true|1|t))?$/i.test(t) || /^--draft=(?:true|1|t)$/i.test(t));
+    if (!draft) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
   }
   return hits;
 }
