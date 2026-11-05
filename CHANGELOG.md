@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Added
+* 이슈의 논의 항목을 Issue · Cause · Proposal · Alternative 흐름으로 쓰는 ISS8 추가. 대안마다 비용을 굵은 한 줄로 단다 (#887, ADR-0034).
+
 ## [9.42.6] - 2026-11-03
 
 ### Changed
