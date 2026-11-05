@@ -29,7 +29,7 @@
  * 4. 최종 점검 통과 기록 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
  *    통과 기록이 있어야 통과한다. 판정은 로컬만이다. 통과 기록 head 와 origin 추적 브랜치를 비교한다.
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
- * 5. 플로우 진입 (#769 · #773): 커밋 · push · PR 생성 직전에 그 세션의 플로우 가이드 읽음 여부를 기록하고,
+ * 5. 플로우 진입 (#769 · #773 · #891): 커밋 · push · PR 생성 직전에 마지막 압축 뒤 플로우 가이드 읽음 여부를 기록하고,
  *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
  * 6. 초안 PR (#876): `gh pr create` 에 초안 플래그가 없으면 차단한다. 가이드를 읽었는지가 아니라 규칙을 본다.
  *    드라이런 OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1.
@@ -146,16 +146,19 @@ const FLOW_ENTRY_DISABLE = process.env.OPS_AGENT_FLOW_ENTRY_DISABLE === '1';
 // 세션 시작에 주입되는 트리거 표에도 가이드 경로가 문자열로 있어서, 경로만 찾으면 전부 읽음이 된다.
 // 값은 JSON 문자열이라 명령 안의 따옴표가 \" 로 들어 있다. 이스케이프를 건너뛰며 같은 값 안에서만 찾는다.
 const FLOW_ENTRY_RE = /"(?:file_path|command)":"(?:[^"\\]|\\.)*skills\/flow\/(?:SKILL\.md|guides\/)|"skill":"(?:ops-agent:)?flow"/;
+const FLOW_ENTRY_RE_G = new RegExp(FLOW_ENTRY_RE.source, 'g');
+// 압축 경계 (#891). 이 줄 뒤의 읽음만 인정한다.
+const COMPACT_BOUNDARY_RE = /"subtype":"compact_boundary"/g;
 const FLOW_ACTION_RES = [
   ['commit', /^(?:\S*\/)?git(?:\s+-C\s+\S+)*\s+commit\b/],
   ['push', /^(?:\S*\/)?git(?:\s+-C\s+\S+)*\s+push\b/],
   ['pr', /^(?:\S*\/)?gh\s+pr\s+create\b/],
 ];
 const FLOW_SCAN_CHUNK = 4 << 20;
-const FLOW_PR_DENY = '[ops-agent 플로우 진입 · 차단] 이 세션은 플로우 가이드를 읽지 않고 PR 을 만듭니다 (#773).\n'
+const FLOW_PR_DENY = '[ops-agent 플로우 진입 · 차단] 이 세션은 플로우 가이드를 읽지 않고(또는 압축 뒤 다시 읽지 않고) PR 을 만듭니다 (#773 · #891).\n'
   + 'PR 생성의 초안 · 본문 · 리뷰 요청 순서는 가이드에 있습니다. 먼저 읽고 가이드 절차(초안 생성)대로 다시 만듭니다:\n'
   + '  ~/.claude/ops-agent/current/skills/flow/guides/pr.md\n'
-  + '읽으면 이 세션은 끝까지 통과합니다. 비활성: OPS_AGENT_FLOW_ENTRY_DISABLE=1';
+  + '읽으면 다음 컨텍스트 압축 전까지 통과합니다. 비활성: OPS_AGENT_FLOW_ENTRY_DISABLE=1';
 const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
 // `gh pr merge` 가 값을 취하는 플래그. 값이 PR 번호 자리로 읽히지 않게 먼저 걷어낸다.
 const MERGE_VALUE_FLAG = /(?:^|\s)(?:-[btFAR]|--(?:body|body-file|subject|match-head-commit|author-email|repo))(?:\s+|=)(?:"[^"]*"|'[^']*'|\S+)/g;
@@ -1278,22 +1281,29 @@ function recordFlowEntry(command, hookInput, cwd) {
 }
 
 // 대화 기록은 수십 MB 까지 자란다. 세션마다 읽은 위치를 캐시에 두고 그 뒤만 읽는다.
-// 한 번 찾으면 그 세션은 끝까지 loaded 다. 예산이 모자라면 판정하지 않고 unknown 을 남긴다.
+// 읽음은 마지막 압축 경계 뒤의 흔적만 인정한다 (#891). 압축은 읽은 가이드를 요약으로 대체해, 경계 앞의 읽음으로
+// 통과시키면 가이드 없이 PR 을 만든다. 예산이 모자라면 판정하지 않고 unknown 을 남긴다.
+// 판정 상수(FLOW_ENTRY_RE_G · COMPACT_BOUNDARY_RE)는 위쪽 FLOW_ENTRY_RE 옆에 있다.
+function lastMatchIndex(re, text) {
+  let last = -1;
+  for (const m of text.matchAll(re)) last = m.index;
+  return last;
+}
+
 function flowGuideLoaded(sessionId, transcriptPath) {
   if (!sessionId || !existsSync(transcriptPath)) return 'unknown';
   const cacheFile = join(homedir(), '.claude', 'ops-agent', '.cache', 'flow-entry', `${sessionId}.json`);
   let state = { offset: 0, loaded: false };
   try { state = { ...state, ...JSON.parse(readFileSync(cacheFile, 'utf8')) }; } catch { /* 첫 호출 */ }
-  if (state.loaded) return 'loaded';
 
-  let verdict = 'missed';
+  let complete = true;
   const fd = openSync(transcriptPath, 'r');
   try {
     const size = statSync(transcriptPath).size;
-    if (size < state.offset) state.offset = 0; // 기록이 새로 쓰였다
+    if (size < state.offset) state = { offset: 0, loaded: false }; // 기록이 새로 쓰였다
     let pos = state.offset;
     while (pos < size) {
-      if (remainingMs() < 300) { verdict = 'unknown'; break; }
+      if (remainingMs() < 300) { complete = false; break; }
       const len = Math.min(FLOW_SCAN_CHUNK, size - pos);
       const buf = Buffer.alloc(len);
       const n = readSync(fd, buf, 0, len, pos);
@@ -1304,9 +1314,12 @@ function flowGuideLoaded(sessionId, transcriptPath) {
         if (pos + n >= size) break;
         end = n - 1; // 청크보다 긴 줄
       }
-      const hit = FLOW_ENTRY_RE.test(buf.toString('utf8', 0, end + 1));
+      const text = buf.toString('utf8', 0, end + 1);
+      const hit = lastMatchIndex(FLOW_ENTRY_RE_G, text);
+      const boundary = lastMatchIndex(COMPACT_BOUNDARY_RE, text);
+      if (hit > boundary) state.loaded = true;
+      else if (boundary > hit) state.loaded = false;
       pos += end + 1;
-      if (hit) { state.loaded = true; verdict = 'loaded'; break; }
     }
     state.offset = pos;
   } finally {
@@ -1316,7 +1329,8 @@ function flowGuideLoaded(sessionId, transcriptPath) {
     mkdirSync(dirname(cacheFile), { recursive: true });
     writeFileSync(cacheFile, JSON.stringify(state));
   } catch { /* 캐시가 없으면 다음 호출이 처음부터 읽는다 */ }
-  return verdict;
+  if (state.loaded && complete) return 'loaded';
+  return complete ? 'missed' : 'unknown';
 }
 
 function appendFinalCheckMetric(rec) {

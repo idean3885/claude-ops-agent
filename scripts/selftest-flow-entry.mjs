@@ -127,6 +127,31 @@ denyCase('푸시와 함께 온 PR 생성도 막는다', [OTHER], 'git push -u or
 denyCase('가이드를 읽은 세션의 PR 생성은 통과', [SESSION_START, READ_GUIDE], PR, false);
 denyCase('읽지 않아도 커밋 · push 는 막지 않는다', [OTHER], 'git commit -m x && git push', false);
 
+// 압축 경계 (#891). 압축은 읽은 가이드를 요약으로 대체하므로 경계 앞의 읽음은 경계 뒤 절차의 근거가 아니다.
+const COMPACT = JSON.stringify({ type: 'system', subtype: 'compact_boundary', content: 'Conversation compacted' });
+denyCase('압축 전에만 읽은 세션의 PR 생성은 막는다', [READ_GUIDE, COMPACT, OTHER], PR, true);
+denyCase('압축 뒤 다시 읽으면 통과', [READ_GUIDE, COMPACT, BASH_GUIDE], PR, false);
+denyCase('압축 뒤 처음 읽어도 통과', [OTHER, COMPACT, READ_GUIDE], PR, false);
+
+// 실제 세션은 읽음 판정을 캐시에 둔다. 캐시가 loaded 인 뒤에 압축이 와도 판정이 풀려야 한다.
+{
+  const home = mkdtempSync(join(tmpdir(), 'flow-entry-'));
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, [READ_GUIDE, OTHER].map(l => l + '\n').join(''));
+    const first = runHook(home, transcript, PR, 'cache-compact');
+    check('캐시: 압축 전 PR 생성은 통과', !/플로우 진입 · 차단/.test(first.stdout || ''), (first.stdout || '').slice(0, 160));
+    appendFileSync(transcript, COMPACT + '\n' + OTHER + '\n');
+    const second = runHook(home, transcript, PR, 'cache-compact');
+    check('캐시: loaded 뒤 압축이 오면 PR 생성을 막는다', /플로우 진입 · 차단/.test(second.stdout || ''), (second.stdout || '').slice(0, 160));
+    appendFileSync(transcript, SKILL_FLOW + '\n');
+    const third = runHook(home, transcript, PR, 'cache-compact');
+    check('캐시: 압축 뒤 다시 읽으면 통과', !/플로우 진입 · 차단/.test(third.stdout || ''), (third.stdout || '').slice(0, 160));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
 // 대화 기록이 없는 호출은 세지 않는다. 다른 자체 점검이 사용자 지표에 기록을 남기지 않게 하는 조건이다.
 {
   const home = mkdtempSync(join(tmpdir(), 'flow-entry-'));
