@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Fixed
+* CLAUDE.md 체크리스트의 dbgate 자체 점검 코드 블록 닫힘 (#906)
+
 ## [9.44.0] - 2026-11-06
 
 ### Added
