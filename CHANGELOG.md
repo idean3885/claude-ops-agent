@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Changed
+* README 의 할 수 있는 일(기능 영역) 절 (#905)
+
 ### Fixed
 * CLAUDE.md 체크리스트의 dbgate 자체 점검 코드 블록 닫힘 (#906)
 
