@@ -1,0 +1,78 @@
+#!/bin/bash
+# DbGate 웹 서버를 뒤에서 켜고 브라우저 탭을 연 뒤 바로 끝난다. 상주시키지 않는다.
+#   dbgate        켜고(이미 켜져 있으면 그대로) 브라우저 탭을 연다. Orca 터미널이면 오른쪽에 탭을 연다
+#   dbgate stop   바로 끈다
+# 서버는 브라우저 탭이 붙어 있는 동안만 켜져 있다. 접속이 IDLE_SEC 초(10분) 동안 없으면 스스로 꺼진다.
+# 이 PC 안에서만 접속된다(serve.js). 접속 목록 형식과 자리는 ../SKILL.md 「접속 목록」.
+PORT=${DBGATE_PORT:-3999}
+URL="http://localhost:$PORT"
+IDLE_SEC=${DBGATE_IDLE_SEC:-600}
+CHECK_SEC=${DBGATE_CHECK_SEC:-30}
+SELF="$(readlink -f "$0")"
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+STATE="$HOME/.claude/ops-agent/dbgate/state"
+PIDFILE="$STATE/supervisor.pid"
+mkdir -p "$STATE"
+
+listening() { lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; }
+
+open_tab() {
+  if [ -n "${ORCA_TERMINAL_HANDLE-}" ] && command -v orca >/dev/null; then
+    # 이미 열린 DbGate 탭이 있으면 새로 만들지 않고 그 탭을 앞으로 가져온다. 서버를 다시 켰어도 탭이 스스로 다시 연결한다.
+    page=$(orca tab list --json 2>/dev/null | python3 -I -c 'import json,sys
+url=sys.argv[1]
+tabs=json.load(sys.stdin).get("result",{}).get("tabs",[])
+print(next((t["browserPageId"] for t in tabs if t.get("url","").startswith(url)),""))' "$URL")
+    if [ -n "$page" ]; then
+      orca tab switch --page "$page" --focus >/dev/null
+      # DbGate 는 켤 때마다 로그인 토큰 키를 새로 만든다. 다시 켠 뒤 예전 탭은 「missing authorization header」가 되므로 첫 화면으로 다시 연다.
+      orca goto --url "$URL" >/dev/null
+    else
+      orca tab create --url "$URL" --split right >/dev/null
+    fi
+  else
+    open "$URL"
+  fi
+}
+
+# 서버를 띄우고 브라우저 접속이 없는 시간을 잰다. 터미널과 떨어진 세션에서 돈다.
+serve() {
+  echo $$ > "$PIDFILE"
+  cd "$ROOT" || exit 1
+  PORT=$PORT node serve.js &
+  server=$!
+  trap 'kill $server 2>/dev/null; rm -f "$PIDFILE"' EXIT
+  trap 'exit 0' INT TERM HUP
+  idle=0
+  while kill -0 $server 2>/dev/null; do
+    sleep $CHECK_SEC & wait $!   # wait 로 기다려야 끄라는 신호를 바로 처리한다
+    # 열린 DbGate 탭은 서버와 이벤트 스트림 연결을 계속 유지한다. 서버 쪽 3999 연결이 없으면 쓰는 탭이 없다.
+    if lsof -a -p $server -nP -iTCP:$PORT -sTCP:ESTABLISHED >/dev/null 2>&1; then
+      idle=0
+    else
+      idle=$((idle + CHECK_SEC))
+      if [ $idle -ge $IDLE_SEC ]; then
+        echo "$(date '+%F %T') 접속 없음 ${IDLE_SEC}초, 끈다"
+        exit 0
+      fi
+    fi
+  done
+}
+
+case "${1-}" in
+  --serve) serve; exit ;;
+  stop)
+    [ -f "$PIDFILE" ] && kill "$(cat "$PIDFILE")" 2>/dev/null && echo "껐습니다" || echo "켜져 있지 않습니다"
+    exit 0 ;;
+esac
+
+if ! listening; then
+  # 새 세션(setsid)으로 띄워 이 터미널을 닫아도 꺼지지 않게 한다. 끄는 일은 접속 확인 루프가 맡는다.
+  nohup python3 -I -c 'import os,sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])' "$SELF" --serve \
+    >> "$STATE/server.log" 2>&1 < /dev/null &
+  # 처음 켤 때는 키체인 허용 창에 답하는 시간이 필요하다(최대 5분).
+  for _ in $(seq 1 600); do listening && break; sleep 0.5; done
+  listening || { echo "켜지지 않았습니다. 로그: $STATE/server.log"; exit 1; }
+fi
+open_tab
+echo "DbGate: $URL (탭을 닫고 $((IDLE_SEC / 60))분 뒤 자동으로 꺼짐)"
