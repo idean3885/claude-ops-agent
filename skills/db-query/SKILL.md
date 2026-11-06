@@ -1,0 +1,92 @@
+---
+name: db-query
+description: DB 조회 요청을 DBA 판단을 받아 실무자가 가드가 걸린 조회 도구로 실행한다. 조회 전용 계정이면 바로, 아니면 사람의 1회 승인 뒤 실행하고, 쓰기는 사람에게 넘긴다. 트리거 "DB 조회", "디비 조회", "쿼리 돌려", "데이터 확인", "테이블 조회".
+trigger: ["DB 조회", "디비 조회", "쿼리 돌려", "데이터 확인", "테이블 조회"]
+requires:
+  - kind: command
+    name: dbgate-serve
+    check: command -v dbgate-serve
+    install: npm install -g dbgate-serve
+    why: 조회 드라이버(mysql2)와 접속 목록 해석을 dbgate 스킬과 같이 쓴다.
+---
+
+# DB 조회
+
+AI 가 DB 를 조회하는 유일한 길이다. 대상은 MySQL 이다. 사람이 말로 요청하고, DBA 가 판단하고, 실무자가 가드 안에서 실행한다.
+
+진입하기 전에 `requires:` 를 확인한다. 미충족이면 [`bootstrap`](../bootstrap/SKILL.md) 의 미충족 보고를 내고 멈춘다. 접속 목록은 [`dbgate`](../dbgate/SKILL.md) 「접속 목록」과 같은 파일이다.
+
+## 역할
+
+[ADR-0019](../../docs/adr/0019-roles-follow-raci-a-c-r.md) 의 세 칸을 따른다. 전문가는 조회문을 쓰지 않는다. 자기가 쓴 조회를 자기 기준으로 승인하는 고리가 생기기 때문이다.
+
+| 칸 | 누가 | 하는 일 |
+|----|------|---------|
+| 결정자 | 사람 | 요청 · DBA 결론에 대한 이의 · 예외 승인 · 쓰기 실행 |
+| 전문가 | [DBA](../../experts/dba.md) | 조회 한 건에 「운영 조회」 기준(DB8~DB12)으로 결론 한 줄과 사유 |
+| 실무자 | [db-query-operator](../../agents/db-query-operator.md) | 요청을 조회문으로 옮기고, DBA 결론대로 고쳐 가드 도구로 실행하고 결과를 보고 |
+
+## 회전
+
+```text
+요청(말) ─▶ 실무자: 접속 · 조회문 초안
+          ─▶ DBA: 그대로 실행 / 바꿔서 실행 / 실행하지 않음 + 사유
+          ─▶ 실무자: query.js 실행 (가드가 다시 판정)
+          ─▶ 보고: 결과 · 가림 칸 수 · 예외 여부
+쓰기(DML · DDL)가 필요하면 ─▶ DBA 입회로 작업 내용을 정리해 넘기고 멈춘다. 실행은 사람
+```
+
+| 단계 | 완료 조건 |
+|------|-----------|
+| 1. 초안 | 접속 이름과 조회문 하나가 정해진다. 무엇을 확인하려는지 한 줄이 붙는다. |
+| 2. 판단 | DBA 결론 한 줄이 있다. 「실행하지 않음」이면 대안을 사람에게 내고 멈춘다. |
+| 3. 실행 | 가드 도구의 종료 코드가 나온다. 거절(3 · 4)이면 사유를 그대로 보고하고 조회문을 고쳐 2로 돌아간다. |
+| 4. 보고 | 결과와 마지막 줄(행 수 · 가림 칸 · 계정 · 예상 처리 행)을 낸다. |
+
+거절 사유를 우회하려고 조회를 쪼개 여러 번 보내지 않는다. 가드가 막은 것은 그 조회의 성질이지 횟수가 아니다.
+
+## 가드
+
+`node ~/.claude/ops-agent/current/skills/db-query/query.js "<접속 이름>" --sql "<SELECT ...>" [--database <스키마>]`
+
+판정은 [guard.js](guard.js) 에 있고 [`scripts/selftest-db-query.mjs`](../../scripts/selftest-db-query.mjs) 가 막는 것마다 시험한다.
+
+| 순서 | 막는 것 | 거절 시 종료 |
+|------|---------|--------------|
+| 문장 | 읽기 문장(SELECT · WITH · SHOW · DESC · EXPLAIN) 하나만. 잠금 읽기 · 파일 출력 · 대기 함수 · `EXPLAIN ANALYZE`(실제로 실행한다) 거절. 문자열 · 주석은 나타난 순서대로 지우고, 버전 주석(`/*!…*/` · MariaDB `/*M!…*/`)과 실행 시간 힌트(`MAX_EXECUTION_TIME`)는 거절한다. | 3 |
+| 결과 컬럼 | SELECT 목록의 `*` 와 개인정보 이름의 컬럼(별칭 · 함수 · 백틱 · camelCase 포함) 거절. `COUNT(…)` 안과 `EXISTS (SELECT * …)` 는 허용 | 3 |
+| 계정 | `SHOW GRANTS` 가 조회 권한(SELECT · SHOW VIEW · USAGE · SHOW DATABASES)뿐인가. 부분 회수 줄은 무시 | 4 |
+| 세션 | 읽기 전용 트랜잭션, 서버 실행 시간 상한 10초 | (서버가 끊음) |
+| 비용 | `EXPLAIN` 으로 한 테이블 전체 훑기 100만 행 초과, 예상 처리 1,000만 행 초과(같은 SELECT 블록은 곱, 블록끼리는 합)면 실행하지 않음 | 3 |
+| 크기 | 바깥 LIMIT 이 없으면 200 을 붙이고, 200 을 넘는 LIMIT 은 거절. 출력도 200행에서 자름 | 3 |
+| 개인정보 가림 | 원래 컬럼 이름이나 결과 이름이 개인정보면 통째로, 값 안의 이메일 · 전화 · 주민번호 · 카드번호 형태는 그 부분만 `***` | |
+| 암호화 | SSL 사용, 인증서 검증 없음. mysql 명령의 기본과 같다. SSL 필수 계정이 있고 사설 CA 를 목록에 두지 않는다. | |
+
+가림은 마지막 방어다. 개인정보가 필요 없는 조회로 쓰는 것이 먼저다(DB11). 원본 행을 봐야 하면 사람이 [`dbgate`](../dbgate/SKILL.md) 화면에서 본다.
+
+### 조회 전용 계정이 아닐 때
+
+긴급 장애처럼 조회 전용 계정이 없는 접속을 봐야 하면 `--allow-write-account` 를 붙인다. 그 호출은 하네스가 매번 사람에게 묻는다(아래 ask 규칙). 문장 · 세션 · 비용 · 크기 · 개인정보 가드는 그대로 걸린다. 감사 기록에 `account: exception` 으로 남고, 그 기록이 쌓인 환경이 조회 전용 계정을 발급할 후보다.
+
+### 하네스 규칙
+
+`~/.claude/settings.json` 의 `permissions` 에 사람이 넣는다. ask 가 allow 보다 먼저 평가되므로 예외 옵션이 붙은 호출만 매번 묻는다([permissions](https://code.claude.com/docs/en/permissions)). 경로는 위 명령과 같은 문자열이어야 맞는다.
+
+```json
+{
+  "allow": ["Bash(node ~/.claude/ops-agent/current/skills/db-query/query.js *)"],
+  "ask": ["Bash(node ~/.claude/ops-agent/current/skills/db-query/query.js *--allow-write-account*)"]
+}
+```
+
+## 의견 일치
+
+목표는 사람과 DBA 의 결론이 같아지는 것이다. 사람이 DBA 결론을 뒤집으면 실무자가 `~/.claude/ops-agent/db-query/overrides.md` 에 한 줄을 더한다: 날짜 · DBA 결론 · 사람의 결정 · 사람이 든 이유. 같은 모양의 이유가 두 번 나오면 [전문가](../expert/SKILL.md) 「판단을 남기는 자리」대로 DBA 판정 기준에 올리는 이슈를 낸다. 줄 수가 줄어드는 것이 일치에 다가가는 지표다.
+
+## 소비 환경이 채우는 것
+
+| 무엇 | 왜 여기 없는가 |
+|------|----------------|
+| 접속 목록 | 접속 주소는 그 조직의 자산이다. |
+| 조회 전용 계정 | 계정 발급은 DB 운영 주체가 한다. |
+| 개인정보로 보는 범위 | 조직의 개인정보 정책이 정한다. 가드의 패턴은 그 최소한이고, `~/.claude/ops-agent/db-query/pii.json` 의 `columns`(정규식 배열)로 컬럼 이름을 더한다. |

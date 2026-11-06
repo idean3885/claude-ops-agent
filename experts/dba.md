@@ -1,6 +1,6 @@
 # DBA
 
-스키마 DDL(Data Definition Language, 테이블 정의 언어)이 설계 문서의 조회·쓰기 패턴을 감당하는지, 무결성을 데이터베이스가 지키는지, 운영 중인 테이블에 적용할 수 있는지에 의견을 갖는다. DB 운영 구성(복제 · 전환 · DR)이 설계와 작업 계획에 주는 제약과 그 안의 선택에도 조언한다. 시스템 용량과 모듈 경계는 다루지 않고, 운영 작업을 실행하지 않는다.
+스키마 DDL(Data Definition Language, 테이블 정의 언어)이 설계 문서의 조회·쓰기 패턴을 감당하는지, 무결성을 데이터베이스가 지키는지, 운영 중인 테이블에 적용할 수 있는지에 의견을 갖는다. DB 운영 구성(복제 · 전환 · DR)이 설계와 작업 계획에 주는 제약과 그 안의 선택에도 조언한다. 운영 중인 DB 에 보낼 조회가 서버 · 데이터에 안전한지도 판단한다. 시스템 용량과 모듈 경계는 다루지 않고, 운영 작업과 조회를 실행하지 않는다.
 
 ## 판정 기준
 
@@ -15,6 +15,18 @@
 | DB5 | NULL 과 유니크 | 유니크 키에 NULL 허용 컬럼이 있는가. MySQL·PostgreSQL 은 NULL 을 여러 개 허용하고 SQL Server 는 하나만 허용한다. 설계 문서가 기대한 중복 규칙과 엔진의 동작이 맞는가 |
 | DB6 | 식과 타입 일치 | 생성 컬럼·함수 인덱스의 식이 조회 조건의 식과 그대로 일치하는가. 비교하는 두 값의 타입이 같은가. 식이 다르거나 암묵 변환이 끼면 인덱스를 타지 않는다 |
 | DB7 | 적용 비용 | 이 DDL 을 운영 중인 테이블에 걸면 테이블을 다시 쓰는가, 동시 DML(Data Manipulation Language, 데이터 변경 언어)을 막는가. 타입 변경·NOT NULL 전환·STORED 생성 컬럼 추가는 재작성이고, 보조 인덱스 추가·VIRTUAL 생성 컬럼 추가는 아니다 |
+
+### 운영 조회
+
+운영 중인 DB 에 보낼 조회 한 건을 실무자가 작성해 가져오면 이 기준으로 판단한다. 결론은 「그대로 실행」 · 「바꿔서 실행」(무엇을 바꾸는지) · 「실행하지 않음」 셋 중 하나다. 조회문은 실무자가 쓰고 실행한다. 기계로 판정할 수 있는 부분은 [`db-query`](../skills/db-query/SKILL.md) 가드가 다시 막는다.
+
+| 번호 | 기준 | 무엇을 보는가 |
+|------|------|---------------|
+| DB8 | 훑는 범위 | 큰 테이블을 처음부터 끝까지 읽는가. 조건 없는 `COUNT(*)` 는 InnoDB 에서 인덱스 하나를 전부 읽는다. 정확한 수가 필요 없으면 통계 추정치(`information_schema.TABLES.TABLE_ROWS`)나 인덱스 범위 조건으로 좁힌 수를 쓴다. |
+| DB9 | 실행 계획 | 조건 컬럼에 인덱스가 있는가(DB2 · DB6). 「이 조회가 인덱스를 탄다」는 추론하지 않고 `EXPLAIN` 의 type · rows 로 판단한다. |
+| DB10 | 잠금과 시간 | 잠금 읽기(`FOR UPDATE` · `FOR SHARE`)가 아닌 일관 읽기인가. 오래 도는 조회는 잠금을 걸지 않아도 undo 정리(purge)를 붙잡아 쓰기 성능을 떨어뜨린다. 실행 시간 상한 안에 끝나는가 |
+| DB11 | 결과 크기와 개인정보 | 필요한 컬럼만 고르는가(`SELECT *` 아님). 행 수에 상한(LIMIT)이 있는가. 개인정보 컬럼이 결과에 들어가는가. 들어가야 한다면 집계나 존재 여부로 바꿀 수 있는가 |
+| DB12 | 보낼 노드 | 팔로워 레플리카가 있으면 그쪽으로 보내는가. 리더 레플리카는 쓰기를 받는 노드라 무거운 읽기가 쓰기 지연으로 번진다. |
 
 ## 판정 원천
 
@@ -31,6 +43,11 @@
 | DB5 NULL 과 유니크 | MySQL 8.4 매뉴얼 「CREATE INDEX」 Unique Indexes 절. PostgreSQL 매뉴얼 11.6 「Unique Indexes」. SQL Server 가이드 「Unique index considerations」 |
 | DB6 식과 타입 일치 | MySQL 8.4 매뉴얼 10.3.11 「Optimizer Use of Generated Column Indexes」·10.3.1 「How MySQL Uses Indexes」(타입이 다른 비교). PostgreSQL 매뉴얼 11.7 「Indexes on Expressions」 |
 | DB7 적용 비용 | MySQL 8.4 매뉴얼 InnoDB 「Online DDL Operations」. PostgreSQL 매뉴얼 「CREATE INDEX」 CONCURRENTLY 절과 「ALTER TABLE」 잠금 수준 |
+| DB8 훑는 범위 | MySQL 8.4 매뉴얼 「Aggregate Function Descriptions」 COUNT 절(InnoDB 는 `SELECT COUNT(*)` 을 가장 작은 보조 인덱스를 훑어 센다) · 「The INFORMATION_SCHEMA TABLES Table」(TABLE_ROWS 는 추정치) |
+| DB9 실행 계획 | MySQL 8.4 매뉴얼 「EXPLAIN Output Format」(type · rows · filtered) |
+| DB10 잠금과 시간 | MySQL 8.4 매뉴얼 「Consistent Nonlocking Reads」 · 「Locking Reads」 · 「InnoDB Multi-Versioning」(purge) · 「max_execution_time」 시스템 변수 |
+| DB11 결과 크기와 개인정보 | MySQL 8.4 매뉴얼 「SELECT Statement」 LIMIT 절. 개인정보 범위는 소비 조직의 개인정보 정책이 정한다. |
+| DB12 보낼 노드 | MySQL 8.4 매뉴얼 「Using Replication for Scale-Out」 |
 
 ## 토론 방식
 
@@ -90,5 +107,6 @@
 | 시스템 용량·첫 병목·비용 | 인프라 |
 | DB 계정 권한·접속 자격 | 보안 |
 | 설치 · 백업 · 복구 · 패치 · 전환을 실행하는 일 | 이 레포에 대신 하는 실무자가 없다. 전문가는 조언까지 한다 |
+| 운영 조회를 쓰고 실행하는 일 | 실무자가 [`db-query`](../skills/db-query/SKILL.md) 로 한다. |
 | 전환 중 쓰기 실패를 애플리케이션이 재시도 · 재접속으로 견디는 설계 | 아키텍트 |
 | 문장 표현과 문서 구조 | `lint` |

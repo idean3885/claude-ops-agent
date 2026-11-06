@@ -237,6 +237,9 @@ main ────────────────●─────
 - [ ] **`skills/dbgate/lib/connections.js` 를 고쳤으면 자체 점검을 실행한다.** 비밀번호를 다른 계정에 넣거나 지운 접속을 되살리는 결함은 접속이 실패하기 전까지 드러나지 않는다.
   ```bash
   node scripts/selftest-dbgate.mjs
+- [ ] **`skills/db-query/guard.js` 를 고쳤으면 자체 점검을 실행한다.** 가드는 거절할 때만 드러나므로 무너지면 무거운 조회 · 쓰기 · 개인정보가 신호 없이 통과한다.
+  ```bash
+  node scripts/selftest-db-query.mjs
   ```
 - [ ] **`skills/transcribe/cleanup.py` 를 고쳤으면 자체 점검을 실행한다.** 교정은 한 번에 끝내므로 치환이 무너지면 틀린 정리본이 그대로 굳는다.
   ```bash
