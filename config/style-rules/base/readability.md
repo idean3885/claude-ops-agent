@@ -5,12 +5,12 @@
 > **출처**: Google Developer Documentation Style Guide, Microsoft Writing Style Guide,
 > Nielsen Norman Group 웹 가독성 연구, WCAG CJK 타이포그래피 권장사항 종합.
 
-> **분리 구조**: 본 파일은 구조 가독성(P·H·L·C·V·CJ·BQ)만 다룬다.
+> **분리 구조**: 본 파일은 구조 가독성(P·H·L·C·V·CJ·BQ·LB·SC)만 다룬다.
 > - 저자 톤(T1\~T24) → [`tone.md`](./tone.md)
 > - 한국어 구두점(PN1\~PN8) → [`punctuation.md`](./punctuation.md)
 > - AI 티 분류(A\~K) → [`ai-tells.md`](./ai-tells.md)
 > - 산출물 분량(LN1\~LN2) → [`length.md`](./length.md)
-> - 문서의 목적과 범위(PU1\~PU5) → [`purpose.md`](./purpose.md)
+> - 문서의 목적과 범위(PU1\~PU6) → [`purpose.md`](./purpose.md)
 > - 문서 유형별 적용 강도 → [`../extensions/{유형}.md`](../extensions/)
 
 ---

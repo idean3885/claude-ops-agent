@@ -4,14 +4,14 @@
 
 | 파일 | 역할 |
 |------|------|
-| `base/purpose.md` | 문서의 목적과 범위 (PU1~PU5). 착수 전에 판정하는 유일한 파일 |
+| `base/purpose.md` | 문서의 목적과 범위 (PU1~PU6). 쓰기 전에 판정하는 축(PU1·PU2)을 가진 유일한 파일 |
 | `base/ai-tells.md` | AI 티 분류 (A~K, im-not-ai MIT 차용) |
-| `base/readability.md` | 구조 가독성 (P·H·L·C·V·CJ·BQ) |
+| `base/readability.md` | 구조 가독성 (P·H·L·C·V·CJ·BQ·LB·SC) |
 | `base/tone.md` | 저자 톤 (T1~T24) |
 | `base/punctuation.md` | 한국어 구두점 (PN1\~PN8) |
 | `base/length.md` | 산출물 분량 (LN1~LN2) |
 | `base/terms.md` | 표준 용어 목록. 용어 교정으로 바로잡은 말과 문장 시험 예문(글 · 말) |
-| `base/authoring.md` | `SKILL.md`·`CLAUDE.md`·가이드·provider 정의를 쓰거나 고칠 때 적용 (AU1~AU6, mattpocock/skills MIT 차용) |
+| `base/authoring.md` | `SKILL.md`·`CLAUDE.md`·가이드·provider 정의를 쓰거나 고칠 때 적용 (AU1~AU8, mattpocock/skills MIT 차용) |
 | `extensions/profiles.md` | 유형별 적용 대상·적용 강도·합격선 정본 |
 | `extensions/{blog,wiki,poc,info,knowledge,issue,deck,architecture,dailylog,peer-review,work-review}.md` | 문서 유형별 고유 규칙 |
 | `metrics/` | 정량 지표 정의와 카운터 스크립트 |
