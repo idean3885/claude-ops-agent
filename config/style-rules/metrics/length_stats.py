@@ -114,7 +114,7 @@ def main():
         print(json.dumps(s, ensure_ascii=False))
     elif not s['enough']:
         print(f"표본 {s['n']}편 — {MIN_SAMPLES}편 미만이므로 기준값을 내지 않는다.")
-        print('상한을 적지 않고 LN1·LN2 만 적용한다. 표본 없이 만든 상한은 근거가 아니라 추측이다.')
+        print('하한 · 상한을 적지 않고 LN1·LN2 만 적용한다. 표본 없이 만든 기준값은 근거가 아니라 추측이다.')
     else:
         print(f"표본 {s['n']}편 · 실측 {s['min']}~{s['max']}행")
         print(f"하한 {s['floor']}행 · 중앙 {s['median']}행 · 상한 {s['cap']}행")

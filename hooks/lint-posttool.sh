@@ -133,7 +133,7 @@ esac
 #
 # 같은 마크다운이라도 읽는 쪽이 사람인지 모델인지에 따라 걸리는 규칙이 다르다.
 # 네 축(ai-tells·readability·tone·punctuation)은 사람이 읽는 한국어 산문을 다루고
-# authoring(AU1~AU6)은 모델이 읽는 문서를 다룬다. 판정 없이 네 범주만 지시하면
+# authoring(AU1~AU8)은 모델이 읽는 문서를 다룬다. 판정 없이 네 범주만 지시하면
 # SKILL.md 를 편집해도 포인터 문구·정보 계층·완료 조건이 점검 대상에 들어오지 않는다.
 #
 # 경로로 판정한다. 파일 내용으로 추론하면 같은 파일이 편집마다 다르게 잡힌다.
@@ -184,7 +184,7 @@ msg="${msg}AI 티(style-rules base/ai-tells), 가독성(readability), 저자 톤
 msg="${msg}구조를 먼저 본다: 문서가 세운 전제와 문서의 구성 방식이 어긋나는 쌍이 있는가(purpose PU5). "
 msg="${msg}걸리면 통째로 빠질 절이므로 문장 교정보다 이쪽이 먼저다. "
 if [ -n "$agent_doc" ]; then
-  msg="${msg}[에이전트가 읽는 문서] authoring(base/authoring.md AU1~AU6) 도 함께 적용하라: "
+  msg="${msg}[에이전트가 읽는 문서] authoring(base/authoring.md AU1~AU8) 도 함께 적용하라: "
   msg="${msg}포인터 문구가 갈래당 하나인가(AU1) · 일부 갈래만 쓰는 참조가 단계를 덮고 있는가(AU3) · "
   msg="${msg}각 단계의 끝을 판별할 수 있고 빠뜨림이 드러나는가(AU4) · 금지형만 있고 목표 동작이 없는 지시가 있는가(AU5) · "
   msg="${msg}환경을 옮겨 적은 줄과 기본값과 같은 지시가 있는가(AU6). "

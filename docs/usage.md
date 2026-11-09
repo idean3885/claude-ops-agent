@@ -43,7 +43,7 @@ claude plugin update ops-agent@ops-agent
 | PreToolUse | 기본 브랜치 직접 push, `reset --hard`·`clean -f`·`branch -D`·`restore` | **사용자가 세션 허용을 켤 때까지 차단** |
 | PreToolUse | 커밋·push·PR 생성 직전, 그 세션이 플로우 가이드를 읽었는지 | 기록 (`metrics/flow-entry.jsonl`). 읽지 않은 세션의 PR 생성은 **차단** |
 | PostToolUse | 문서 편집 후 표현·구조 위반 위치와 수치 | 알림 (마커 파일 있을 때만) |
-| PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU6) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
+| PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU8) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
 | UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`) |
 | Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 교정 요청 |
 
