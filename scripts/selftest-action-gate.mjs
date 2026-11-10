@@ -397,10 +397,32 @@ reviewCase('차단 건수 없는 옛 형식', '## 주장 검증\n- 1회: 지적 
 reviewCase('회차 상한은 스킬 몫', '## 주장 검증\n- 1회: 차단 3건\n- 2회: 차단 2건\n- 3회: 차단 1건\n- 4회: 차단 0건\n', true);
 reviewCase('회차 건너뜀', '## 주장 검증\n- 1회: 차단 2건\n- 3회: 차단 0건\n', false, '이어지지 않는다');
 reviewCase('첫 어긋난 줄을 가리킨다', '## 주장 검증\n- 2회: 차단 1건\n- 3회: 차단 0건\n', false, '1번째 줄이 2회');
+// 주장 검증 입력 (#928). 「빠진 행」은 이슈 원문을 받아야 검출력이 있다. 노트에 원문 파일 경로가 있고 그 파일이 비어 있지 않아야 한다.
+const issueRaw = join(reviewDir, 'issue-raw.md');
+writeFileSync(issueRaw, '## Todo\n- [ ] 남은 항목\n');
+const issueEmpty = join(reviewDir, 'issue-empty.md');
+writeFileSync(issueEmpty, '');
+function inputCase(name, notes, wantPass, reasonHas = '') {
+  const file = join(reviewDir, `input-${typeCaseCount}.md`);
+  writeFileSync(file, notes);
+  const res = spawnSync('bash', ['-c', 'set -uo pipefail; FINAL_CHECK_LIB=1 . "$1"; claim_input_failure "$2"', 'selftest', FC, file], { encoding: 'utf8' });
+  const out = (res.stdout || '').trim();
+  const ok = res.status === 0 && (wantPass ? out === '' : out !== '' && out.includes(reasonHas));
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  주장 검증 입력: ${name} — ${out || '통과'}`);
+}
+inputCase('원문 파일 경로', `## 주장 검증\n- 이슈 본문: ${issueRaw}\n- 1회: 차단 0건\n`, true);
+inputCase('이슈 없는 PR 은 사유와 함께', '## 주장 검증\n- 이슈 본문: 없음 — 이슈 없는 문서 정정\n- 1회: 차단 0건\n', true);
+inputCase('경로 줄 없음', '## 주장 검증\n- 1회: 차단 0건\n', false, '이슈 본문');
+inputCase('다른 절의 경로 줄', `## 교정\n- 이슈 본문: ${issueRaw}\n\n## 주장 검증\n- 1회: 차단 0건\n`, false, '이슈 본문');
+inputCase('없는 파일', '## 주장 검증\n- 이슈 본문: /nonexistent/issue.md\n', false, '없다');
+inputCase('빈 파일', `## 주장 검증\n- 이슈 본문: ${issueEmpty}\n`, false, '비어');
+inputCase('사유 없는 없음', '## 주장 검증\n- 이슈 본문: 없음\n', false, '사유');
 {
   // 진입점 배선. 함수만 부르는 위 케이스는 본 경로에서 h 를 부르지 않아도 통과하므로 소스로 확인한다.
   const src = readFileSync(FC, 'utf8');
-  const ok = (src.match(/LC_ALL=C awk/g) || []).length >= 2 && src.includes('review_failure=$(claim_check_failure "$NOTES")') && src.includes('fail h "주장 검증: $review_failure"') && src.includes('fail h "주장 검증: 노트 파일이 없다"');
+  const ok = (src.match(/LC_ALL=C awk/g) || []).length >= 2 && src.includes('review_failure=$(claim_check_failure "$NOTES")') && src.includes('fail h "주장 검증: $review_failure"') && src.includes('fail h "주장 검증: 노트 파일이 없다"') && src.includes('input_failure=$(claim_input_failure "$NOTES")') && src.includes('fail h "주장 검증 입력: $input_failure"');
   if (!ok) failed++;
   typeCaseCount++;
   console.log(`${ok ? '  OK' : '  XX'}  주장 검증: 진입점이 h 를 판정한다 — ${ok ? '배선 있음' : '배선 없음'}`);
