@@ -2,7 +2,7 @@
 
 한국어 글에서 구두점은 "끊어 읽어야 의미가 살 때"만 사용한다.
 시각적 호흡 장식은 구두점의 역할이 아니다.
-`readability.md CJ2`(합쇼체 통일) 및 `tone.md T1`(em dash 금지)과 함께 문장 리듬의 규범을 이룬다.
+`readability.md CJ2`(어미 통일) 및 `tone.md T1`(em dash 금지)과 함께 문장 리듬의 규범을 이룬다.
 
 ---
 
@@ -90,7 +90,8 @@ Good:
 ```markdown
 Forward Auth의 장점은 인가 로직 중앙화와 스트리밍 병목 해소입니다.
 
-Forward Auth의 장점은 다음과 같습니다.
+**Forward Auth의 장점**
+
 - 인가 로직 중앙화
 - 스트리밍 병목 해소
 ```
