@@ -26,6 +26,7 @@
 #      마지막 회차의 차단 지적이 0건이 아님. 회차 줄 형식은 `- <회차>회: 차단 <건수>건 · 권장 <건수>건 · 사소 <건수>건 (HEAD <sha 7자>)`.
 #      회차 상한은 PR 가이드 「주장 검증」이, 심각도 정의는 제로베이스 검토 스킬이 정한다. 마지막 두 회차의 차단이
 #      줄지 않았으면 멈춤 조건이라 사람 판단으로 넘긴다는 안내를 낸다 (#803)
+#      같은 절에 `- 이슈 본문: <경로>` 가 없거나 그 파일이 없거나 비어 있음. 이슈 없는 PR 은 `- 이슈 본문: 없음 — <사유>` (#928)
 #
 # 통과하면 통과 기록을 남기고 레포 유형별 끝 안내를 낸다. 기록의 원천은 이 로컬 기록 하나이고
 # PR 댓글 · 커밋 상태 같은 공유 표면에는 올리지 않는다 (ADR-0029).
@@ -81,6 +82,31 @@ claim_check_failure() {
       if (last != 0) { print "마지막 회차(" n "회)의 차단 지적이 " last "건이다. 0건이 아니면 통과로 적지 않는다" }
     }
   ' "$notes"
+}
+
+# h. 노트의 ## 주장 검증 절에서 주장 검증 입력(이슈 본문 원문 파일)을 판정한다. 통과면 아무것도 출력하지 않는다.
+# why: 「빠진 행」은 이슈 완료 조건 · Todo 를 원문으로 받아야 검출력이 있다. 요약을 넘기면 차단 0건으로 통과해 누락을 가린다 (#928)
+claim_input_failure() {
+  local notes="$1" value path
+  [ -f "$notes" ] || { echo "노트 파일이 없다"; return 0; }
+  value=$(LC_ALL=C awk '
+    /^##[[:space:]]/ { t=$0; sub(/^##[[:space:]]+/, "", t); sub(/[[:space:]]+$/, "", t); on=(t=="주장 검증"); next }
+    on && match($0, /^[[:space:]]*[-*][[:space:]]*이슈 본문:/) { v=substr($0, RSTART+RLENGTH); sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); print v; exit }
+  ' "$notes")
+  if [ -z "$value" ]; then
+    echo "## 주장 검증 에 이슈 본문 원문 경로 줄(- 이슈 본문: <경로>)이 없다. 트래커 원문을 파일로 저장해 검증에 넘긴다"
+    return 0
+  fi
+  case "$value" in
+    없음*)
+      local reason="${value#없음}"
+      reason="${reason#"${reason%%[![:space:]—-]*}"}"
+      [ -z "$reason" ] && echo "이슈 본문이 「없음」이면 사유를 적는다 (- 이슈 본문: 없음 — <사유>)"
+      return 0 ;;
+  esac
+  path="${value/#\~/$HOME}"
+  if [ ! -f "$path" ]; then echo "이슈 본문 파일이 없다 ($value)"; return 0; fi
+  [ -s "$path" ] || echo "이슈 본문 파일이 비어 있다 ($value)"
 }
 
 # 테스트가 함수만 불러 쓸 때는 여기서 멈춘다. gh 를 부르지 않는다.
@@ -217,6 +243,8 @@ else
   done
   review_failure=$(claim_check_failure "$NOTES")
   [ -n "$review_failure" ] && fail h "주장 검증: $review_failure"
+  input_failure=$(claim_input_failure "$NOTES")
+  [ -n "$input_failure" ] && fail h "주장 검증 입력: $input_failure"
 fi
 
 # g. 커밋 정리: merge-base 이후 커밋이 1개여야 한다. 세지 못하면 PR 의 커밋 목록으로 집계한다.
