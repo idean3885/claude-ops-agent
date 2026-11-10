@@ -13,7 +13,9 @@
 
 ## [Unreleased]
 
-### Added
+## [9.44.5] - 2026-11-10
+
+### Changed
 * 표준 용어에 contact point · Authorization: Bearer 등재 (#922)
 
 ## [9.44.4] - 2026-11-10
