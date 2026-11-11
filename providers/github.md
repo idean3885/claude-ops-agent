@@ -76,16 +76,28 @@ bash ~/.claude/ops-agent/current/scripts/gh-issue.sh start {이슈번호} [--typ
 - **직접 체크아웃**: `--checkout` → `git checkout -b {브랜치} --track origin/{브랜치}`
 - 연결된 브랜치의 PR 은 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다. 이슈와 PR 은 1:1 이다 ([ADR-0032](../docs/adr/0032-one-issue-one-pr-review-design-not-code.md)).
 
-**연결 구조** (`/issue start` 「착수 읽기」 입력): 상위 · 하위(형제 = 상위의 하위) · 선행 연결을 읽는다.
+**연결 구조 조회** (flow 이슈 가이드 「이슈 관계」 대응)
+
+| 관계 | 필드 |
+|------|------|
+| 계층: 상위 | `parent` |
+| 계층: 형제 | 상위의 `subIssues` |
+| 선후: 나를 막는 이슈 | `blockedBy` |
+| 중복 | `duplicateOf` |
+| 관련 · 본문 링크 | 전용 필드 없음. 본문의 `#번호` |
 
 ```bash
 gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){issue(number:$n){
   parent{number title state body}
-  subIssues(first:50){nodes{number title state}}}}}' -F o={owner} -F r={repo} -F n={이슈번호}
-# 형제: 위 응답의 parent.number 로 같은 쿼리를 다시 불러 subIssues 를 읽는다
+  blockedBy(first:20){totalCount nodes{number title state}}
+  duplicateOf{number}}}}' -F o={owner} -F r={repo} -F n={이슈번호}
+# 형제: parent.number 로 다시 불러 subIssues 를 읽는다 (열린 형제는 본문까지)
+gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){issue(number:$n){
+  subIssues(first:50){totalCount nodes{number title state body}}}}}' -F o={owner} -F r={repo} -F n={상위번호}
 ```
 
-- 상위가 없으면(독립 이슈) 형제도 없다. 본문의 선행 연결(`#번호`)만 읽는다.
+- 페이지 한도: `subIssues` 50 · `blockedBy` 20. `totalCount` 가 한도보다 크면 잘린 것이다.
+- 필드 확인: 2026-11-11 이 레포 이슈로 조회해 응답 확인
 
 ### complete
 
