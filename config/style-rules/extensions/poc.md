@@ -3,6 +3,7 @@
 > **Base**: `base/readability.md` + `base/tone.md` + `base/punctuation.md` + `base/ai-tells.md`
 > **Adds**: PoC 문서 특화 규칙 (다섯 단계 구조 + 독자별 요약 위치 + 재현 가능성 + 성공기준 사전정의 + 성공·실패 동시기록 + 확증편향 방지 + 후보 비교)
 > **정본**: PoC 문서 구조의 정본은 이 파일이다. `skills/write` 유형 표와 `skills/infra-lab` 실험 기록은 이 구조를 링크한다.
+> **판정**: 실험 설계가 질문에 답하는가(손실 · 가설 · 비교군 · 평가 기법)는 [실험 전문가](../../../experts/experiment.md)가 판정한다. 이 파일은 문서 형식이다.
 > **Profile**: 적용 대상·base 대비 적용 강도·분량 기준값·합격선은 [profiles.md](profiles.md) 가 정본이다.
 
 PoC 문서는 기술 검증의 결과를 "된다·안 된다"로 명확히 결론짓고, 동일 환경에서 재현 가능한 절차를 남기는 것이 목적이다.
