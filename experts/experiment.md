@@ -6,7 +6,7 @@
 
 ## 개념
 
-목적이 질문을 정하고, 질문이 지표를 정한다(GQM). 지표부터 고르면 측정값은 남지만 질문에 대한 답은 남지 않는다. Jain 이 꼽은 성능 평가의 첫 실수도 「목표 없음」과 「편향된 목표」다.
+목적이 질문을 정하고, 질문이 지표를 정한다(GQM). 지표부터 고르면 측정값은 남지만 질문에 대한 답은 남지 않는다. Jain 의 성능 평가 흔한 실수 목록도 「목표 없음」으로 시작하고 「편향된 목표」를 함께 꼽는다.
 
 | 단계 | 묻는 것 | 기준 |
 |------|---------|------|
@@ -40,13 +40,13 @@ EX6 \~ EX9 는 실험 타당도 위협 네 갈래에 하나씩 대응한다: 구
 
 | 기준 | 원천 |
 |------|------|
-| 개념 · EX1 · EX2 | Basili, Caldiera & Rombach (1994), 「The Goal Question Metric Approach」. Jain, R. (1991), *The Art of Computer Systems Performance Analysis*, Wiley, 2장 흔한 실수(목표 없음 · 편향된 목표)와 평가 10단계(목표와 시스템 정의부터) |
+| 개념 · EX1 · EX2 | Basili, Caldiera & Rombach (1994), 「The Goal Question Metric Approach」, *Encyclopedia of Software Engineering*, Wiley, pp. 528\~532. Jain, R. (1991), *The Art of Computer Systems Performance Analysis*, Wiley, 「Common Mistakes and How to Avoid Them」 장(흔한 실수: 목표 없음 · 편향된 목표, 평가 절차의 첫 단계: 목표를 정하고 시스템을 정의한다) |
 | EX3 | Popper, *The Logic of Scientific Discovery* 의 반증 가능성. ADR-0020(가설 → 실험 → 판단 순서) |
-| EX4 | ADR-0016(공식 문서가 기본값). Jain 2장 「중요한 요인 무시」 |
-| EX5 | Jain 3장 평가 기법 선택(분석 모델 · 시뮬레이션 · 측정). ADR-0023(관찰 단계는 되돌리는 비용이 정한다) |
-| EX6 \~ EX9 | Wohlin et al. (2012), *Experimentation in Software Engineering*, Springer, 타당도 위협(결론 · 내부 · 구성 · 외부) |
-| EX6 | Jain 2장 「잘못된 성능 지표」 · 「대표하지 않는 부하」. 열린 루프 부하와 coordinated omission 은 Gil Tene 「How NOT to Measure Latency」 |
-| EX9 | Hanley & Lippman-Hand (1983), 「If nothing goes wrong, is everything all right?」(3의 규칙) |
+| EX4 | ADR-0016(공식 문서가 기본값) |
+| EX5 | Jain 「Selection of Techniques and Metrics」 장(평가 기법 선택). ADR-0023(관찰 단계는 되돌리는 비용이 정한다) |
+| EX6 \~ EX9 | Wohlin, Runeson, Höst, Ohlsson, Regnell & Wesslén (2012), *Experimentation in Software Engineering*, Springer, 타당도 위협(결론 · 내부 · 구성 · 외부). 네 갈래는 Cook & Campbell (1979) 에서 왔다 |
+| EX6 | 열린 루프 부하와 coordinated omission: Gil Tene 「How NOT to Measure Latency」(SpringOne2GX 2013 등) |
+| EX9 | Hanley & Lippman-Hand (1983), 「If nothing goes wrong, is everything all right? Interpreting zero numerators」, *JAMA* 249(13), pp. 1743\~1745 (3의 규칙: 0/n 이면 95% 상한 약 3/n) |
 
 ## 원칙과 규칙
 
