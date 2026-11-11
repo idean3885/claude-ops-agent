@@ -84,7 +84,7 @@ bash ~/.claude/ops-agent/current/scripts/gh-issue.sh start {이슈번호} [--typ
 | 계층: 형제 | 상위의 `subIssues` |
 | 선후: 나를 막는 이슈 | `blockedBy` |
 | 중복 | `duplicateOf` |
-| 관련 · 본문 링크 | 전용 필드 없음. 본문의 `#번호` |
+| 관련 · 본문 링크 | 전용 필드 없음. 본문의 `#번호` 를 `gh issue view {번호} --comments` 로 본문 · 댓글까지 읽는다 |
 
 ```bash
 gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){issue(number:$n){
