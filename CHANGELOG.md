@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Added
+* DevTools MCP 허용 URL 추가 스크립트 `scripts/devtools-allow.py`. 공식 CLI 로 같은 범위에 다시 등록하고, 막히면 실행 명령과 다시 연결을 한 번에 요청한다 (#967)
+
 ## [9.48.1] - 2026-11-11
 
 ### Changed

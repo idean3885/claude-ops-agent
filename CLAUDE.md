@@ -234,6 +234,10 @@ main ────────────────●─────
   ```bash
   bash scripts/selftest-worktree-cleanup.sh
   ```
+- [ ] **`scripts/devtools-allow.py` 를 고쳤으면 자체 점검을 실행한다.** 등록을 지웠다 다시 넣으므로, 다시 넣기가 실패했을 때 복원이 무너지면 DevTools MCP 등록이 사라진다.
+  ```bash
+  python3 scripts/selftest-devtools-allow.py
+  ```
 - [ ] **`skills/dbgate/lib/connections.js` 를 고쳤으면 자체 점검을 실행한다.** 비밀번호를 다른 계정에 넣거나 지운 접속을 되살리는 결함은 접속이 실패하기 전까지 드러나지 않는다.
   ```bash
   node scripts/selftest-dbgate.mjs

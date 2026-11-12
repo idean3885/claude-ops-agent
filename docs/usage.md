@@ -149,6 +149,8 @@ flowchart LR
 | `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (54건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/selftest-worktree-cleanup.sh` | 워크트리 정리의 안전장치(dirty 거부 · 정규 clone 보존 · bare clone 삭제) 자체 점검, 실제 git | [worktree.md](worktree.md) |
+| `scripts/devtools-allow.py` | DevTools MCP 허용 URL 추가 (공식 CLI 로 같은 범위에 다시 등록, 실행 · 다시 연결은 사용자) | [working-principles.md](working-principles.md) |
+| `scripts/selftest-devtools-allow.py` | devtools-allow.py 자체 점검 (가짜 설정 · 가짜 CLI) | [working-principles.md](working-principles.md) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-transcribe-cleanup.py` | transcribe 교정(대응표 치환 · 원문 보존 · 덮어쓰기 거부) 자체 점검 | [transcribe](../skills/transcribe/SKILL.md) |
