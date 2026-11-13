@@ -60,17 +60,20 @@ flowchart LR
   T -->|"커밋·PR 본문"| H["What 가드"]
   T -->|"이슈 생성"| I["이슈 생성 가드"]
   T -->|"PR 생성"| D["초안 PR 가드"]
+  T -->|"레포 읽기·쓰기"| R["레포 허용 목록"]
   T -->|"머지·릴리즈·삭제"| A["한시 권한"]
   T -->|"문서 편집"| E["편집 후 자가 점검"]
   C -->|히트| X["차단"]
   H -->|히트| X
   I -->|직접 호출| X
   D -->|초안 아님| X
+  R -->|미등록·읽기 전용 쓰기| X
   A -->|미허용| X
   C -->|통과| OK["실행"]
   H -->|통과| OK
   I -->|어댑터| OK
   D -->|초안| OK
+  R -->|등록| OK
   A -->|허용| OK
   E --> OK
   OK --> S["Stop<br/>응답 스캔 → 다음 턴 통지"]
@@ -148,8 +151,9 @@ flowchart LR
 | `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 · 초안 PR 가드 · 주장 검증 자체 점검 (158건) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (54건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
+| `scripts/selftest-repo-allowlist.mjs` | 레포 허용 목록 가드 자체 점검 (실제 훅 · 실제 git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-worktree-cleanup.sh` | 워크트리 정리의 안전장치(dirty 거부 · 정규 clone 보존 · bare clone 삭제) 자체 점검, 실제 git | [worktree.md](worktree.md) |
-| `scripts/devtools-allow.py` | DevTools MCP 허용 URL 추가 (공식 CLI 로 같은 범위에 다시 등록, 실행 · 다시 연결은 사용자) | [working-principles.md](working-principles.md) |
+| `scripts/devtools-allow.py` | DevTools MCP 허용 URL 추가 · 격리 맞춤(고정 프로필 · 격리 끄기 인자를 걷음) · `--check` 로 격리가 아닌 등록 점검 (공식 CLI 로 같은 범위에 다시 등록, 실행 · 다시 연결은 사용자) | [working-principles.md](working-principles.md) |
 | `scripts/selftest-devtools-allow.py` | devtools-allow.py 자체 점검 (가짜 설정 · 가짜 CLI) | [working-principles.md](working-principles.md) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |

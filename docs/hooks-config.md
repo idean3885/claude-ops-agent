@@ -40,6 +40,7 @@
 |------|------|------|
 | `metrics` | `[{ name, source, groupBy, since? }]` | `source`(jsonl)의 `groupBy` 필드 값별 줄 수를 집계합니다. `since` 가 없으면 `started` 이후 `ts`(ISO 문자열)만 집계합니다. 파일이 없으면 「기록 없음」으로 냅니다. |
 | `criteria` | 문자열 배열 | 판정 기준입니다. ` / ` 로 이어 한 줄로 냅니다. |
+| `cause` | `content`(내용) \| `level`(수준) | 이 시범이 줄이려는 교정의 원인입니다. 있으면 손으로 쓰는 `log` 안내 대신 `scripts/lessons-judge.py report` 의 원인별 정답률을 시작일 전 기준선과 비교하라는 줄을 냅니다. 없으면 기존 `log` 안내를 냅니다. |
 | `reviewAt` | `YYYY-MM-DD` | 판정일입니다. 오늘이 이 날 이후면 기준과 지표를 대조해 정식 도입 · 폐기 · 재검토를 사용자에게 묻는 안내가 추가됩니다. |
 
 ```json

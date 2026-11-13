@@ -515,7 +515,12 @@ function buildTrialsContext() {
           lines.push('  판정일 도래: 기준과 지표를 대조해 정식 도입 · 폐기 · 재검토를 사용자에게 묻는다');
         }
       }
-      lines.push(`  산출물·관찰은 ${path} 의 log 에 한 줄씩 더한다`);
+      if (t.cause === 'content' || t.cause === 'level') {
+        const causeName = t.cause === 'content' ? '내용' : '수준';
+        lines.push(`  효과: 원인 「${causeName}」 정답률을 시작일 전 기준선과 비교 (scripts/lessons-judge.py report --split ${t.started || '<시작일>'})`);
+      } else {
+        lines.push(`  산출물·관찰은 ${path} 의 log 에 한 줄씩 더한다`);
+      }
     }
     return lines.join('\n');
   } catch {

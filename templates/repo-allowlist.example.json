@@ -1,0 +1,10 @@
+{
+  "hosts": ["git.example.com"],
+  "write": [
+    "git.example.com/team/service-api",
+    "git.example.com/team/service-infra"
+  ],
+  "read": [
+    "git.example.com/other-team/shared-lib"
+  ]
+}
