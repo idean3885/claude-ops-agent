@@ -156,7 +156,7 @@ main ────────────────●─────
 
 머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (마켓플레이스 update + 활성 세션 경로 복원).
 
-이슈 하나는 PR 하나다. 여러 이슈를 한 PR 에 담지 않는다. 한 머지가 여러 이슈에 걸치면 이슈 단위로 되돌릴 수 없다 ([ADR-0032](docs/adr/0032-one-issue-one-pr-review-design-not-code.md)).
+목적 하나는 이슈 하나, PR 하나다. 착수 전에 목적을 80자 안 한 줄로 적고, 그 목적에 드는 변경은 모두 그 PR 에 모은다. 실패는 롤포워드로 고친다 ([ADR-0038](docs/adr/0038-one-purpose-one-pr-roll-forward.md)).
 
 ### 수정 플로우
 
@@ -246,6 +246,10 @@ main ────────────────●─────
 - [ ] **`skills/transcribe/cleanup.py` 를 고쳤으면 자체 점검을 실행한다.** 교정은 한 번에 끝내므로 치환이 무너지면 틀린 정리본이 그대로 굳는다.
   ```bash
   python3 scripts/selftest-transcribe-cleanup.py
+  ```
+- [ ] **`scripts/lessons-judge.py` 를 고쳤으면 자체 점검을 실행한다.** 판정은 작업 시간 밖에서 조용히 돌아 재귀 가드 · 대상 선정 · 고지 조건이 무너져도 신호가 없다.
+  ```bash
+  python3 scripts/selftest-lessons-judge.py
   ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인
