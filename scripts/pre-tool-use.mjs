@@ -125,6 +125,10 @@ const PR_DRAFT_GUARD_DISABLE = process.env.OPS_AGENT_PR_DRAFT_GUARD_DISABLE === 
 const PR_DRAFT_GUARD_DRYRUN = process.env.OPS_AGENT_PR_DRAFT_GUARD_DRYRUN === '1';
 // 최상위 생성 명령. `env` 접두와 `create` 앞의 -R/--repo 도 같은 생성이다. 판정은 detectNonDraftPrCreate.
 const PR_CREATE_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*create\b/;
+// 준비 완료 전환(#977). 전환은 리뷰어에게 알림이 가는 행동이라 작성자가 웹에서 한다. 머지 준비는 초안 상태로 진행한다.
+// `--undo`(초안으로 되돌림)는 대상이 아니다. GraphQL 전환 mutation 도 같은 전환이다. 판정은 detectPrReady.
+const PR_READY_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*ready\b/;
+const PR_READY_GRAPHQL_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+api\s+graphql\b.*\bmarkPullRequestReadyForReview\b/;
 
 const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
 
@@ -388,10 +392,28 @@ if (!DISABLE) {
         }
       }
 
-      // 초안 PR 가드: PR 은 초안으로 만든다 (#876). 준비 완료 전환(gh pr ready)은 작성자가 정한다.
+      // 초안 PR 가드: PR 은 초안으로 만든다 (#876). 준비 완료 전환(gh pr ready)은 작성자가 정하고 어시스턴트 호출은 막는다 (#977).
       if (!PR_DRAFT_GUARD_DISABLE && remainingMs() <= 0) noteBudgetExceeded('초안 PR 가드');
       if (!PR_DRAFT_GUARD_DISABLE && remainingMs() > 0) {
         const prHits = detectNonDraftPrCreate(command);
+        const readyHits = detectPrReady(command);
+        if (readyHits.length) {
+          const header = PR_DRAFT_GUARD_DRYRUN
+            ? '[ops-agent 초안 PR 가드 · 드라이런]'
+            : '[ops-agent 초안 PR 가드 · 차단]';
+          const msg = `${header} 준비 완료 전환은 작성자가 웹에서 합니다:\n${readyHits.map(h => `  - ${h}`).join('\n')}\n\n` +
+            `머지 준비(리뷰 요청 준비 · 머지 전 최종 점검)는 초안 상태 그대로 진행합니다. 초안이라서 못 하는 단계는 없습니다.\n` +
+            `가이드: ~/.claude/ops-agent/current/skills/flow/guides/pr.md 「초안으로 생성하고 작성자가 먼저 본다」\n` +
+            `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1`;
+          if (PR_DRAFT_GUARD_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+            }));
+            process.exit(0);
+          }
+        }
         if (prHits.length) {
           const header = PR_DRAFT_GUARD_DRYRUN
             ? '[ops-agent 초안 PR 가드 · 드라이런]'
@@ -1070,6 +1092,17 @@ function detectNonDraftPrCreate(command) {
     const tokens = seg.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/g) || [];
     const draft = tokens.some(t => t === '--draft' || /^-[few]*d(?:=(?:true|1|t))?$/i.test(t) || /^--draft=(?:true|1|t)$/i.test(t));
     if (!draft) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
+  }
+  return hits;
+}
+
+// 세그먼트마다 최상위 `gh pr ready`(`--undo` 없음)와 GraphQL 전환 mutation 을 잡는다.
+function detectPrReady(command) {
+  const hits = [];
+  for (const seg of gateSegments(command)) {
+    const tokens = seg.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/g) || [];
+    const ready = PR_READY_RE.test(seg) && !tokens.includes('--undo');
+    if (ready || PR_READY_GRAPHQL_RE.test(seg)) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
   }
   return hits;
 }
