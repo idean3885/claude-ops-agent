@@ -96,6 +96,10 @@ const CASES = [
   ['목록 원천 Write', 'Write', { file_path: '/x/config/repo-allowlist.json', content: '{}' }, PLAIN, 'deny'],
   ['목록 파일 리다이렉트', ...bash('echo {} > ~/.claude/ops-agent/repo-allowlist.local.json'), 'deny'],
   ['목록 파일 읽기', ...bash('cat ~/.claude/ops-agent/repo-allowlist.local.json'), 'pass'],
+  ['등록 스크립트 실행', ...bash('bash ~/x/scripts/repo-allowlist.sh add write git.corp.test/org/unlisted'), 'deny'],
+  ['등록 스크립트 직접 실행', ...bash('cd /tmp && ~/x/repo-allowlist.sh remove git.corp.test/org/read-repo'), 'deny'],
+  ['등록 스크립트 목록 파일 없어도 차단', ...bash('bash ~/x/repo-allowlist.sh add read git.corp.test/org/x'), 'deny', join(base, 'none.json')],
+  ['등록 스크립트 조회', ...bash('bash ~/x/scripts/repo-allowlist.sh list'), 'pass'],
   ['목록 파일 없음 → 판정 안 함', 'Read', { file_path: join(X, 'a.txt') }, PLAIN, 'pass', MISSING],
   ['hosts 생략 → 모든 호스트 판정', 'Read', { file_path: join(P, 'a.txt') }, PLAIN, 'deny', LIST_ALL_HOSTS],
 ];

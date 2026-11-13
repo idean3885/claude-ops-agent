@@ -19,6 +19,9 @@ import { homedir } from 'os';
 
 export const ALLOWLIST_FILE_RE = /(?:^|[\\/])repo-allowlist(?:\.local)?\.json$/;
 export const DENY_HEADER = '[ops-agent 레포 허용 목록 · 차단]';
+// 등록은 사용자가 트리거한다. 어시스턴트는 명령 한 줄과 그 행위 · 대상을 제시하고 허락을 받는다 (#972)
+export const REGISTER_HINT = '등록이 필요하면 등록 명령 한 줄과 그 명령이 하는 일 · 대상 레포 · 권한(쓰기 · 읽기 전용)을 사용자에게 설명하고 허락을 받습니다. 실행은 사용자가 `!` 로 합니다.';
+const REGISTER_SCRIPT_RE = /(?:^|\/)repo-allowlist[\w.-]*\.sh$/;
 
 export function allowlistPath() {
   return process.env.OPS_AGENT_REPO_ALLOWLIST || join(homedir(), '.claude', 'ops-agent', 'repo-allowlist.local.json');
@@ -324,6 +327,17 @@ export function bashTargets(command, hookCwd) {
   return targets;
 }
 
+/** 등록 스크립트(repo-allowlist*.sh)를 조회(list) 밖의 인자로 실행하는 Bash 명령인지. */
+export function runsRegisterScript(command) {
+  for (const seg of segmentsOf(command || '')) {
+    const words = seg.filter(t => typeof t === 'string');
+    let i = 0;
+    while (i < words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i]) || /^(?:sudo|env|command|exec|time|nohup|bash|sh|zsh)$/.test(words[i]))) i++;
+    if (i < words.length && REGISTER_SCRIPT_RE.test(words[i]) && words[i + 1] !== 'list') return true;
+  }
+  return false;
+}
+
 /** 도구 호출이 닿는 레포. */
 export function toolTargets(toolName, toolInput, cwd) {
   const ti = toolInput || {};
@@ -350,7 +364,7 @@ export function checkRepoAllowlist(allow, toolName, toolInput, cwd) {
       : `${t.repo} 는 사용자가 등록한 레포가 아닙니다 (${t.need === 'write' ? '쓰기' : '읽기'} · ${t.why}).`;
     return `${DENY_HEADER} ${what}\n`
       + '등록하지 않은 레포는 클론 · 읽기 · 쓰기 모두 작업 대상이 아닙니다. 요청이 정말 이 레포를 가리키는지 사용자에게 확인합니다.\n'
-      + '등록은 사용자가 직접 합니다.';
+      + REGISTER_HINT;
   }
   return null;
 }
