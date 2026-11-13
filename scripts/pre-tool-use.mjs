@@ -50,7 +50,9 @@ import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
-import { ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, checkRepoAllowlist, loadAllowlist } from './repo-allowlist-rules.mjs';
+import {
+  ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, REGISTER_HINT, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
+} from './repo-allowlist-rules.mjs';
 // 규칙 로딩·공개 여부 판정은 confidential-scan.mjs 와 공유한다.
 // 복제하면 가드와 스캐너의 판정이 달라진다.
 import {
@@ -215,8 +217,10 @@ let truncationNotice = '';
     const hookInput = JSON.parse(input);
     const toolName = hookInput.tool_name || '';
     const allow = loadAllowlist();
-    if (allow && writesGuardedFile(toolName, hookInput.tool_input, ALLOWLIST_FILE_RE, 'repo-allowlist')) {
-      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 파일은 사용자가 직접 씁니다. 등록이 필요하면 사용자에게 요청합니다.`;
+    if (toolName === 'Bash' && runsRegisterScript(hookInput.tool_input && hookInput.tool_input.command)) {
+      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 등록 명령은 사용자가 실행합니다.\n${REGISTER_HINT}`;
+    } else if (allow && writesGuardedFile(toolName, hookInput.tool_input, ALLOWLIST_FILE_RE, 'repo-allowlist')) {
+      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 파일은 어시스턴트가 쓰지 않습니다.\n${REGISTER_HINT}`;
     } else if (allow) {
       deny = checkRepoAllowlist(allow, toolName, hookInput.tool_input, hookInput.cwd || process.cwd());
     }
