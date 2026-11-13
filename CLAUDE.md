@@ -203,12 +203,13 @@ main ────────────────●─────
           if v!=sorted(v): print(p,k,v)
   "
   ```
-- [ ] **`scripts/pre-tool-use.mjs` · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
+- [ ] **`scripts/pre-tool-use.mjs` · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
   ```bash
   node scripts/selftest-action-gate.mjs
   node scripts/selftest-issue-adapter.mjs
   node scripts/selftest-build-guard.mjs
   node scripts/selftest-flow-entry.mjs
+  node scripts/selftest-repo-allowlist.mjs
   ```
 - [ ] **`skills/flow/SKILL.md` 상태 표나 `skills/flow/guides/` 의 절 제목을 고쳤으면 자체 점검을 실행한다.** 상태 표가 없는 절을 가리켜도 단계에 들어가기 전까지 신호가 없다.
   ```bash

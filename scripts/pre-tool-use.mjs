@@ -33,6 +33,9 @@
  *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
  * 6. 초안 PR (#876): `gh pr create` 에 초안 플래그가 없으면 차단한다. 가이드를 읽었는지가 아니라 규칙을 본다.
  *    드라이런 OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1.
+ * 7. 레포 허용 목록 (#969): 도구 호출이 닿는 레포를 원격 주소로 식별해 ~/.claude/ops-agent/repo-allowlist.local.json
+ *    과 대조한다. 판정 호스트의 레포가 목록에 없으면 읽기부터, 읽기 전용이면 쓰기를 막는다. 목록 파일은 사람이 쓴다.
+ *    다른 가드의 비활성 플래그와 무관하게 돈다. 목록 파일이 없으면 판정하지 않는다. 규칙은 repo-allowlist-rules.mjs.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
@@ -47,6 +50,7 @@ import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
+import { ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, checkRepoAllowlist, loadAllowlist } from './repo-allowlist-rules.mjs';
 // 규칙 로딩·공개 여부 판정은 confidential-scan.mjs 와 공유한다.
 // 복제하면 가드와 스캐너의 판정이 달라진다.
 import {
@@ -202,6 +206,30 @@ const VALUE_FLAGS = new Set([
 ]);
 
 let truncationNotice = '';
+
+// ─── 레포 허용 목록 (#969) ───
+// 다른 가드의 비활성 플래그와 무관하게 돈다. 판정하지 못하면(목록 파일 깨짐 등) 통과시키되 사실을 알린다.
+{
+  let deny = null;
+  try {
+    const hookInput = JSON.parse(input);
+    const toolName = hookInput.tool_name || '';
+    const allow = loadAllowlist();
+    if (allow && writesGuardedFile(toolName, hookInput.tool_input, ALLOWLIST_FILE_RE, 'repo-allowlist')) {
+      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 파일은 사용자가 직접 씁니다. 등록이 필요하면 사용자에게 요청합니다.`;
+    } else if (allow) {
+      deny = checkRepoAllowlist(allow, toolName, hookInput.tool_input, hookInput.cwd || process.cwd());
+    }
+  } catch (e) {
+    truncationNotice += `[ops-agent 레포 허용 목록] 판정하지 못했습니다: ${(e && e.message) || e}. 이 호출은 목록 대조 없이 진행됩니다.\n`;
+  }
+  if (deny) {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: deny },
+    }));
+    process.exit(0);
+  }
+}
 
 if (!DISABLE) {
   try {
@@ -786,20 +814,26 @@ function readRepoType(repoRoot) {
 // 어시스턴트가 레포 유형 파일을 쓰는 호출인지. 도구 호출은 경로 끝으로, Bash 는 쓰기 형태로 본다.
 // 읽기(cat · grep · jq)는 통과한다.
 function writesRepoTypeFile(toolName, toolInput) {
+  return writesGuardedFile(toolName, toolInput, REPO_TYPE_FILE, 'repo-type');
+}
+
+// 사람이 선언하는 파일(레포 유형 · 레포 허용 목록)을 쓰는 호출인지. `stem` 은 파일 이름에서 확장자 앞부분이다.
+function writesGuardedFile(toolName, toolInput, fileRe, stem) {
   const ti = toolInput || {};
   if (/^(?:Edit|Write|MultiEdit|NotebookEdit)$/.test(toolName)) {
-    return [ti.file_path, ti.notebook_path].some(f => typeof f === 'string' && REPO_TYPE_FILE.test(f));
+    return [ti.file_path, ti.notebook_path].some(f => typeof f === 'string' && fileRe.test(f));
   }
   if (toolName !== 'Bash') return false;
-  const NAME = 'repo-type.json';
+  const nameRe = new RegExp(`${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\.[\\w.]+)?\\.json`);
+  const redirectRe = new RegExp(`>>?\\|?\\s*["']?[^\\s;|&"']*${nameRe.source}`);
   for (const seg of gateSegments(ti.command || '')) {
-    if (!seg.includes(NAME)) continue;
+    if (!nameRe.test(seg)) continue;
     const toks = seg.split(/\s+/).filter(Boolean).map(t => t.replace(/^["']|["']$/g, ''));
     const cmd = (toks[0] || '').replace(/^.*\//, '');
-    if (/>>?\|?\s*["']?[^\s;|&"']*repo-type\.json/.test(seg)) return true;
+    if (redirectRe.test(seg)) return true;
     if (cmd === 'tee' || cmd === 'rm' || cmd === 'mv') return true;
-    if (cmd === 'sed' && toks.some(t => /^-[A-Za-z]*i[A-Za-z]*$/.test(t) || t.startsWith('--in-place'))) return true;
-    if ((cmd === 'cp' || cmd === 'ln') && toks[toks.length - 1].endsWith(NAME)) return true;
+    if ((cmd === 'sed' || cmd === 'perl') && toks.some(t => /^-[A-Za-z]*i[A-Za-z]*$/.test(t) || t.startsWith('--in-place'))) return true;
+    if ((cmd === 'cp' || cmd === 'ln') && nameRe.test(toks[toks.length - 1])) return true;
   }
   return false;
 }

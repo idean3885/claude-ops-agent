@@ -1,6 +1,6 @@
 # 차단 규칙 레퍼런스
 
-`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 여섯 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
+`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 여덟 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
 
 이 hook 은 판정만 합니다. 세션 컨텍스트 주입은 `scripts/session-start.mjs` 가 맡습니다.
 
@@ -13,6 +13,7 @@
 | 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
 | 플로우 진입 | 플로우 가이드를 읽지 않은 세션의 `gh pr create` | 가이드를 읽습니다. 상세는 [hooks-config.md](hooks-config.md) 「플로우 진입 지표」 |
 | 초안 PR 가드 | 초안 플래그(`--draft` · `-d`) 없는 `gh pr create`. 최상위 명령만 봅니다 (「한계」) | 초안으로 만듭니다. 준비 완료 전환은 작성자가 합니다 (#876) |
+| 레포 허용 목록 | 사용자가 등록하지 않은 레포의 클론 · 읽기 · 쓰기, 읽기 전용 레포의 쓰기 | 사용자가 목록 파일에 등록합니다 (#969) |
 
 ---
 
@@ -353,6 +354,47 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 
 ---
 
+## 레포 허용 목록
+
+도구 호출이 닿는 레포를 원격 주소로 식별해 사용자가 등록한 목록과 대조합니다 (#969). 요청을 잘못 읽은 어시스턴트가 담당이 아닌 레포를 클론해 수정 · PR 까지 진행해도 사람이 알아차리기 전까지 막는 장치가 없었습니다. 금지 목록은 새 레포가 생길 때마다 빠지므로 등록한 것만 허용합니다.
+
+| 항목 | 내용 |
+|------|------|
+| 목록 파일 | `~/.claude/ops-agent/repo-allowlist.local.json`. 예시는 [`templates/repo-allowlist.example.json`](../templates/repo-allowlist.example.json). 파일이 없으면 판정하지 않습니다. |
+| 레포 식별 | 원격 주소를 `host/owner/repo` 소문자로 맞춥니다(https · ssh · scp 형식). 디렉토리 경로는 워크트리 · 새 클론마다 달라 쓰지 않습니다. `.git` 을 직접 읽고, 워크트리 · 서브모듈은 `gitdir` · `commondir` 를 따라 공용 config 의 `origin`(없으면 첫 원격)을 봅니다. |
+| 판정 호스트 | `hosts` 에 적은 호스트의 레포만 판정합니다. 생략하면 모든 호스트를 판정합니다. 개인 · 공개 호스트를 빼 두면 실험 레포를 만들 때마다 등록할 필요가 없습니다. |
+| `write` | 읽기 · 쓰기 모두 허용 |
+| `read` | 클론 · 조회 · fetch · pull · 브랜치 이동 · 워크트리 추가는 허용, 수정 · 커밋 · 푸시 · PR · 이슈 · API 쓰기는 차단 |
+| 목록에 없음 | 판정 호스트의 레포면 이미 클론돼 있어도 읽기부터 차단 |
+| 판정하지 않음 | git 레포가 아닌 경로, 원격이 없는 레포, 판정 호스트 밖의 레포 |
+| 목록 파일 편집 | 어시스턴트가 `repo-allowlist.json` · `repo-allowlist.local.json` 을 쓰지 못합니다. 쓰기 형태 판정은 레포 유형 편집 차단과 같습니다. 사람은 편집기나 `!` 로 씁니다. |
+
+### 판정 대상
+
+| 도구 | 레포 | 필요 권한 |
+|------|------|-----------|
+| Read · Grep · Glob | 경로(생략하면 작업 디렉토리) | 읽기 |
+| Edit · Write · MultiEdit · NotebookEdit | 파일 경로. 없는 경로는 가장 가까운 상위로 봅니다 | 쓰기 |
+| Bash `git clone` | 클론 원본 주소 | 읽기 |
+| Bash `git …` | `-C` · `cd` 를 반영한 작업 디렉토리 | `commit` · `push` · `merge` · `rebase` · `reset` · `add` · `rm` · `mv` · `stash` · `tag`(생성) · `branch -d/-m` 등은 쓰기, 그 밖은 읽기 |
+| Bash `gh` | `-R` · `--repo`, `gh api repos/<owner>/<repo>` (`--hostname` · `GH_HOST`), 없으면 작업 디렉토리 | 조회(`view` · `list` · `diff` · `checks` · `clone` 등)와 `gh api` GET 은 읽기, 그 밖은 쓰기 |
+| Bash 이슈 어댑터 | `gh-issue.sh` 의 `-R`, 없으면 작업 디렉토리 | 쓰기 |
+| Bash 그 밖 | 작업 디렉토리와 경로 인자 | 읽기. `>` · `>>` 대상, `rm` · `mv` · `touch` · `mkdir` · `tee` 등의 인자, `cp` · `ln` 의 대상, `sed -i` 의 파일은 쓰기 |
+
+### 보지 않는 것
+
+- 스크립트 · 인터프리터 안의 파일 쓰기(`python3 x.py`)는 보지 않습니다. 목록에 없는 레포는 경로 인자가 읽기로 걸리지만, 읽기 전용 레포 안의 스크립트 쓰기는 통과합니다.
+- 셸 변수가 든 경로(`cd "$DIR"`)는 확장할 수 없어 판정하지 않습니다.
+- 차단 메시지에는 해제 방법을 싣지 않습니다. 등록은 사람의 결정입니다.
+
+| 항목 | 값 |
+|------|-----|
+| 판정 | `scripts/repo-allowlist-rules.mjs` |
+| 자체 점검 | `node scripts/selftest-repo-allowlist.mjs` (실제 훅 · 실제 git) |
+| 비활성 | 목록 파일을 지웁니다. 다른 가드의 비활성 플래그와 무관하게 돕니다. |
+
+---
+
 ## 플래그
 
 오탐 조정과 파이프라인 실행용입니다. 상시 사용을 전제하지 않습니다.
@@ -366,5 +408,6 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 | 플로우 진입 | 없음 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
+| 레포 허용 목록 | 없음 | 플래그 없음. 목록 파일이 없으면 판정하지 않습니다 |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.
