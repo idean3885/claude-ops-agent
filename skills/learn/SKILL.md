@@ -16,6 +16,19 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 좁히면 실제 교정을 놓쳐, 쓸 만한 자리가 없었다. 근거는
 [docs/lessons.md](../../docs/lessons.md) 「정규식으로 교정을 판별하지 않는다」.
 
+## 작업 시간 밖 판정과 승인 묶음
+
+사람이 챙기지 않는다. 세션 시작 훅이 분리 프로세스로 지난 세션의 교정 · 원인(내용 · 수준) · 막을 수 있던 자산을 추려 `~/.claude/ops-agent/lessons/judgments.jsonl` 에 쌓는다. 작업 시간 밖에서 하는 것은 여기까지다. 자산과의 대조 · 게이트 · 등재는 사람이 /learn 으로 승인 묶음을 열 때 한다. 자동 등재는 없다. 설치 시점 이전 세션은 판정하지 않고, 하루 판정은 10건까지다.
+
+/learn 을 부르면 절차 전에 다음을 한다.
+
+1. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py report` 로 정답률 · 원인 · 승인 대기를 보인다.
+2. 한 번에 올리는 승인 항목은 report 의 「이번 승인 묶음」 10건까지다. 넘는 건은 남겨 다음 /learn 으로 미룬다.
+3. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py samples` 로 표본 5건을 사용자에게 판정받고, 답마다 `sample-record <트랜스크립트> <답> <correct|content|level>` 로 남긴다. 기계 판정과 사람 판정의 일치도를 보는 표본이다.
+4. report 의 「자산이 있었는데 틀린 답」 표에서 후보(같은 자산 2회 이상)마다, 그 자산에 도구 경계 로드 자리를 줄지 사용자에게 승인받는다 (lessons.md 「도구 경계에서 로드한다」).
+5. 아래 절차(대조 · 게이트 · 등재)로 간다.
+6. 끝나면 `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py approve` 로 이번 묶음만 닫는다. 보이지 않은 대기는 닫지 않는다.
+
 ## 절차
 
 1. 세션 트랜스크립트를 연다

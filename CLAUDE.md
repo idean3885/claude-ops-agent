@@ -247,6 +247,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-transcribe-cleanup.py
   ```
+- [ ] **`scripts/lessons-judge.py` 를 고쳤으면 자체 점검을 실행한다.** 판정은 작업 시간 밖에서 조용히 돌아 재귀 가드 · 대상 선정 · 고지 조건이 무너져도 신호가 없다.
+  ```bash
+  python3 scripts/selftest-lessons-judge.py
+  ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인
 
