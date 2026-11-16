@@ -212,6 +212,10 @@ const VALUE_FLAGS = new Set([
 ]);
 
 let truncationNotice = '';
+// 통과하는 호출에 붙이는 조치 한 줄 (도구 경계 로드, docs/lessons.md 「도구 경계에서 로드한다」).
+let passNotice = '';
+const ROADMAP_NOTICE = '[ops-agent 이슈 생성 · 알림] 진행 중인 로드맵 이슈에 담을 일이면 새 이슈가 아니라 그 이슈의 항목(체크박스)으로 더한다. 원칙: docs/working-principles.md 「이슈는 그 이슈만으로 착수된다」';
+const ISSUE_ADAPTER_CREATE_RE = /\bgh-issue\.sh\s+create\b/;
 
 // ─── 레포 허용 목록 (#969) ───
 // 다른 가드의 비활성 플래그와 무관하게 돈다. 판정하지 못하면(목록 파일 깨짐 등) 통과시키되 사실을 알린다.
@@ -380,6 +384,7 @@ if (!DISABLE) {
             `  - 시작 결정: 지금 손대는 이슈면 --start, 백로그 · 후속이면 --no-start "<사유>"\n` +
             `  - 기존 기록: ISS5 본문 ## Why 에 「- 기존 기록: {이전 · 지금 · 바뀐 점 | 없음 · 찾은 자리}」 한 줄 (ADR-0027)\n` +
             `본문 규칙: config/style-rules/extensions/issue.md · 가이드: skills/flow/guides/issue.md\n` +
+            `${ROADMAP_NOTICE}\n` +
             `드라이런: OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1`;
           if (ISSUE_CREATE_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
@@ -390,6 +395,8 @@ if (!DISABLE) {
             process.exit(0);
           }
         }
+        // 어댑터 생성은 통과시키되 로드맵 이슈에 담을 일인지 조치 한 줄을 붙인다 (#1035).
+        if (ISSUE_ADAPTER_CREATE_RE.test(command)) passNotice = ROADMAP_NOTICE;
       }
 
       // 초안 PR 가드: PR 은 초안으로 만든다 (#876). 준비 완료 전환(gh pr ready)은 작성자가 정하고 어시스턴트 호출은 막는다 (#977).
@@ -588,8 +595,14 @@ respondContinue();
 
 // ─────────────────────────────────────────────
 // 세션 컨텍스트는 SessionStart 훅이 1회 주입한다 (scripts/session-start.mjs).
-// 이 훅은 가드 판정만 담당하고, 통과 시 추가 컨텍스트를 싣지 않는다.
+// 이 훅은 가드 판정만 담당한다. 통과 시 추가 컨텍스트는 도구 경계 조치 한 줄(passNotice)뿐이다.
 function respondContinue() {
+  if (passNotice) {
+    const out = { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: passNotice } };
+    if (truncationNotice) out.systemMessage = truncationNotice;
+    process.stdout.write(JSON.stringify(out));
+    return;
+  }
   if (truncationNotice) {
     process.stdout.write(JSON.stringify({ continue: true, systemMessage: truncationNotice }));
     return;
