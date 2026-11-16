@@ -44,12 +44,43 @@ def parse_entries(text: str, section: str = "항목") -> list[tuple[str, dict[st
     return entries
 
 
+ENTRY_SECTIONS = ("항목", "익힌 항목")
+INLINE_ENTRY_HEADING = re.compile(r"\S.*?(?<!#)### \S")
+INLINE_CODE = re.compile(r"`[^`]*`")
+
+
+def misplaced_entries(text: str) -> list[str]:
+    """절 밖에 놓인 항목 제목과 문장 안에 끼어든 항목 제목을 찾는다. 코드 펜스 안은 예시라 보지 않는다."""
+    problems = []
+    section = ""
+    fence = ""
+    for number, line in enumerate(text.splitlines(), 1):
+        marker = FENCE_LINE.match(line)
+        if marker:
+            mark = marker.group(1)
+            if not fence:
+                fence = mark
+            elif mark[0] == fence[0] and len(mark) >= len(fence) and not marker.group(2).strip():
+                fence = ""
+            continue
+        if fence:
+            continue
+        if line.startswith("## "):
+            section = line[3:].strip()
+        elif line.startswith("### ") and section not in ENTRY_SECTIONS:
+            problems.append(f"{number}행 「{line[4:].strip()}」: 항목이 「## {section}」 절에 있다. 「## 항목」 · 「## 익힌 항목」 절로 옮긴다")
+        elif INLINE_ENTRY_HEADING.match(INLINE_CODE.sub("", line)):
+            problems.append(f"{number}행: 문장 안에 항목 제목(### )이 끼어 있다")
+    return problems
+
+
 def check(text: str) -> list[str]:
+    placement = misplaced_entries(text)
     learning, learned_entries = parse_entries(text), parse_entries(text, "익힌 항목")
     # 마지막 항목을 옮기면 「## 항목」 이 빈다. 두 절이 모두 비었을 때만 목록이 없는 것이다
     if not learning and not learned_entries:
-        return ["「## 항목」 · 「## 익힌 항목」 절에 항목이 없다"]
-    problems = []
+        return placement + ["「## 항목」 · 「## 익힌 항목」 절에 항목이 없다"]
+    problems = placement
     learned_titles = {title for title, _ in learned_entries}
     for title, fields in learning + learned_entries:
         for name in REQUIRED_FIELDS:
