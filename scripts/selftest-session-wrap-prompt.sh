@@ -9,9 +9,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$ROOT/hooks/session-wrap-prompt.sh"
 export HOME="$(mktemp -d)"   # 지표 파일을 실제 홈에 남기지 않는다
 
+# 훅 출력을 다 받은 뒤 본다. grep -q 로 바로 물리면 여러 줄을 내는 훅이 SIGPIPE 로 끝나 pipefail 에 걸린다
+run_hook() {  # run_hook <문장> [session_id]
+  python3 -c 'import json,sys;print(json.dumps({"prompt":sys.argv[1],"session_id":sys.argv[2]}))' "$1" "${2:-}" | bash "$HOOK"
+}
 fires() {
-  printf '{"prompt":%s}' "$(printf '%s' "$1" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))')" \
-    | bash "$HOOK" | grep -q '세션 마무리 감지'
+  local out; out=$(run_hook "$1")
+  printf '%s' "$out" | grep -q '세션 마무리 감지'
 }
 
 PASS=0; FAIL=0
@@ -63,6 +67,35 @@ expect quiet "아래 글을 교정해 주세요
 expect quiet "교정 부탁
 세션 마무리
 위 두 줄은 제목 후보입니다"
+
+# 세션 인덱스 (#1050): 어댑터가 쓴 줄을 이슈별로 묶어 주입하고, 주입한 뒤 지운다
+check() {  # check <이름> <참|거짓 명령…>
+  local name="$1"; shift
+  if "$@"; then PASS=$((PASS+1)); echo "OK   인덱스: $name"; else FAIL=$((FAIL+1)); echo "FAIL 인덱스: $name"; fi
+}
+IDX_DIR="$HOME/.claude/ops-agent/.cache/session-issues"
+mkdir -p "$IDX_DIR"
+cat > "$IDX_DIR/sid-a.jsonl" <<'J'
+{"ts":"2026-11-17T00:00:00Z","repo":"o/r","number":"7","title":"첫 이슈","action":"생성"}
+{"ts":"2026-11-17T00:00:01Z","repo":"o/r","number":"7","title":"첫 이슈","action":"시작"}
+{"ts":"2026-11-17T00:00:02Z","repo":"ghe.example/o/s","number":"9","title":"둘째 이슈","action":"시작"}
+{"ts":"2026-11-17T00:00:03Z","repo":"o/r","number":"7","title":"첫 이슈","action":"시작"}
+J
+cp "$IDX_DIR/sid-a.jsonl" "$IDX_DIR/sid-other.jsonl"
+OUT=$(run_hook "세션 마무리" "sid-a")
+check "이슈 하나는 한 줄, 같은 동작은 한 번만 적는다" grep -qxF -- "- o/r#7 첫 이슈 (생성 · 시작)" <<<"$OUT"
+check "다른 호스트 레포도 낸다" grep -qxF -- "- ghe.example/o/s#9 둘째 이슈 (시작)" <<<"$OUT"
+check "같은 이슈를 두 줄로 내지 않는다" test "$(grep -c '#7 ' <<<"$OUT")" = 1
+check "주입한 뒤 그 세션 파일을 지운다" test ! -e "$IDX_DIR/sid-a.jsonl"
+check "다른 세션 파일은 남긴다" test -e "$IDX_DIR/sid-other.jsonl"
+OUT=$(run_hook "세션 마무리" "sid-a")
+check "파일이 없으면 대화에서 모으라고 알린다" grep -q '세션 인덱스 없음' <<<"$OUT"
+OUT=$(run_hook "세션 마무리 절차" "sid-other")
+check "마무리 신호가 아닌 턴은 파일을 건드리지 않는다" test -e "$IDX_DIR/sid-other.jsonl"
+check "마무리 신호가 아닌 턴은 아무것도 내지 않는다" test -z "$OUT"
+echo '{"repo":"o/r","number":"1","title":"밖","action":"생성"}' > "$IDX_DIR/../outside.jsonl"
+OUT=$(run_hook "세션 마무리" "../outside")
+check "세션 번호의 경로 문자는 걷는다 (인덱스 밖 파일을 지우지 않는다)" test -e "$IDX_DIR/../outside.jsonl"
 
 echo "$PASS/$((PASS+FAIL)) 통과"
 [ "$FAIL" -eq 0 ]
