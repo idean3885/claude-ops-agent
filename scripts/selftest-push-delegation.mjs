@@ -155,5 +155,16 @@ scenario('기록 편집 차단', home => {
   check('읽기는 통과', tool(home, repo, 'Bash', { command: `cat ${p}` }).got === 'pass');
 });
 
+// 5. 자율 위임 알림 훅은 위임 문장에 반응하지 않는다 (#1048)
+const autonomyHook = join(here, '..', 'hooks', 'autonomy-prompt.sh');
+const autonomy = text => {
+  const home = mkdtempSync(join(tmpdir(), 'push-deleg-auto-'));
+  const r = spawnSync('bash', [autonomyHook], { input: JSON.stringify({ prompt: text }), encoding: 'utf8', env: ENV(home) });
+  rmSync(home, { recursive: true, force: true });
+  return (r.stdout || '').includes('자율 위임 감지');
+};
+check('자율 위임 알림: 위임 문장 단독은 조용', !autonomy(PHRASE) && !autonomy(`  ${PHRASE}\n`));
+check('자율 위임 알림: 기존 위임 문구는 그대로 알림', autonomy('자율 진행합니다') && autonomy('위임합니다') && autonomy(`${PHRASE} 하고 진행`));
+
 console.log(failed ? `\n실패 ${failed}건` : `\n${count}건 전부 통과`);
 process.exit(failed ? 1 : 0);
