@@ -46,6 +46,15 @@ expect("말 예문에 표준 용어 하나가 빠지면 실패", any("「말」 
 expect("예문이 「」 로 감싸지 않으면 실패", any("「」 로 감싼" in p for p in terms.check(VALID.replace("「두 스키마에 같은 테이블 정의를 적용했다.」", "두 스키마에 같은 테이블 정의를 적용했다."))))
 expect("등재일 형식 오류는 실패", any("등재일" in p for p in terms.check(VALID.replace("2026-10-21", "10/21"))))
 expect("항목 없는 목록은 실패", terms.check(HEAD) != [])
+ENTRY = VALID[len(HEAD):]
+OUTSIDE = "# 표준 용어\n\n## 제거 조건\n\n" + ENTRY + "\n" + VALID
+expect("「## 항목」 밖 절에 놓인 항목은 실패", any("「## 제거 조건」 절에 있다" in p for p in terms.check(OUTSIDE)))
+INLINE = "# 표준 용어\n\n## 제거 조건\n\n- 다 익힌 항목은 「" + ENTRY + "## 익힌 항목」 절로 옮긴다\n\n" + VALID
+expect("문장 안에 끼어든 항목 제목은 실패", any("문장 안에 항목 제목" in p for p in terms.check(INLINE)))
+FENCED = "# 표준 용어\n\n## 항목 형식\n\n```markdown\n### 표준 용어\n- 섞어 쓴 말: x\n```\n\n" + VALID
+expect("코드 펜스 안의 예시 제목은 통과", terms.check(FENCED) == [])
+INLINE_CODE = "# 표준 용어\n\n## 등재 조건\n\n- 항목 제목은 `### 표준 용어` 로 쓴다\n\n" + VALID
+expect("줄 안 코드 표기 속 제목 예시는 통과", terms.check(INLINE_CODE) == [])
 
 real = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "style-rules", "base", "terms.md")
 with open(real, encoding="utf-8") as handle:
