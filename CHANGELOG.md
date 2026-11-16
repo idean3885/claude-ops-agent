@@ -21,6 +21,9 @@
 ### Changed
 * 글로벌 지침에 대화 응답 언어(사용자가 쓰는 언어)를 명시 (#1037)
 
+### Fixed
+* db-query 가드가 관리형 DB 콘솔의 읽기 권한 묶음(PROCESS · REPLICATION · sys 스키마 EXECUTE)을 조회 전용으로 판정, 실행 중 쿼리 원문 · 변경 로그 · 전문 검색 색인 · 계정 정의와 시스템 스키마(performance_schema · sys · mysql) 조회는 거절 (#1031)
+
 ## [9.53.3] - 2026-11-16
 
 ### Fixed
