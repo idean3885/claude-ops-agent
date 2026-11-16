@@ -33,9 +33,12 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
     problem: missing(격리 인자 없음) · disabled(격리 끔) · fixed-profile · connect(떠 있는 브라우저에 붙음,
              fix 는 제거 명령)
     지워진 디렉토리의 등록만 있으면 none 이다
-종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · check 에서 격리 빠짐,
+종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 넓은 호스트 와일드카드 · check 에서 격리 빠짐,
           2 argparse 인자 오류 · 설정 파일 없음 · 등록 없음 · 등록 디렉토리 없음 · CLI 실패 ·
             떠 있는 브라우저에 붙는 등록 · 차단 패턴이 있는 등록에 허용 패턴 추가
+
+패턴 넓이: 호스트에 * 를 쓰면 `*.` 뒤에 고정 라벨이 둘 이상이어야 한다(https://*.example.com/*).
+https://*/* · https://*.com/* 처럼 도메인이 고정되지 않은 패턴은 거부한다. 포트의 * 는 상관없다.
 
 범위: 로컬 범위(~/.claude.json 의 projects)와 사용자 범위만 다룬다. 프로젝트 범위(.mcp.json)는
 레포에 커밋되는 공유 설정이라 이 스크립트가 고치지 않는다.
@@ -80,6 +83,17 @@ def isolation_problem(args):
     if ISOLATED not in args:
         return "missing"
     return None
+
+
+def too_broad(pattern):
+    """호스트 와일드카드가 도메인을 고정하지 않으면 True. `*.` 뒤 고정 라벨이 둘 이상이어야 받는다."""
+    host = pattern.split("://", 1)[1].split("/", 1)[0].rsplit("@", 1)[-1].split(":", 1)[0]
+    if "*" not in host:
+        return False
+    if not host.startswith("*."):
+        return True
+    labels = host[2:].split(".")
+    return len(labels) < 2 or any(not l or "*" in l for l in labels)
 
 
 def config_path():
@@ -229,6 +243,12 @@ def main():
     bad = [p for p in a.patterns if "://" not in p]
     if bad:
         print(json.dumps({"status": "error", "message": f"패턴은 scheme 을 포함해야 한다: {bad}"}, ensure_ascii=False))
+        return 1
+    broad = [p for p in a.patterns if too_broad(p)]
+    if broad:
+        print(json.dumps({"status": "error", "step": "broad",
+                          "message": f"도메인이 고정되지 않은 호스트 와일드카드는 받지 않는다(예: https://*.example.com/* 는 된다): {broad}"},
+                         ensure_ascii=False))
         return 1
 
     conf = load_config()

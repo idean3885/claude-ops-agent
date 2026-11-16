@@ -394,7 +394,7 @@
 - 시작 때 생기는 빈 탭(`about:blank`)은 새 탭을 띄우지 않고 그 탭에서 이동
 - 로그인과 MCP 등록 명령 실행은 사용자 몫
 - DevTools MCP 가 없으면 다른 브라우저 도구로 넘어가지 않고, 렌더 확인을 못 했다는 사실과 등록 명령을 보고
-- 허용 URL 밖이라 막히면 설정 파일 편집을 안내하지 않고 실행 명령 한 줄과 다시 연결(`/mcp` → chrome-devtools → Reconnect)을 한 번에 요청. 명령은 `python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py --project <세션 작업 디렉토리> '<패턴>'` 이고, 다시 등록하면서 빠진 격리 인자도 넣음
+- 허용 URL 밖이라 막히면 설정 파일 편집을 안내하지 않고 실행 명령 한 줄과 다시 연결(`/mcp` → chrome-devtools → Reconnect)을 한 번에 요청. 명령은 `python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py --project <세션 작업 디렉토리> '<패턴>'` 이고, 다시 등록하면서 빠진 격리 인자도 넣음. 패턴은 도메인을 고정한다. `https://*/*` · `https://*.com/*` 같은 호스트 와일드카드는 스크립트가 거부하고, `https://*.example.com/*` 는 받음
 - 업무 시스템은 API 로. API 응답에 원하는 것이 없어도 화면으로 넘어가지 않음
 
 **배경.** Claude in Chrome 은 사용자가 쓰는 브라우저 세션 전체를 넘겨받아서, 보안 문제로 사용을 줄여 가다 없앨 예정이다. API 로 되는 일을 화면으로 대신하면 같은 일을 하는 경로가 둘로 나뉜다.
