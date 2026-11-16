@@ -69,6 +69,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/autonomy-prompt.sh\"",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-wrap-prompt.sh\"",
+            "timeout": 3
           }
         ]
       }

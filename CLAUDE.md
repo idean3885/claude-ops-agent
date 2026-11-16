@@ -231,6 +231,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-terms.py
   ```
+- [ ] **`hooks/session-wrap-prompt.sh` 를 고쳤으면 자체 점검을 실행한다.** 발동 조건이 넓어지면 마무리 신호가 아닌 턴에 종결 절차가 끼어들고, 좁아지면 마무리 신호를 놓쳐도 신호가 없다.
+  ```bash
+  bash scripts/selftest-session-wrap-prompt.sh
+  ```
 - [ ] **`scripts/worktree-cleanup.sh` 를 고쳤으면 자체 점검을 실행한다.** 정리는 백업 없이 지우므로 지우지 말아야 할 것을 지우는 결함은 실행 뒤에야 드러난다.
   ```bash
   bash scripts/selftest-worktree-cleanup.sh
