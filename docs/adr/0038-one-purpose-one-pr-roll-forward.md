@@ -1,6 +1,6 @@
 # ADR-0038: 목적 하나를 이슈 하나 · PR 하나로 모으고, 실패는 롤포워드로 고친다
 
-- 상태: accepted
+- 상태: accepted (결정 1 「나누는 기준은 목적」은 [ADR-0039](0039-session-bundle-one-commit-per-issue.md) 가 세션 단위로 대체)
 - 일시: 2026-11-13
 - 관련: #986, ADR-0032(이슈 하나 · PR 하나, 결정 5 와 나누는 기준을 대체), [태스크 관리 전략](../task-management.md)
 

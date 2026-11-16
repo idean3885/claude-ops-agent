@@ -419,6 +419,30 @@ inputCase('다른 절의 경로 줄', `## 교정\n- 이슈 본문: ${issueRaw}\n
 inputCase('없는 파일', '## 주장 검증\n- 이슈 본문: /nonexistent/issue.md\n', false, '없다');
 inputCase('빈 파일', `## 주장 검증\n- 이슈 본문: ${issueEmpty}\n`, false, '비어');
 inputCase('사유 없는 없음', '## 주장 검증\n- 이슈 본문: 없음\n', false, '사유');
+// 커밋 정리 (ADR-0039, #1013). 세션 묶음 PR 은 이슈마다 커밋 하나다. 이슈 번호는 제목 줄에서만 읽는다.
+function commitCase(name, msgs, wantPass, reasonHas = '') {
+  const res = spawnSync('bash', ['-c', 'set -uo pipefail; FINAL_CHECK_LIB=1 . "$1"; commit_issue_failure', 'selftest', FC], { encoding: 'utf8', input: msgs.map((m) => `${m}\x1e`).join('') });
+  const out = (res.stdout || '').trim();
+  const ok = res.status === 0 && (wantPass ? out === '' : out !== '' && out.includes(reasonHas));
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  커밋 정리: ${name} — ${out || '통과'}`);
+}
+commitCase('이슈마다 커밋 하나', ['docs: 원칙 추가 (#1002)\n\n본문', 'feat: 측정 (#1000)'], true);
+commitCase('한 커밋이 이슈 둘', ['docs: 원칙과 용어 (#1002 · #1004)'], true);
+commitCase('본문의 다른 이슈 언급은 세지 않는다', ['docs: 원칙 추가 (#1002)\n\n기존 기록: #775', 'feat: 측정 (#775)'], true);
+commitCase('같은 이슈의 교정 커밋', ['docs: 원칙 추가 (#1002)', 'docs: 문구 교정 (#1002)'], false, '#1002');
+commitCase('커밋 하나는 이슈 번호 없이도 통과 (트래커 링크를 본문에 두는 레포)', ['feat: 기능 추가\nhttps://tracker.example/tasks/1'], true);
+commitCase('여럿 중 제목에 이슈 번호 없음', ['docs: 원칙 추가 (#1002)', 'docs: 용어\n\nCloses #1004'], false, '이슈 번호가 없다');
+commitCase('커밋 없음', [], false, '커밋이 없다');
+{
+  // 진입점 배선. 커밋 수 1개 규칙이 남아 있으면 세션 묶음 PR 이 막힌다.
+  const src = readFileSync(FC, 'utf8');
+  const ok = src.includes('commit_failure=$(printf \'%s\' "$commit_msgs" | commit_issue_failure)') && src.includes('fail g "$commit_failure') && !src.includes('1개로 스쿼시한다');
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  커밋 정리: 진입점이 g 를 이슈 기준으로 판정한다 — ${ok ? '배선 있음' : '배선 없음'}`);
+}
 {
   // 진입점 배선. 함수만 부르는 위 케이스는 본 경로에서 h 를 부르지 않아도 통과하므로 소스로 확인한다.
   const src = readFileSync(FC, 'utf8');

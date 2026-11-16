@@ -156,7 +156,7 @@ main ────────────────●─────
 
 머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (마켓플레이스 update + 활성 세션 경로 복원).
 
-목적 하나는 이슈 하나, PR 하나다. 착수 전에 목적을 80자 안 한 줄로 적고, 그 목적에 드는 변경은 모두 그 PR 에 모은다. 실패는 롤포워드로 고친다 ([ADR-0038](docs/adr/0038-one-purpose-one-pr-roll-forward.md)).
+한 세션에서 잡은 이슈는 몇 개든 PR 하나로 묶는다. 이슈마다 커밋 하나를 두고 커밋 제목에 이슈 번호를 적는다. 막힌 이슈는 묶음에서 제외하고 열어 둔다. 실패는 롤포워드로 고친다 ([ADR-0039](docs/adr/0039-session-bundle-one-commit-per-issue.md) · [ADR-0038](docs/adr/0038-one-purpose-one-pr-roll-forward.md)).
 
 ### 수정 플로우
 
