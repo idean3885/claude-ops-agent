@@ -41,6 +41,7 @@
 | 종료 코드 | 0 성공 · 1 인자 · 본문 검사 실패(생성 안 됨) · 2 API 오류(생성 실패) · 3 생성됐으나 시작 실패 |
 | 출력 | JSON 한 줄. 성공은 stdout, 오류는 stderr. `status`(`ok` \| `error`) · `start`(`started` \| `skipped` \| `failed`) · `reason`(`--no-start` 사유) · 식별자(키는 provider 가 정한다. github `number`) |
 | 생성 뒤 실패 | 식별자를 반드시 담는다. 이슈는 남아 있으므로 start 를 다시 부른다. |
+| 세션 인덱스 | 생성 · 시작이 성공하면 `~/.claude/ops-agent/.cache/session-issues/<세션 번호>.jsonl` 에 한 줄(`repo` · `number` · `title` · `action`)을 더한다. 세션 번호는 `CLAUDE_CODE_SESSION_ID` 이고 없으면 쓰지 않는다. 쓰기 실패는 결과를 바꾸지 않는다. 세션 마무리 훅이 이 파일로 대상 이슈를 확정하고 지운다. |
 
 내장 github 구현은 `scripts/gh-issue.sh` 다.
 

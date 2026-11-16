@@ -22,6 +22,10 @@
 #                그 브랜치의 PR 이 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다 (#813)
 #   --branch     브랜치 이름. 기본 `{타입}/{번호}`. 리모트 머지 이력의 접두가 provider 패턴과 다를 때 넘긴다
 #
+# 세션 인덱스: 생성 · 시작이 성공하면 ~/.claude/ops-agent/.cache/session-issues/<세션 번호>.jsonl 에
+#   한 줄(repo · number · title · action)을 더한다. 세션 마무리 훅이 이 파일로 대상 이슈를 확정하고 지운다 (#1050).
+#   세션 번호는 CLAUDE_CODE_SESSION_ID 다. 없으면 쓰지 않는다(마무리는 대화에서 대상을 모은다). 쓰기 실패는 결과를 바꾸지 않는다.
+#
 # 종료 코드: 0 성공, 1 인자 · 본문 검사 실패(생성 안 됨), 2 gh · git 오류, 3 생성됐으나 시작 실패
 # 출력: JSON 한 줄. 성공은 stdout, 오류는 stderr. status · number · start(started|skipped|failed) · reason
 
@@ -58,6 +62,25 @@ d = {"status": "ok"}
 for kv in sys.argv[1:]:
     k, v = kv.split("=", 1); d[k] = v
 print(json.dumps(d, ensure_ascii=False))' "$@"
+}
+
+# 세션 인덱스에 한 줄을 더한다. 실패해도 조용히 넘어간다 (어댑터 결과를 바꾸지 않는다).
+index_line() { # <action> <number> <title> <url>
+  local sid="${CLAUDE_CODE_SESSION_ID:-}"
+  sid="${sid//[^A-Za-z0-9_-]/}"
+  [ -n "$sid" ] || return 0
+  local dir="$HOME/.claude/ops-agent/.cache/session-issues"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  python3 -c '
+import json, sys, datetime
+action, number, title, url = sys.argv[1:5]
+# why: github.com 은 owner/repo, 그 밖의 호스트는 host/owner/repo 로 적어 -R 값과 같은 모양을 쓴다
+path = url.split("://", 1)[-1].split("/issues/")[0]
+host, _, rest = path.partition("/")
+repo = rest if host == "github.com" else path
+print(json.dumps({"ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "repo": repo, "number": number, "title": title, "action": action}, ensure_ascii=False))
+' "$1" "$2" "$3" "$4" >>"$dir/$sid.jsonl" 2>/dev/null || true
 }
 
 # ─── start ───
@@ -117,6 +140,15 @@ cmd_start() {
       out+=(branch="$BRANCH")
     fi
   fi
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    # 생성에서 이어진 시작이면 제목 · 주소를 이미 안다. 단독 시작만 조회한다
+    local META_TITLE="${KNOWN_TITLE:-}" META_URL="${KNOWN_URL:-}" META
+    if [ -z "$META_URL" ]; then
+      META=$(gh issue view "$NUMBER" ${R[@]+"${R[@]}"} --json title,url --jq '.url + "\t" + .title' 2>/dev/null) || META=""
+      META_URL="${META%%$'\t'*}"; META_TITLE="${META#*$'\t'}"
+    fi
+    [ -n "$META_URL" ] && index_line 시작 "$NUMBER" "$META_TITLE" "$META_URL"
+  fi
   ok_json "${out[@]}"
 }
 
@@ -175,6 +207,8 @@ print(json.dumps(d, ensure_ascii=False))' "$CHECK" >&2
   NUMBER="${URL##*/}"
   [[ "$NUMBER" =~ ^[0-9]+$ ]] || err_json 2 "생성 응답에서 번호를 읽지 못했다: $URL"
 
+  index_line 생성 "$NUMBER" "$TITLE" "$URL"
+
   if [ -n "$NO_START_REASON" ]; then
     ok_json number="$NUMBER" url="$URL" start=skipped reason="$NO_START_REASON"
     return 0
@@ -182,7 +216,7 @@ print(json.dumps(d, ensure_ascii=False))' "$CHECK" >&2
 
   local START_OUT START_RC
   set +e
-  START_OUT=$(cmd_start "$NUMBER" --type "$TYPE" ${R[@]+"${R[@]}"} ${START_ARGS[@]+"${START_ARGS[@]}"})
+  START_OUT=$(KNOWN_TITLE="$TITLE" KNOWN_URL="$URL" cmd_start "$NUMBER" --type "$TYPE" ${R[@]+"${R[@]}"} ${START_ARGS[@]+"${START_ARGS[@]}"})
   START_RC=$?
   set -e
   if [ "$START_RC" -ne 0 ]; then
