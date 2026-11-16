@@ -49,6 +49,7 @@ import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
+import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 import {
   ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, REGISTER_HINT, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
@@ -250,6 +251,14 @@ if (!DISABLE) {
     if (writesRepoTypeFile(hookInput.tool_name || '', hookInput.tool_input)) {
       process.stdout.write(JSON.stringify({
         hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: REPO_TYPE_DENY_EDIT },
+      }));
+      process.exit(0);
+    }
+    // 대화창 위임 기록 편집 차단 (#1046). 위임은 사람의 입력을 받은 훅만 쓴다.
+    if (writesGuardedFile(hookInput.tool_name || '', hookInput.tool_input, DELEGATION_FILE_RE, 'push-delegation')) {
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+          permissionDecisionReason: `[ops-agent 푸시 권한 위임 · 차단] 위임 기록은 사람이 대화창에 「${DELEGATION_PHRASE}」을 입력했을 때 훅만 쓴다. 어시스턴트는 쓰지 않는다.` },
       }));
       process.exit(0);
     }
@@ -495,6 +504,10 @@ if (!DISABLE) {
             `이 명령은 위 갈래(${scopeArg})만 엽니다. 다른 갈래는 계속 차단되고 다시 사람에게 옵니다.\n` +
             (carried.length
               ? `\`on\` 은 열려 있던 갈래를 대체합니다. 이미 열린 갈래(${carried.join(',')})를 위 명령에 함께 담았으니 이 한 줄로 필요한 갈래가 모두 열립니다.\n`
+              : '') +
+            (blockedScopes.length === 1 && blockedScopes[0] === 'git-default-push'
+              && declaredScopes(findRepoRoot(extractCwdFromCommand(command, hookInput.cwd))).includes('git-default-push')
+              ? `이 레포는 위임을 선언했습니다. 대신 사람이 대화창에 「${DELEGATION_PHRASE}」만 입력하면 이 세션 동안 기본 브랜치 push 가 열립니다. 이 문장을 그대로 안내합니다.\n`
               : '') +
             `어시스턴트가 이 스크립트를 실행하면 자기 수정으로 차단됩니다. 정상 동작이며 우회하지 않습니다.\n` +
             `자연어 승인("승인합니다"·"머지 승인" 등)은 권한을 열지 않습니다. 마커 파일 생성만이 개방 신호입니다.\n` +
@@ -1165,6 +1178,8 @@ function runWhatAbstractionGuard(command) {
 // 그래서 갈래 키를 category 보다 좁게 둔다 (scope).
 function runActionGate(command, sessionId, hookCwd) {
   const allowed = allowedScopes(sessionId);
+  // 대화창 위임 (#1046): 이 세션 · 이 레포에 사람이 연 갈래를 더한다. 선언 · 문장 둘 다 있어야 열린다.
+  for (const s of delegatedScopes(sessionId, findRepoRoot(extractCwdFromCommand(command, hookCwd)))) allowed.add(s);
   // `all` 이 열려 있어도 탐지는 한다. 동거 검사(#386)는 게이트가 열린 동안에만 발동하기 때문이다.
   const ops = detectGatedActions(command, hookCwd);
   // cluster-exec 는 cluster-write 에서 나뉘어 나온 갈래다. 기존에 cluster-write 로 열던 개방이 exec 를
