@@ -164,5 +164,30 @@ def cmd_release():
     print('✔ Unreleased → [%s] 로 끊음 (%d건)' % (ver, len(re.findall(r'^\* ', block, re.M))))
 
 
+def cmd_next():
+    """Unreleased 로 다음 버전을 정해 출력한다. 비어 있으면 아무것도 출력하지 않는다.
+
+    머지 직후 워크플로가 부른다 (ADR-0040). 사람이 버전을 선택하는 자리를 없애려면 선택하는
+    규칙이 결정적이어야 한다. SemVer 의 뜻대로 MAJOR 는 브레이킹 체인지, MINOR 는 기능 추가
+    (지원 중단 예고 포함), PATCH 는 버그 픽스 · 기능 개선이다. 체인지로그 분류로 판별한다:
+    **BREAKING** → MAJOR, Added · Deprecated → MINOR, 그 밖 → PATCH.
+    """
+    prev = os.environ['PREV_VERSION']
+    head, body = split_head(changelog_path().read_text(encoding='utf-8'))
+    span = unreleased_block(body)
+    if span is None:
+        return
+    block = body[span[0]:span[1]]
+    if not re.search(r'^\* ', block, re.M):
+        return
+    major, minor, patch = (int(x) for x in prev.split('.'))
+    if '**BREAKING**' in block:
+        print('%d.0.0' % (major + 1))
+    elif re.search(r'^### (?:Added|Deprecated)\s*\n\* ', block, re.M):
+        print('%d.%d.0' % (major, minor + 1))
+    else:
+        print('%d.%d.%d' % (major, minor, patch + 1))
+
+
 if __name__ == '__main__':
-    {'add': cmd_add, 'release': cmd_release}[sys.argv[1]]()
+    {'add': cmd_add, 'release': cmd_release, 'next': cmd_next}[sys.argv[1]]()

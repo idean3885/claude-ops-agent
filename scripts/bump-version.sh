@@ -4,8 +4,10 @@
 # Usage:
 #   ./scripts/bump-version.sh add <changelog_entry> [category]
 #   ./scripts/bump-version.sh release <new_version>
+#   ./scripts/bump-version.sh next
 #
 # add      CHANGELOG.md 의 Unreleased 에 항목만 쌓는다. 버전 파일은 건드리지 않는다.
+# next     Unreleased 로 다음 버전을 정해 출력한다. 비어 있으면 빈 출력. 머지 직후 워크플로가 쓴다.
 # release  Unreleased 를 버전 섹션으로 끊고 4곳(VERSION·CHANGELOG.md·plugin.json·
 #          marketplace.json)을 함께 갱신한다.
 #
@@ -21,6 +23,7 @@ usage() {
 Usage:
   bump-version.sh add <changelog_entry> [category]
   bump-version.sh release <version>
+  bump-version.sh next                 # MAJOR 브레이킹 체인지 · MINOR 기능 추가 · PATCH 버그 픽스 · 개선
 
 category: Added Changed Deprecated Removed Fixed Security
   생략하면 changelog_entry 의 커밋 타입 접두에서 유도하고 본문에서 접두를 걷는다.
@@ -75,6 +78,10 @@ PY
       echo "✘ 버전 불일치: VERSION=$V1 plugin=$V2 marketplace=$V3 CHANGELOG=$V4" >&2
       exit 1
     fi
+    ;;
+  next)
+    PREV_VERSION=$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")
+    ROOT_DIR="$ROOT_DIR" PREV_VERSION="$PREV_VERSION" python3 "$SCRIPT_DIR/changelog.py" next
     ;;
   ''|-h|--help|help)
     usage
