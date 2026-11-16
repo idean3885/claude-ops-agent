@@ -87,10 +87,7 @@ def isolation_problem(args):
 
 def too_broad(pattern):
     """호스트 와일드카드가 도메인을 고정하지 않으면 True. `*.` 뒤 고정 라벨이 둘 이상이어야 받는다."""
-    host = pattern.split("://", 1)[1].split("/", 1)[0].rsplit("@", 1)[-1]
-    if host.startswith("["):
-        return False
-    host = host.split(":", 1)[0]
+    host = pattern.split("://", 1)[1].split("/", 1)[0].rsplit("@", 1)[-1].split(":", 1)[0]
     if "*" not in host:
         return False
     if not host.startswith("*."):
