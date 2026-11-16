@@ -106,7 +106,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 [Semantic Versioning](https://semver.org/) 기준.
 
-**변경은 `Unreleased` 에 쌓고, PR 이 머지되면 바로 릴리즈를 끊는다.** PR 안에서는 버전을 올리지 않는다. 병행 세션끼리 같은 번호가 부딪히기 때문이다. 릴리즈를 미루면 머지됐지만 릴리즈 전인 규칙이 설치본에 없어, 다른 세션이 옛 규칙으로 작업한다 (#870).
+**변경은 `Unreleased` 에 쌓고, PR 이 머지되면 워크플로가 바로 릴리즈를 끊는다.** PR 안에서는 버전을 올리지 않는다. 병행 세션끼리 같은 번호가 부딪히기 때문이다. 릴리즈를 미루면 머지됐지만 릴리즈 전인 규칙이 설치본에 없어, 다른 세션이 옛 규칙으로 작업한다 (#870). 버전은 `bump-version.sh next` 가 Unreleased 로 정한다. MAJOR 는 브레이킹 체인지, MINOR 는 기능 추가, PATCH 는 버그 픽스 · 기능 개선이다(SemVer). 판별은 체인지로그 분류로 한다: `**BREAKING**` 표시 → MAJOR, Added · Deprecated → MINOR, 그 밖 → PATCH ([ADR-0040](docs/adr/0040-human-designs-and-decides-ai-ships-fast.md)).
 
 체인지로그는 [Keep a Changelog 1.1.0](https://keepachangelog.com/ko/1.1.0/) 을 따른다. 그 규격이 `Unreleased` 를 권하는 근거는 릴리즈 시점의 작성 부담 제거, 다음 버전 예고, 몰아 쓰지 않기, 워크플로 편입 넷이다.
 
@@ -120,7 +120,8 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 
 ```bash
 ./scripts/bump-version.sh add "<changelog_entry>" [category]   # 작업 때마다
-./scripts/bump-version.sh release <version>                    # PR 머지 직후
+./scripts/bump-version.sh next                                 # 다음 버전 출력 (워크플로)
+./scripts/bump-version.sh release <version>                    # 머지 직후 워크플로가 실행
 ```
 
 `release` 가 갱신하는 4곳이다. 수동 편집하면 어긋나 캐시 경로 해석이 깨진다.
@@ -148,13 +149,17 @@ main ────────────────●─────
 - PR 타겟: `main` 직접
 - 이슈 플로우 동일 적용: `/flow` 단일 진입 (issue → spec → 구현 → commit → pr)
 
-반영 경로: 워크트리 → `bump-version.sh add` → 커밋 → PR → 웹 머지 → 릴리즈 PR(`release/<버전>`, `bump-version.sh release`) → 웹 머지. main 직접 push 는 하지 않는다. 머지 알림을 받으면 묻지 않고 릴리즈 PR 을 만든다. 버전은 위 SemVer 기준으로 정한다.
+반영 경로: 세션 묶음 착수 승인 → 워크트리 → `bump-version.sh add` → 커밋 → PR → 웹 머지 → 릴리즈 워크플로(`.github/workflows/release.yml`). main 직접 push 는 하지 않는다. 릴리즈 PR 은 만들지 않는다.
+
+**사람의 판단 자리는 세션마다 둘이다** ([ADR-0040](docs/adr/0040-human-designs-and-decides-ai-ships-fast.md)). 세션에서 처리할 이슈 목록(열린 이슈 중 고른 것 + 이번 세션에서 나온 갭)을 한 번 제시하고 착수 승인을 받는다. 승인 뒤에는 이슈마다 진행을 묻지 않는다. 머지 직전 보고는 「대신 정한 것」(사람에게 묻지 않고 AI 가 고른 설계 · 낱말 · 범위) 목록으로 한다. 사람이 이슈 하나를 반려하면 그 커밋을 묶음에서 제외한다.
+
+머지된 이슈 커밋을 롤백할 때는 `./scripts/revert-issue.sh <커밋> <이슈번호>` 를 쓴다. 방향을 거부했거나 오작동이 지금도 퍼질 때 쓰고, 이후 변경과 내용이 부딪히면 스크립트가 멈추므로 롤포워드로 고친다. 받아들인 방향 안의 결함은 롤포워드로 고친다.
 
 로컬 `gh pr merge` 를 쓸 때는 `./scripts/pre-merge-check.sh <브랜치> main` 을 앞에 물린다. 브랜치가 타겟보다 오래된 베이스 위에 있으면 머지가 버전을 뒤로 밀어낸다. 검출 시 종료 코드 1 이라 `&&` 체인이 멈춘다. 한시 권한 대상 행위를 다른 명령과 한 블록에 두면 훅이 차단한다 (ADR 0011).
 
 머지 직전에는 `scripts/final-check.sh <PR번호> --notes <파일>` 의 통과 기록이 있어야 한다. 없으면 훅이 `gh pr merge` 를 막는다 (#612, [docs/action-gate.md](docs/action-gate.md) 「최종 점검 통과 기록」). 이 레포는 사상 유형이라 병합은 사람이 웹에서 하고, 어시스턴트는 상황 보고에 통과 기록 경로를 첨부한다 (ADR-0028 · ADR-0029).
 
-머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (마켓플레이스 update + 활성 세션 경로 복원).
+머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (릴리즈 잡 대기 + 마켓플레이스 update + 활성 세션 경로 복원).
 
 한 세션에서 잡은 이슈는 몇 개든 PR 하나로 묶는다. 이슈마다 커밋 하나를 두고 커밋 제목에 이슈 번호를 적는다. 막힌 이슈는 묶음에서 제외하고 열어 둔다. 실패는 롤포워드로 고친다 ([ADR-0039](docs/adr/0039-session-bundle-one-commit-per-issue.md) · [ADR-0038](docs/adr/0038-one-purpose-one-pr-roll-forward.md)).
 
@@ -169,8 +174,8 @@ main ────────────────●─────
 | 기존 규칙 · 가이드 · 훅이 이미 그 자리를 맡는가 (`grep` 로 skills · docs · scripts 를 본다) | 있으면 플러그인 갭이 아니다. 동작하지 않은 원인이 「없음」인지 「안 읽힘」인지 구분한다. 안 읽힘이면 읽는 단계를 고치는 이슈다 |
 | 소비 레포의 문서(README · CLAUDE.md)에 규칙이 있는가 | 있으면 레포 규칙이고 플러그인이 할 일은 그 문서를 여는 단계뿐이다 |
 | 같은 주제의 과거 지시 · 결정이 있는가 ([ADR-0027](docs/adr/0027-instructions-are-checked-against-records.md)) | 이슈 `## Why` 의 「기존 기록」 줄에 적는다. 있으면 이전 · 지금 · 바뀐 점, 없으면 「없음 · 찾은 자리」. 바뀐 것이 없으면 과거 지시를 따른다. 어댑터가 이 줄 없이는 생성하지 않는다 (ISS5). |
-| ADR 로 남길 결정인가 | 기존 결정을 뒤집거나 기각한 대안을 남겨야 할 때만 ADR 이다. 그 밖의 지시는 다스리는 문서에 한 줄로 남긴다. |
-| 같은 자리가 두 번 이상 나왔는가 | 한 번이면 사례로 기록하고 이슈는 올리지 않는다 (전문가 추가와 같은 기준) |
+| ADR 로 남길 결정인가 | 기존 결정을 뒤집거나 기각한 대안을 남겨야 할 때만 ADR 이다. 그 밖의 지시는 다스리는 문서에 한 줄로 남긴다. 새 ADR 은 「다시 열 조건」 절(관측값과 임계)을 반드시 두고, 기존 ADR 을 대체하면 그 ADR 의 다시 열 조건 중 충족된 것을 인용한다 ([ADR-0040](docs/adr/0040-human-designs-and-decides-ai-ships-fast.md) 결정 6). |
+| 같은 자리가 두 번 이상 나왔는가 | 한 번이면 사례로 기록하고 이슈는 올리지 않는다 (전문가 추가와 같은 기준). 기록 자리는 [사례 기록 이슈 #1042](https://github.com/idean3885/claude-ops-agent/issues/1042) 의 댓글 한 줄이다(무엇이 · 어디서 · 기존 규칙이 왜 못 막았나). 같은 자리의 댓글이 둘이 되면 이슈로 올리고 두 댓글을 근거로 단다 ([ADR-0040](docs/adr/0040-human-designs-and-decides-ai-ships-fast.md)). |
 | 고칠 층이 맞는가 ([ADR-0004](docs/adr/0004-fix-altitude.md)) | 사상 → 집행 → 개별. 개별 수정으로 끝날 것을 집행 장치로 올리지 않는다 |
 
 **최종 컨펌 전에 다시 검사한다.** 구현하고 보면 처음 판단과 어긋나는 것이 생긴다.

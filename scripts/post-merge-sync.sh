@@ -3,8 +3,8 @@
 # PR 머지로 origin/main 에 반영된 새 버전을 로컬 캐시에 반영한다.
 # 마켓플레이스 업데이트 → 로컬 캐시 git 복원 → 활성 세션 경로 복원 → 검증
 #
-# 버전 범프·커밋·직접 push 는 하지 않는다. 그 단계는 워크트리에서 bump-version.sh 로
-# 버전 파일을 올린 뒤 커밋 → PR → 웹 머지가 담당한다.
+# 버전 범프·커밋·직접 push 는 하지 않는다. 버전은 머지 직후 자동 릴리즈 워크플로가
+# 끊는다 (ADR-0040). 이 스크립트는 그 잡이 끝나기를 기다린 뒤 받는다.
 #
 # Usage: ./scripts/post-merge-sync.sh
 # 선행 조건: 대상 PR 이 origin/main 에 이미 머지되어 있어야 한다.
@@ -15,8 +15,32 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_NAME="ops-agent@ops-agent"
 REMOTE_URL="${OPS_AGENT_REMOTE_URL:-https://github.com/idean3885/claude-ops-agent.git}"
 
+# --- Step 0: 자동 릴리즈 잡 대기 ---
+# 머지 직후 바로 받으면 잡이 버전을 끊기 전이라 받을 것이 없다. 가장 최근 main 잡을 기다린다.
+# gh 가 없거나 잡을 찾지 못하면 기다리지 않고 지나간다 (Step 3 이 받은 것 없음을 알린다).
+# 머지 직후에는 새 잡이 아직 등록되지 않았을 수 있다. 끝난 이전 잡을 고르지 않도록 머지 커밋으로 찾는다.
+if command -v gh >/dev/null 2>&1; then
+  REPO="${OPS_AGENT_REPO:-idean3885/claude-ops-agent}"
+  git -C "$ROOT_DIR" fetch origin --quiet 2>/dev/null || true
+  MERGE_SHA=$(git -C "$ROOT_DIR" rev-parse origin/main 2>/dev/null || true)
+  RUN_ID=""
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    RUN_ID=$(gh run list -R "$REPO" -w release.yml -b main -L 5 --json databaseId,headSha \
+      --jq ".[] | select(.headSha == \"$MERGE_SHA\") | .databaseId" 2>/dev/null | head -1 || true)
+    [ -n "$RUN_ID" ] && break
+    # 릴리즈 커밋 자체는 잡을 띄우지 않는다. 이미 릴리즈 커밋이면 기다릴 잡이 없다.
+    git -C "$ROOT_DIR" log -1 --format=%s origin/main 2>/dev/null | grep -q '^chore: release ' && break
+    sleep 5
+  done
+  if [ -n "$RUN_ID" ]; then
+    echo "⏳ 자동 릴리즈 잡 대기: $RUN_ID"
+    gh run watch "$RUN_ID" -R "$REPO" --exit-status >/dev/null 2>&1 \
+      || { echo "✘ 자동 릴리즈 잡 실패: gh run view $RUN_ID 로 원인을 보고 롤포워드로 고칩니다" >&2; exit 1; }
+  fi
+fi
+
 # --- 머지된 버전 확인 (origin/main 기준) ---
-# 로컬 체크아웃 상태와 무관하게 원격 main 의 VERSION 을 동기 기준으로 삼는다.
+# 로컬 체크아웃 상태와 무관하게 원격 main 의 VERSION 을 동기 기준으로 삼는다. 잡이 끊은 릴리즈 커밋을 받으려 다시 받는다.
 git -C "$ROOT_DIR" fetch origin --quiet 2>/dev/null || true
 NEW_VERSION=$(git -C "$ROOT_DIR" show origin/main:VERSION 2>/dev/null || cat "$ROOT_DIR/VERSION")
 echo "📦 동기 대상 버전: $NEW_VERSION"
@@ -117,7 +141,7 @@ INSTALLED_VERSION=$(cat "$NEW_CACHE/VERSION" 2>/dev/null || echo "MISSING")
 if [ "$INSTALLED_VERSION" = "$NEW_VERSION" ]; then
   if printf '%s\n' "$BEFORE_VERSIONS" | grep -qx "$NEW_VERSION"; then
     echo "ℹ 받은 것 없음 — 캐시가 이미 $NEW_VERSION 이었습니다"
-    echo "  버전을 끊지 않은 머지는 캐시에 반영되지 않습니다. bump-version.sh release <버전> 뒤 다시 실행하세요"
+    echo "  자동 릴리즈 잡이 버전을 끊지 않은 머지입니다 (Unreleased 가 비었거나 잡이 아직 뜨지 않음). 잡을 확인한 뒤 다시 실행하세요"
   fi
   echo "✅ 동기 완료: ops-agent $NEW_VERSION (origin/main VERSION 기준)"
 else
