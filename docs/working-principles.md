@@ -410,7 +410,7 @@
 - 시작 때 생기는 빈 탭(`about:blank`)은 새 탭을 띄우지 않고 그 탭에서 이동
 - 로그인과 MCP 등록 명령 실행은 사용자 몫
 - DevTools MCP 가 없으면 다른 브라우저 도구로 넘어가지 않고, 렌더 확인을 못 했다는 사실과 등록 명령을 보고
-- 허용 URL 밖이라 막히면 설정 파일 편집을 안내하지 않고 실행 명령 한 줄과 다시 연결(`/mcp` → chrome-devtools → Reconnect)을 한 번에 요청. 명령은 `python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py --project <세션 작업 디렉토리> '<패턴>'` 이고, 다시 등록하면서 빠진 격리 인자도 넣음. 패턴은 호스트를 고정한다. `https://*/*` · `https://*.com/*` 같은 와일드카드와 `https://:host/*` 같은 URLPattern 그룹 표기는 스크립트가 거부하고, `https://*.example.com/*` 는 받음
+- 허용 URL 밖이라 막히면 설정 파일 편집을 안내하지 않고 실행 명령 한 줄과 다시 연결(`/mcp` → chrome-devtools → Reconnect)을 한 번에 요청. 명령은 `python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py --project <세션 작업 디렉토리> '<패턴>'` 이고, 다시 등록하면서 빠진 격리 인자도 넣음. 패턴은 `scheme://호스트[:포트][/경로]` 형식만 받고 호스트를 고정한다. `https://*/*` · URLPattern 그룹 · userinfo · 쿼리 · 해시 같은 표기는 스크립트가 거부하고, `https://*.example.com/*` 는 받음. 비 ASCII 도메인은 punycode 로 씀. 형식을 통과한 패턴도 DevTools MCP 와 같은 해석기(node 의 URLPattern)로 만들어 보고 예외 · 다른 해석이면 거부
 - 다국어 화면은 그 언어로 띄운 브라우저로 판정. `python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py --project <세션 작업 디렉토리> --lang <code>` 로 언어별 서버를 더하고 다시 읽기 → 연결을 요청. 쿠키 · 요청 헤더 · navigator 덮어쓰기는 서버가 언어 쿠키를 다시 심어 판정이 틀림. 쓰지 않을 때는 등록 디렉토리에서 `claude mcp remove <server>-<code> -s <범위>` 로 지움
 - 업무 시스템은 API 로. API 응답에 원하는 것이 없어도 화면으로 넘어가지 않음
 

@@ -10,6 +10,7 @@ CLI 호출 순서(remove → add-json, 같은 범위 · 같은 디렉토리) · 
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,6 +27,48 @@ exit 0
 """
 
 fails = 0
+
+
+# 받아야 하는 패턴. 소비 측(chrome-devtools-mcp 의 URLPattern)이 스크립트가 판정한 scheme · 호스트와 같게 해석하는지 아래에서 대조한다
+ACCEPTED = ["https://*.example.com/*", "http://localhost:*/*", "http://127.0.0.1:8080/*", "https://a_b.example.com/*",
+            "https://xn--bj0bj06e.example.com/*", "https://a.example.com", "https://a.example.com/path/*",
+            "https://XN--BJ0BJ06E.example.com/*", "chrome-extension://abc/*", "https://a.example.com/%7Ea~b/*",
+            "HTTPS://A.EXAMPLE.COM/*", "https://a.example.com:443/*", "http://a.example.com:80/*"]
+# 형식은 통과하지만 소비 측 URLPattern 이 만들지 못하는 패턴. 스크립트가 같은 해석기로 확인해 거부해야 한다 (#1021 2회차)
+CONSUMER_REJECTED = ["https://a.example.com:080/*", "https://a.example.com:\u0668\u0660/*", "https://a.example.com:\uff18\uff10/*",
+                     "https://a_b.3/*", "https://*.1_2.3/*", "https://XN--A.com/*",
+                     # 예외 없이 다르게 해석되는 것: 호스트가 127.0.0.1 로 접힘 · 포트가 1 로 접힘
+                     "https://0x7F000001/*", "https://a.example.com:1\uff12/*"]
+# 거부해야 하는 패턴. 스크립트 판정과 소비 측 해석이 어긋나 우회가 되던 표기를 포함한다 (#1014 · #1018 · #1021)
+REJECTED = ["https://*/*", "https://*.com/*", "https://*", "http://a*.example.com/*", "https://*.*.example.com/*",
+            "https://*ab.example.com/*", "https://a*b.example.com/*", "https://*..com/*", "https://u:p@*/*",
+            "https://:host/*", "https://:sub.example.com/*", "https://(.*)/*", "https://{a.}?example.com/*",
+            "https://a+.example.com/*", "https://([a-z]+).example.com/*", "https://a?.example.com/*", "https://{a}.example.com/*",
+            "https://a..com/*", "https://a\\.example.com/*", "http://[::1]:*/*",
+            "https:*://a.example.com/*", "https:(.*)://a.example.com/*", "*://a.example.com/*", "http+://a.example.com/*",
+            "http*://a.example.com/*", "h(.*)://a.example.com/*", "1http://a.example.com/*",
+            "https://*#@a.example.com/*", "https://evil.test?@a.example.com/*", "https://u:p@a.example.com/*",
+            "https://{@a.example.com/*", "https://a.example.com/(", "https://a.example.com:99999/*",
+            "https://한글.example.com/*", "https://a.example.com/*?x", "https://a.example.com/#*",
+            "https://a.example.com/a:b", "https://a.example.com/{a}", "https://a.example.com/a+", "https://a.example.com/a\\b",
+            "https://a.example.com:65536/*", "https://a.example.com:0/*"]
+
+
+def urlpattern_hosts(patterns):
+    """node 의 URLPattern 으로 patterns 를 만들어 [protocol, hostname] 또는 None(예외)을 돌려준다. 쓸 수 없으면 None"""
+    js = ("const ps=JSON.parse(process.argv[1]);if(typeof URLPattern!=='function'){console.log('null');process.exit(0)}"
+          "console.log(JSON.stringify(ps.map(p=>{try{const u=new URLPattern(p);return [u.protocol,u.hostname]}catch(e){return null}})))")
+    try:
+        r = subprocess.run(["node", "-e", js, json.dumps(patterns)], capture_output=True, text=True, timeout=30)
+        return json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def same_as_consumer(pattern, consumer):
+    """스크립트가 판정한 scheme · 호스트와 소비 측 해석이 같으면 True"""
+    m = re.fullmatch(r"([^:/]+)://([^:/]+).*", pattern)
+    return consumer is not None and m is not None and consumer == [m[1].lower(), m[2].lower()]
 
 
 def check(name, cond, detail=""):
@@ -172,13 +215,40 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, out, calls = run(tmp, conf, ["127.0.0.1:*/*"], sub)
     check("scheme 없는 패턴은 거부한다", rc == 1 and out["status"] == "error" and not calls, (rc, out))
 
-    for wide in ("https://*/*", "https://*.com/*", "https://*", "http://a*.example.com/*", "https://*.*.example.com/*",
-                 "https://*ab.example.com/*", "https://a*b.example.com/*", "https://*..com/*", "https://u:p@*/*",
-                 "https://:host/*", "https://:sub.example.com/*", "https://(.*)/*", "https://{a.}?example.com/*", "https://a+.example.com/*"):
+    for wide in REJECTED:
         rc, out, calls = run(tmp, conf, [wide], sub)
-        check(f"고정되지 않은 호스트는 거부한다: {wide}", rc == 1 and out.get("step") == "broad" and not calls, (rc, out, calls))
-    rc, out, calls = run(tmp, conf, ["https://*.example.com/*", "http://localhost:*/*", "http://127.0.0.1:8080/*", "http://[::1]:*/*", "https://u:p@a.example.com/*", "--dry-run"], sub)
-    check("고정 호스트 · 도메인이 고정된 와일드카드 · 포트 · IP · IPv6 · userinfo 는 받는다", rc == 0 and out["status"] == "dry-run", (rc, out))
+        check(f"받는 형식 밖의 패턴은 거부한다: {wide}", rc == 1 and out.get("step") == "broad" and not calls, (rc, out, calls))
+    for odd in CONSUMER_REJECTED:
+        rc, out, calls = run(tmp, conf, [odd], sub)
+        check(f"URLPattern 이 만들지 못하는 패턴은 거부한다: {odd}", rc == 1 and out.get("step") == "consumer" and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, conf, ["https://a.example.com/*"], sub, {"DEVTOOLS_ALLOW_NODE": os.path.join(tmp, "no-node")})
+    check("node 가 없으면 패턴을 받지 않고 종료 2", rc == 2 and out.get("step") == "node" and not calls, (rc, out, calls))
+    for name, body in (("node3", "exit 3"), ("nodee", "echo '[]'"), ("nodeg", "echo 'not json'")):
+        fake = os.path.join(tmp, name)
+        with open(fake, "w") as f:
+            f.write(f"#!/bin/sh\n{body}\n")
+        os.chmod(fake, 0o755)
+        rc, out, calls = run(tmp, conf, ["https://a.example.com/*", "https://b.example.com/*"], sub, {"DEVTOOLS_ALLOW_NODE": fake})
+        check(f"URLPattern 확인이 비정상이면 받지 않고 종료 2: {body}", rc == 2 and out.get("step") == "node" and not calls, (rc, out, calls))
+    # URLPattern 이 없는 node: 전역을 지운 뒤 실제 node 로 실행한다
+    nourl = os.path.join(tmp, "nourl.js")
+    with open(nourl, "w") as f:
+        f.write("delete globalThis.URLPattern;\n")
+    fake = os.path.join(tmp, "node-nourl")
+    with open(fake, "w") as f:
+        f.write(f'#!/bin/sh\nexec node -r "{nourl}" "$@"\n')
+    os.chmod(fake, 0o755)
+    rc, out, calls = run(tmp, conf, ["https://a.example.com/*"], sub, {"DEVTOOLS_ALLOW_NODE": fake})
+    check("node 에 URLPattern 이 없으면 받지 않고 종료 2", rc == 2 and out.get("step") == "node" and not calls, (rc, out, calls))
+    # scheme 만 다르게 해석하는 소비 측: 실제 node 에서는 나오지 않아 가짜 응답으로 비교 자체를 시험한다
+    fake = os.path.join(tmp, "node-scheme")
+    with open(fake, "w") as f:
+        f.write("#!/bin/sh\necho '[[\"http\",\"a.example.com\",\"\"]]'\n")
+    os.chmod(fake, 0o755)
+    rc, out, calls = run(tmp, conf, ["https://a.example.com/*"], sub, {"DEVTOOLS_ALLOW_NODE": fake})
+    check("소비 측이 scheme 을 다르게 해석하면 거부한다", rc == 1 and out.get("step") == "consumer" and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, conf, ACCEPTED + ["--dry-run"], sub)
+    check("고정 호스트 · 도메인이 고정된 와일드카드 · 포트(기본 포트 포함) · IPv4 · 밑줄 · punycode · 대문자 · 경로 생략은 받는다", rc == 0 and out["status"] == "dry-run", (rc, out))
 
     rc, out, calls = run(tmp, conf, ["http://y/*", "--dry-run"], sub)
     check("dry-run 은 CLI 를 부르지 않는다", out["status"] == "dry-run" and not calls, (out, calls))
@@ -267,6 +337,15 @@ with tempfile.TemporaryDirectory() as tmp:
     check("--lang 은 언어 부호 형식이 아니면 CLI 없이 종료 1", rc == 1 and not calls, (rc, out, calls))
     rc, out, calls = run(tmp, conf, ["--lang", "en", "--dry-run"], sub)
     check("--lang --dry-run 은 CLI 를 부르지 않는다", rc == 0 and out["status"] == "dry-run" and not calls, (rc, out, calls))
+
+CONTROL = "https://*#@a.example.com/*"  # 스크립트가 a.example.com 으로 보던 우회 표본. 대조가 이것을 잡아야 의미가 있다
+hosts = urlpattern_hosts(ACCEPTED + [CONTROL])
+if hosts is None:
+    print("skip 받은 패턴의 URLPattern 대조 (node 또는 URLPattern 없음)")
+else:
+    for p, h in zip(ACCEPTED, hosts):
+        check(f"받은 패턴은 URLPattern 에서도 같은 scheme · 호스트다: {p}", same_as_consumer(p, h), h)
+    check("대조군: 우회 표본은 URLPattern 대조에서 어긋난다", not same_as_consumer(CONTROL, hosts[-1]), hosts[-1])
 
 print(f"\n{'PASS' if not fails else 'FAIL'} ({fails} failed)")
 sys.exit(1 if fails else 0)

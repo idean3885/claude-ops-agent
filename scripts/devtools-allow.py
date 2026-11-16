@@ -41,18 +41,20 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
     problem: missing(격리 인자 없음) · disabled(격리 끔) · fixed-profile · connect(떠 있는 브라우저에 붙음,
              fix 는 제거 명령)
     지워진 디렉토리의 등록만 있으면 none 이다
-종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 고정되지 않은 호스트 · check 에서 격리 빠짐,
-          2 argparse 인자 오류 · 설정 파일 없음 · 등록 없음 · 등록 디렉토리 없음 · CLI 실패 ·
+종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 받는 형식 밖의 패턴 · URLPattern 이 못 만들거나 다르게 해석하는 패턴 · check 에서 격리 빠짐,
+          2 argparse 인자 오류 · node(URLPattern) 없음 · 설정 파일 없음 · 등록 없음 · 등록 디렉토리 없음 · CLI 실패 ·
             떠 있는 브라우저에 붙는 등록 · 차단 패턴이 있는 등록에 허용 패턴 추가
 
-패턴 넓이: 호스트는 고정 이름이어야 한다. 와일드카드는 `*.` 뒤에 고정 라벨이 둘 이상일 때만 받는다
-(https://*.example.com/*). https://*/* · https://*.com/* 와 URLPattern 의 이름 그룹(https://:host/*) ·
-정규식 그룹 · 수식어처럼 호스트를 여는 표기는 거부한다. 포트의 숫자 · * 는 상관없다.
+패턴 형식: scheme://호스트[:포트][/경로] 만 받는다. 호스트는 고정 이름이고, 와일드카드는 `*.` 뒤에 고정 라벨이
+둘 이상일 때만 받는다(https://*.example.com/*). 그 밖의 표기(https://*/* · URLPattern 그룹 · 수식어 · scheme 자리의 * ·
+userinfo · 쿼리 · 해시 · IPv6 · 비 ASCII 라벨 · 0 · 65535 초과 포트)는 거부한다. 비 ASCII 도메인은 punycode(xn--)로 쓴다.
+형식을 통과한 패턴은 DevTools MCP 와 같은 해석기(node 의 URLPattern)로 만들어 보고, 예외가 나거나 scheme · 호스트 ·
+포트가 다르게 해석되면 거부한다(종료 1). node · URLPattern 이 없으면 종료 2.
 
 범위: 로컬 범위(~/.claude.json 의 projects)와 사용자 범위만 다룬다. 프로젝트 범위(.mcp.json)는
 레포에 커밋되는 공유 설정이라 이 스크립트가 고치지 않는다.
 
-설정 파일 위치는 CLAUDE_CONFIG_JSON, 고칠 명령에 넣는 자기 경로는 DEVTOOLS_ALLOW_SELF 로
+설정 파일 위치는 CLAUDE_CONFIG_JSON, 고칠 명령에 넣는 자기 경로는 DEVTOOLS_ALLOW_SELF, node 경로는 DEVTOOLS_ALLOW_NODE 로
 바꿀 수 있다 (테스트용).
 """
 
@@ -95,28 +97,69 @@ def isolation_problem(args):
     return None
 
 
-HOST_LABEL = re.compile(r"[A-Za-z0-9-]+")
-IPV6 = re.compile(r"\[[0-9A-Fa-f:.]+\]")
-PORT = re.compile(r":(\d+|\*)$")
+# 받는 형식: scheme://호스트[:포트][/경로]. 이 밖의 표기는 모두 거부한다(허용 목록 방식).
+# 금지 문자를 하나씩 막으면 URLPattern 의 권한부 끝(`/` · `?` · `#`) · userinfo · 그룹 해석과 어긋나 우회가 남았다 (#1021)
+PATTERN = re.compile(r"""
+    (?P<scheme>[A-Za-z][A-Za-z0-9.-]*)://
+    (?P<host>(?:\*\.)?[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)
+    (?::(?P<port>\*|\d{1,5}))?
+    (?P<path>/[A-Za-z0-9._~%/*-]*)?
+""", re.X)
+
+
+def parse_pattern(pattern):
+    """받을 수 있는 패턴이면 {scheme, host, port, path}, 아니면 None.
+
+    scheme 과 호스트는 고정 이름(ASCII 라벨 · 밑줄 · IPv4)이고, 와일드카드는 호스트 앞 `*.` 뒤에 고정 라벨이 둘 이상일
+    때만 받는다. userinfo · 쿼리 · 해시 · URLPattern 그룹 · 수식어 · 이스케이프 · IPv6 · 비 ASCII 라벨(punycode 로 쓴다) ·
+    0 · 65535 를 넘는 포트는 거부한다. 경로는 문자 · 숫자 · `._~%/-` 와 `*` 만 받는다.
+    """
+    m = PATTERN.fullmatch(pattern)
+    if not m:
+        return None
+    if m["host"].startswith("*.") and m["host"].count(".") < 2:
+        return None
+    if m["port"] and m["port"] != "*" and not 0 < int(m["port"]) <= 65535:
+        return None
+    return m.groupdict()
 
 
 def too_broad(pattern):
-    """호스트가 고정 이름이 아니면 True.
+    return parse_pattern(pattern) is None
 
-    받는 것은 고정 라벨(`a.example.com` · `localhost` · IP) · IPv6 리터럴 · `*.` 뒤 고정 라벨 둘 이상뿐이다.
-    URLPattern 의 이름 그룹(`:host`) · 정규식 그룹 · 수식어처럼 `*` 없이 호스트를 여는 표기도 거부한다.
-    포트(`:숫자` · `:*`)는 상관없다.
-    """
-    host = pattern.split("://", 1)[1].split("/", 1)[0].rsplit("@", 1)[-1]
-    host = PORT.sub("", host)
-    if IPV6.fullmatch(host):
-        return False
-    labels = host.split(".")
-    if labels[0] == "*":
-        labels = labels[1:]
-        if len(labels) < 2:
-            return True
-    return not all(HOST_LABEL.fullmatch(l) for l in labels)
+
+# 소비 측(chrome-devtools-mcp)은 허용 판정마다 `new URLPattern(패턴)` 을 만든다. 같은 해석기로 만들어 보고 받는다.
+# 정규식으로 URLPattern 규칙을 흉내 내면 포트 표기 · 라벨 조합 · punycode 처럼 어긋나는 자리가 계속 나왔다 (#1021)
+NODE_JS = (
+    "const ps=JSON.parse(process.argv[1]);"
+    "if(typeof URLPattern!=='function'){process.exit(3)}"
+    "console.log(JSON.stringify(ps.map(p=>{try{const u=new URLPattern(p);return [u.protocol,u.hostname,u.port]}"
+    "catch(e){return null}})))"
+)
+
+
+def consumer_view(patterns):
+    """node 의 URLPattern 으로 만든 [protocol, hostname, port] 목록(예외는 None). node · URLPattern 이 없으면 None"""
+    node = os.environ.get("DEVTOOLS_ALLOW_NODE") or "node"
+    try:
+        r = subprocess.run([node, "-e", NODE_JS, json.dumps(patterns)], capture_output=True, text=True, timeout=30)
+        return json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+# URLPattern 은 scheme 의 기본 포트를 빈 값으로 접는다. 뜻이 같으므로 빈 값으로 보고 비교한다
+DEFAULT_PORTS = {"http": "80", "ws": "80", "https": "443", "wss": "443", "ftp": "21"}
+
+
+def consumer_mismatch(pattern, view):
+    """소비 측이 만들지 못하거나 스크립트가 본 scheme · 호스트 · 포트와 다르게 해석하면 True"""
+    if not isinstance(view, list) or len(view) != 3:
+        return True
+    g = parse_pattern(pattern)
+    scheme = g["scheme"].lower()
+    port = "" if g["port"] == DEFAULT_PORTS.get(scheme) else (g["port"] or "")
+    return view != [scheme, g["host"].lower(), port]
 
 
 def config_path():
@@ -335,9 +378,22 @@ def main():
     broad = [p for p in a.patterns if too_broad(p)]
     if broad:
         print(json.dumps({"status": "error", "step": "broad",
-                          "message": f"호스트가 고정되지 않은 패턴은 받지 않는다(예: https://*.example.com/* 는 된다): {broad}"},
+                          "message": f"scheme://호스트[:포트][/경로] 형식이 아니거나 호스트가 고정되지 않은 패턴은 받지 않는다(예: https://*.example.com/* 는 된다): {broad}"},
                          ensure_ascii=False))
         return 1
+    if a.patterns:
+        views = consumer_view(a.patterns)
+        if not isinstance(views, list) or len(views) != len(a.patterns):
+            print(json.dumps({"status": "error", "step": "node",
+                              "message": "node 의 URLPattern 으로 패턴을 확인할 수 없다. DevTools MCP 를 띄우는 node 가 PATH 에 있어야 한다"},
+                             ensure_ascii=False))
+            return 2
+        bad = [p for p, v in zip(a.patterns, views) if consumer_mismatch(p, v)]
+        if bad:
+            print(json.dumps({"status": "error", "step": "consumer",
+                              "message": f"DevTools MCP 의 URLPattern 이 만들지 못하거나 다르게 해석하는 패턴은 받지 않는다: {bad}"},
+                             ensure_ascii=False))
+            return 1
 
     conf = load_config()
     if conf is None:
