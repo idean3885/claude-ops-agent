@@ -27,6 +27,27 @@ function strip(sql) {
 const READ_HEADS = ['SELECT', 'WITH', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN'];
 const LOCKING = ['INTO OUTFILE', 'INTO DUMPFILE', 'FOR UPDATE', 'FOR SHARE', 'LOCK IN SHARE MODE'];
 const WRITE_WORDS = /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|DROP|ALTER|TRUNCATE|GRANT|REVOKE|RENAME|CALL|LOAD|HANDLER|SET|DO)\b/;
+// 다른 세션의 쿼리 원문 · 변경 로그는 값이 그대로 들어 있어 컬럼 단위 개인정보 가림을 거치지 않는다.
+// 원문 경로가 흩어져 있어 이름을 하나씩 막지 않고, 원문이 모이는 시스템 스키마는 통째로 막는다
+const SYSTEM_SCHEMAS = ['PERFORMANCE_SCHEMA', 'SYS', 'MYSQL'];
+const SQL_TEXT_SOURCES = new RegExp([
+  String.raw`\bSHOW\s+(FULL\s+)?PROCESSLIST\b`,
+  String.raw`\bSHOW\s+(BINLOG|RELAYLOG)\s+EVENTS\b`,
+  String.raw`\bSHOW\s+ENGINE\b`,
+  String.raw`\bSHOW\s+(REPLICA|SLAVE)\s+STATUS\b`,
+  String.raw`\bFOR\s+CONNECTION\b`,
+  String.raw`\b(${SYSTEM_SCHEMAS.join('|')})\x60?\s*\.`,
+  String.raw`\b(PROCESSLIST(_INFO)?|INNODB_TRX|TRX_QUERY|INNODB_LOCKS)\b`,
+  String.raw`\bINNODB_FT_\w+`,
+  String.raw`\bSHOW\s+CREATE\s+USER\b`,
+].join('|'));
+
+// 접속 기본 스키마가 시스템 스키마면 스키마 이름 없이도 원문 테이블에 닿는다
+function verdictDatabase(database) {
+  const name = String(database || '').replace(/`/g, '').trim().toUpperCase();
+  if (SYSTEM_SCHEMAS.includes(name)) return { ok: false, reason: `${name.toLowerCase()} 스키마는 조회하지 않는다 (실행 중 쿼리 원문이 가림 없이 나온다)` };
+  return { ok: true };
+}
 const SLOW_FUNCS = /\b(SLEEP|BENCHMARK|GET_LOCK|MASTER_POS_WAIT|SOURCE_POS_WAIT|WAIT_FOR_EXECUTED_GTID_SET|WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS)\s*\(/;
 
 const hasVersioned = sql => strip(sql).includes('/*!VERSIONED*/');
@@ -96,6 +117,7 @@ function verdictSql(sql, patterns = piiColumnPatterns()) {
   if (lock) return { ok: false, reason: `${lock} 는 보내지 않는다` };
   if (head === 'WITH' && WRITE_WORDS.test(up)) return { ok: false, reason: 'WITH 뒤에 쓰기 문장이 있다' };
   if (SLOW_FUNCS.test(up)) return { ok: false, reason: '대기 · 부하 함수는 보내지 않는다' };
+  if (SQL_TEXT_SOURCES.test(up)) return { ok: false, reason: '실행 중 쿼리 원문 · 변경 로그 · 시스템 스키마(performance_schema · sys · mysql)는 조회하지 않는다 (값이 가림 없이 나온다)' };
   if (/^(EXPLAIN|DESCRIBE|DESC)\s+ANALYZE\b/.test(up)) return { ok: false, reason: 'EXPLAIN ANALYZE 는 조회를 실제로 실행한다. EXPLAIN 만 보낸다' };
   if (head !== 'SELECT' && head !== 'WITH') return { ok: true, kind: 'meta' };
 
@@ -127,8 +149,12 @@ function withLimit(sql, rows = LIMITS.rows) {
 }
 
 // SHOW GRANTS 결과에서 조회 전용 계정인지 본다. 역할(role) 부여는 무엇이 담겼는지 몰라 조회 전용으로 보지 않는다.
-// 부분 회수(REVOKE ... 줄, MySQL 8.0.16+)는 권한을 줄이기만 하므로 판정에서 뺀다.
-const READ_PRIVS = new Set(['SELECT', 'SHOW VIEW', 'USAGE', 'SHOW DATABASES']);
+// 부분 회수(REVOKE ... 줄, MySQL 8.0.16+)는 권한을 줄이기만 하므로 판정에서 제외한다.
+// PROCESS · REPLICATION 은 실행 중 쿼리 · 변경 로그를 읽기만 한다. 관리형 DB 콘솔의 읽기 묶음에 함께 들어 있다.
+// REPLICATION SLAVE 는 가드 밖의 복제 프로토콜로 변경 로그 스트림을 받을 수 있다. 이 판정은 가드를 거치는 조회에 대한 것이다.
+const READ_PRIVS = new Set(['SELECT', 'SHOW VIEW', 'USAGE', 'SHOW DATABASES', 'PROCESS', 'REPLICATION CLIENT', 'REPLICATION SLAVE']);
+// 내장 sys 스키마의 루틴은 모두 호출자 권한(SQL SECURITY INVOKER)으로 실행돼, 계정에 없는 쓰기를 할 수 없다.
+const SYS_SCHEMA_GRANT = /\sON\s+`?sys`?\.\*/i;
 function privileges(grants) {
   const extra = new Set();
   for (const line of grants) {
@@ -139,7 +165,9 @@ function privileges(grants) {
       continue;
     }
     for (const priv of m[1].split(',').map(p => p.trim().toUpperCase().replace(/\s*\(.*\)$/, ''))) {
-      if (!READ_PRIVS.has(priv)) extra.add(priv);
+      if (READ_PRIVS.has(priv)) continue;
+      if (priv === 'EXECUTE' && SYS_SCHEMA_GRANT.test(line)) continue;
+      extra.add(priv);
     }
     if (/WITH\s+GRANT\s+OPTION/i.test(line)) extra.add('GRANT OPTION');
   }
@@ -206,4 +234,4 @@ function maskRows(columns, rows, patterns = piiColumnPatterns()) {
   return { rows: out, masked };
 }
 
-module.exports = { LIMITS, strip, verdictSql, withLimit, privileges, costVerdict, maskRows, isPiiColumn };
+module.exports = { LIMITS, strip, verdictSql, verdictDatabase, withLimit, privileges, costVerdict, maskRows, isPiiColumn };

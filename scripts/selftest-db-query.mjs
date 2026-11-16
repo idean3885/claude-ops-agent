@@ -5,10 +5,10 @@
 //   DQ1  읽기 문장 하나만 통과한다. 쓰기 · 여러 문장 · 잠금 · 파일 출력 · 대기 함수 · EXPLAIN ANALYZE 는 거절한다
 //   DQ2  문자열 · 주석은 나타난 순서대로 지운다. 문자열 안의 주석 기호에 속지 않고, 버전 주석은 같은 순서로 찾아 거절한다
 //   DQ3  SELECT 목록의 * (t.* · 수식어 뒤 · 다른 컬럼 뒤 포함)는 거절하고 COUNT(*) 는 통과한다
-//   DQ4  SELECT · SHOW 권한만 있는 계정은 조회 전용, 그 밖의 권한 · 역할 · GRANT OPTION 은 아니다. 부분 회수 줄은 무시한다
+//   DQ4  SELECT · SHOW · PROCESS · REPLICATION 권한과 sys 스키마 EXECUTE 만 있는 계정은 조회 전용, 그 밖의 권한 · 역할 · GRANT OPTION 은 아니다. 부분 회수 줄은 무시한다
 //   DQ5  큰 테이블 전체 훑기와 큰 조인은 거절한다. 같은 id 는 곱하고 다른 id 는 더한다
 //   DQ6  바깥 LIMIT 이 없으면 줄을 바꿔 붙이고, 상한을 넘는 LIMIT 은 거절한다
-//   DQ7  개인정보 컬럼은 결과로 내지 않는다(별칭 · 함수 · 백틱 · camelCase 포함). 가림은 원래 이름과 결과 이름을 함께 보고, 값 안의 형태는 그 부분만 가린다
+//   DQ7  개인정보 컬럼은 결과로 내지 않는다(별칭 · 함수 · 백틱 · camelCase 포함). 가림은 원래 이름과 결과 이름을 함께 보고, 값 안의 형태는 그 부분만 가린다. 실행 중 쿼리 원문 · 변경 로그는 조회하지 않는다
 //   DQ8  진입점: 조회 전용 아님 → 종료 4, 예외 옵션 → 실행 · exception 기록, 비용 거절 → 본 조회 미실행, 정상 → LIMIT · 가림 · 기록
 import { createRequire } from 'module';
 import { spawnSync } from 'child_process';
@@ -76,6 +76,15 @@ test('DQ4 계정 권한', () => {
   assert.equal(guard.privileges(['GRANT SELECT ON `app`.* TO `w`@`%` WITH GRANT OPTION']).readOnly, false);
   assert.equal(guard.privileges(['GRANT `reader`@`%` TO `u`@`%`']).readOnly, false);
   assert.equal(guard.privileges(['GRANT ALL PRIVILEGES ON *.* TO `root`@`%`']).readOnly, false);
+  // 관리형 DB 콘솔의 읽기 묶음: 전역 PROCESS · REPLICATION 과 sys 스키마 EXECUTE 는 조회 전용이다
+  assert.equal(guard.privileges([
+    'GRANT PROCESS, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO `r`@`%`',
+    'GRANT SELECT, SHOW VIEW ON `app`.* TO `r`@`%`',
+    'GRANT SELECT, EXECUTE ON `sys`.* TO `r`@`%`',
+  ]).readOnly, true);
+  assert.deepEqual(guard.privileges(['GRANT SELECT, EXECUTE ON `app`.* TO `r`@`%`']).extra, ['EXECUTE']);
+  for (const schema of ['sysdata', 'mysys']) assert.deepEqual(guard.privileges([`GRANT EXECUTE ON \`${schema}\`.* TO \`r\`@\`%\``]).extra, ['EXECUTE']);
+  assert.deepEqual(guard.privileges(['GRANT EXECUTE ON *.* TO `r`@`%`']).extra, ['EXECUTE']);
 });
 
 test('DQ5 비용', () => {
@@ -102,6 +111,35 @@ test('DQ7 개인정보', () => {
     'SELECT `user email` FROM t', 'SELECT userEmail FROM t', 'SELECT u.telephone FROM u',
     'SELECT address1, phone1 FROM customers', 'SELECT phonenumber FROM t', 'SELECT homeaddress FROM t', 'SELECT birthdate FROM t',
     'SELECT mobileno FROM t', 'SELECT location FROM users', 'SELECT email2 FROM t', 'SELECT customer_name FROM t', 'SELECT tel1 FROM t', 'SELECT telno FROM t', 'SELECT TELNO FROM t', 'SELECT hpno FROM t', 'SELECT cellnum FROM t', 'SELECT telnum FROM t', 'SELECT faxno FROM t', 'SELECT telnumber FROM t'].forEach(no);
+  ['SHOW PROCESSLIST', 'SHOW FULL PROCESSLIST', 'SHOW BINLOG EVENTS', 'SHOW RELAYLOG EVENTS',
+    'SELECT INFO FROM performance_schema.processlist', 'SELECT info FROM information_schema.PROCESSLIST',
+    'SELECT SQL_TEXT FROM performance_schema.events_statements_history',
+    'SELECT PROCESSLIST_INFO FROM performance_schema.threads', 'SELECT current_statement FROM sys.session',
+    'SELECT last_statement FROM sys.`x$session`', 'SELECT query FROM sys.statement_analysis',
+    'SELECT query FROM sys.statements_with_full_table_scans', 'SELECT query FROM sys.processlist',
+    'SELECT SQL_TEXT FROM performance_schema.events_transactions_current', 'SELECT SQL_TEXT FROM performance_schema.prepared_statements_instances',
+    'SELECT argument FROM mysql.general_log', 'SELECT sql_text FROM mysql.slow_log', 'SHOW ENGINE INNODB STATUS',
+    'SELECT trx_query FROM information_schema.INNODB_TRX', 'SELECT waiting_query FROM sys.innodb_lock_waits',
+    'SELECT blocking_query FROM sys.`x$innodb_lock_waits`', 'SELECT waiting_query FROM sys.schema_table_lock_waits',
+    'SELECT QUERY_SAMPLE_TEXT FROM performance_schema.events_statements_summary_by_digest',
+    'SELECT user FROM `mysql`.`user`', 'SELECT name FROM performance_schema.setup_instruments',
+    "SHOW ENGINE 'innodb' STATUS", 'SHOW ENGINE `innodb` STATUS', 'SHOW ENGINE INNODB MUTEX',
+    'EXPLAIN FORMAT=JSON FOR CONNECTION 12', 'EXPLAIN FOR CONNECTION 12', 'SHOW REPLICA STATUS', 'SHOW SLAVE STATUS',
+    'SELECT lock_data FROM information_schema.INNODB_LOCKS', 'SELECT word FROM information_schema.innodb_ft_index_table',
+    'SELECT word FROM information_schema.INNODB_FT_INDEX_CACHE', 'SHOW CREATE USER root'].forEach(no);
+  ok('SHOW CREATE TABLE t');
+  ok('EXPLAIN SELECT id FROM t');
+  assert.equal(guard.verdictDatabase('sys').ok, false);
+  assert.equal(guard.verdictDatabase('`performance_schema`').ok, false);
+  assert.equal(guard.verdictDatabase('mysql').ok, false);
+  assert.equal(guard.verdictDatabase('app').ok, true);
+  assert.equal(guard.verdictDatabase(undefined).ok, true);
+  ok('SHOW TABLES');
+  ok('SELECT processlist_id FROM t');
+  ok('SELECT id FROM statements');
+  ok('SELECT TABLE_NAME FROM information_schema.TABLES');
+  ok('SELECT ROUTINE_NAME FROM information_schema.ROUTINES');
+  ok("SELECT id FROM t WHERE note = 'PROCESSLIST'");
   ok('SELECT driver_version, pod_name, node_ip_count FROM gpu_nodes');
   ok('SELECT COUNT(email) FROM t');
   ok('SELECT ci.id, ci.name FROM cluster_info ci');
@@ -176,6 +214,10 @@ test('DQ8 진입점', () => {
   assert.deepEqual([r.audit.outcome, r.audit.account], ['ok', 'exception']);
 
   r = run({ ...base, grants: READ, plan: [{ id: 1, table: 'big', type: 'index', rows: 300000000 }] }, 'SELECT COUNT(*) FROM big');
+  assert.equal(r.code, 3);
+  assert.equal(r.executed, '');
+
+  r = run({ ...base, grants: READ }, 'SELECT 1', ['--database', 'sys']);
   assert.equal(r.code, 3);
   assert.equal(r.executed, '');
 

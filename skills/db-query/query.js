@@ -100,6 +100,8 @@ async function main() {
 
   const verdict = guard.verdictSql(args.sql);
   if (!verdict.ok) fail(3, `거절: ${verdict.reason}`, base);
+  const scope = guard.verdictDatabase(args.database || conn.database);
+  if (!scope.ok) fail(3, `거절: ${scope.reason}`, base);
 
   const user = connections.findUser(conn);
   const password = connections.findPassword(conn, user);
