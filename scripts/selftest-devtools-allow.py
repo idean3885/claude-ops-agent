@@ -243,5 +243,30 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, out, calls = run(tmp, {"projects": {}}, ["http://z/*"], sub)
     check("등록이 없으면 종료 코드 2", rc == 2 and out["status"] == "error", (rc, out))
 
+    # --lang (#1001): 기존 등록을 복사해 언어 인자를 단 서버를 같은 범위에 더하고, 기존 등록은 건드리지 않는다
+    rc, out, calls = run(tmp, conf, ["--lang", "en-US"], sub)
+    check("--lang 은 <server>-<code> 를 같은 범위 · 등록 디렉토리에 add-json 만 부른다",
+          rc == 0 and out["server"] == "chrome-devtools-en-US" and len(calls) == 1
+          and calls[0].startswith(f"{org}|mcp add-json chrome-devtools-en-US ") and calls[0].endswith(" -s local"), (rc, out, calls))
+    sent = json.loads(calls[0].split("|", 1)[1][len("mcp add-json chrome-devtools-en-US "):-len(" -s local")]) if calls else {}
+    check("--lang 은 기존 인자 뒤에 Chrome 언어 · Accept-Language 인자를 단다",
+          sent.get("args", [])[:len(BASE)] == BASE
+          and sent.get("args", [])[-2:] == ["--chromeArg=--lang=en-US", "--chromeArg=--accept-lang=en-US,en"]
+          and sent.get("env") == {"K": "v"}, sent)
+    same = {**conf, "projects": {org: {"mcpServers": {"chrome-devtools": entry, "chrome-devtools-ja": {**entry, "args": BASE + ["--chromeArg=--lang=ja", "--chromeArg=--accept-lang=ja"]}}}}}
+    rc, out, calls = run(tmp, same, ["--lang", "ja"], sub)
+    check("--lang 은 같은 등록이 있으면 noop", rc == 0 and out["status"] == "noop" and not calls, (rc, out, calls))
+    stale_lang = {**conf, "projects": {org: {"mcpServers": {"chrome-devtools": entry, "chrome-devtools-ja": {**entry, "args": ["-y", "old"]}}}}}
+    rc, out, calls = run(tmp, stale_lang, ["--lang", "ja"], sub)
+    check("--lang 은 낡은 언어 등록이면 지우고 다시 단다",
+          rc == 0 and len(calls) == 2 and calls[0] == f"{org}|mcp remove chrome-devtools-ja -s local" and "add-json chrome-devtools-ja" in calls[1], (rc, calls))
+    rc, out, calls = run(tmp, stale_lang, ["--lang", "ja"], sub, {"FAKE_ADD_FAIL": "1"})
+    check("--lang 은 다시 달기가 실패하면 낡은 언어 등록을 복원한다",
+          rc == 2 and out.get("restored") is True and len(calls) == 3 and '"old"' in calls[2], (rc, out, calls))
+    rc, out, calls = run(tmp, conf, ["--lang", "English"], sub)
+    check("--lang 은 언어 부호 형식이 아니면 CLI 없이 종료 1", rc == 1 and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, conf, ["--lang", "en", "--dry-run"], sub)
+    check("--lang --dry-run 은 CLI 를 부르지 않는다", rc == 0 and out["status"] == "dry-run" and not calls, (rc, out, calls))
+
 print(f"\n{'PASS' if not fails else 'FAIL'} ({fails} failed)")
 sys.exit(1 if fails else 0)

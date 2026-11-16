@@ -12,6 +12,7 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
 사용법:
   devtools-allow.py [--project <dir>] [--server <name>] [--dry-run] [<pattern>...]
   devtools-allow.py --check [--server <name>]
+  devtools-allow.py --lang <code> [--project <dir>] [--server <name>] [--dry-run]
   사용자에게 건네는 경로: ~/.claude/ops-agent/current/scripts/devtools-allow.py
     pattern    예: 'http://127.0.0.1:*/*'  'https://*.example.com/*'
                생략하면 격리 인자만 맞춘다
@@ -25,6 +26,13 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
     --server   MCP 서버 이름 (기본: chrome-devtools)
     --user     로컬 범위를 보지 않고 사용자 범위 등록을 고친다
     --dry-run  바꿀 내용만 출력하고 등록은 바꾸지 않는다
+    --lang     다국어 화면 테스트용으로, 기존 등록을 복사해 브라우저 언어를 <code>(예: en · ja)로
+               띄우는 서버 `<server>-<code>` 를 같은 범위에 등록한다. 기존 등록은 바꾸지 않는다.
+               DevTools MCP 는 chrome:// 이동을 막고 에뮬레이션에 언어 옵션이 없어, 브라우저 언어
+               (Accept-Language · navigator.language)는 Chrome 실행 인자로만 바꿀 수 있다.
+               쿠키 · 요청 헤더 · navigator 덮어쓰기로 판정하면 서버가 언어 쿠키를 다시 심어 틀린다.
+               세션 시작 뒤 등록하면 /reload-plugins 뒤 /mcp 에서 그 서버를 연결한다.
+               쓰지 않을 때는 등록 디렉토리에서 `claude mcp remove <server>-<code> -s <범위>` 로 지운다
 
 출력: JSON {status, scope, project, added[], already[], isolated_added, args}
   status: ok | noop | dry-run | error
@@ -236,6 +244,66 @@ def add_patterns(args, patterns):
     return new_args, added, already
 
 
+LANG_ARGS = ("--chromeArg=--lang=", "--chromeArg=--accept-lang=")
+
+
+def with_lang(args, code):
+    """언어 인자를 걷고 code 로 다시 넣는다. accept-lang 은 지역 부호가 있으면 언어 부호도 함께 둔다."""
+    base = [a for a in args if not a.startswith(LANG_ARGS)]
+    accept = code if "-" not in code else f"{code},{code.split('-')[0]}"
+    return base + [f"--chromeArg=--lang={code}", f"--chromeArg=--accept-lang={accept}"]
+
+
+def register_lang(a, conf):
+    import re
+    if not re.fullmatch(r"[a-z]{2,3}(-[A-Z]{2})?", a.lang):
+        print(json.dumps({"status": "error", "message": f"언어 부호 형식이 아니다: {a.lang} (예: en · ja · en-US)"}, ensure_ascii=False))
+        return 1
+    scope, project, entry = find_entry(conf, a.project, a.server, a.user)
+    if not entry:
+        print(json.dumps({"status": "error", "message": f"{a.server} 등록을 찾지 못했다 (로컬 · 사용자 범위)"}, ensure_ascii=False))
+        return 2
+    if has_flag(entry.get("args", []), CONNECT):
+        print(json.dumps({"status": "error", "step": "connect", "message": "이미 떠 있는 브라우저에 붙는 등록은 언어를 바꿀 수 없다"}, ensure_ascii=False))
+        return 2
+    name = f"{a.server}-{a.lang}"
+    args, _, _ = ensure_isolated(entry.get("args", []))
+    new_entry = {**entry, "args": with_lang(args, a.lang)}
+    if scope == "local":
+        current = conf.get("projects", {}).get(project, {}).get("mcpServers", {}).get(name)
+    else:
+        current = conf.get("mcpServers", {}).get(name)
+    out = {"scope": scope, "project": project, "server": name, "args": new_entry["args"]}
+    if current == new_entry:
+        print(json.dumps({"status": "noop", **out}, ensure_ascii=False))
+        return 0
+    if a.dry_run:
+        print(json.dumps({"status": "dry-run", **out}, ensure_ascii=False))
+        return 0
+    cwd = project or os.path.expanduser("~")
+    if not os.path.isdir(cwd):
+        print(json.dumps({"status": "error", "step": "cwd", "message": f"등록 디렉토리가 없다: {cwd}"}, ensure_ascii=False))
+        return 2
+    if current is not None:
+        rc, msg = run_cli(["claude", "mcp", "remove", name, "-s", scope], cwd)
+        if rc != 0:
+            print(json.dumps({"status": "error", "step": "remove", "message": msg}, ensure_ascii=False))
+            return 2
+    rc, msg = run_cli(["claude", "mcp", "add-json", name, json.dumps(new_entry), "-s", scope], cwd)
+    if rc != 0:
+        err = {"status": "error", "step": "add", "message": msg}
+        if current is not None:
+            # 지운 언어 등록을 원래 값으로 되돌린다 (일반 경로와 같다)
+            rrc, _ = run_cli(["claude", "mcp", "add-json", name, json.dumps(current), "-s", scope], cwd)
+            err["restored"] = rrc == 0
+            if rrc != 0:
+                err["original"] = current
+        print(json.dumps(err, ensure_ascii=False))
+        return 2
+    print(json.dumps({"status": "ok", **out, "next": f"/reload-plugins → /mcp → {name} → Reconnect"}, ensure_ascii=False))
+    return 0
+
+
 def run_cli(cmd, cwd):
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     return r.returncode, (r.stdout + r.stderr).strip()
@@ -249,7 +317,12 @@ def main():
     ap.add_argument("--user", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--lang")
     a = ap.parse_args()
+
+    if a.lang:
+        conf = load_config()
+        return 2 if conf is None else register_lang(a, conf)
 
     if a.check:
         conf = load_config()

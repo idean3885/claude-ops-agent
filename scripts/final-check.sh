@@ -21,7 +21,7 @@
 #   d. 레포의 `.ops-agent/final-check.sh` 가 있고 종료 코드가 0 이 아님 (레포가 선언한 체크리스트)
 #   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) · PN8(물결표 취소선) 검출. 기존 줄의 검출과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
 #   f. 노트의 세 절 중 없거나 비어 있는 것
-#   g. merge-base 이후 커밋이 1개가 아님 (초안 중 쌓인 교정 커밋은 스쿼시한다)
+#   g. merge-base 이후 커밋이 여럿인데 제목에 이슈 번호가 없는 커밋이 있거나, 한 이슈의 커밋이 둘 이상 (이슈마다 커밋 하나로 합친다, ADR-0039). 커밋 하나는 통과
 #   h. 노트의 ## 주장 검증 에 주장 검증 회차 기록이 없거나, 회차가 1부터 이어지지 않거나,
 #      마지막 회차의 차단 지적이 0건이 아님. 회차 줄 형식은 `- <회차>회: 차단 <건수>건 · 권장 <건수>건 · 사소 <건수>건 (HEAD <sha 7자>)`.
 #      회차 상한은 PR 가이드 「주장 검증」이, 심각도 정의는 제로베이스 검토 스킬이 정한다. 마지막 두 회차의 차단이
@@ -109,6 +109,31 @@ claim_input_failure() {
   [ -s "$path" ] || echo "이슈 본문 파일이 비어 있다 ($value)"
 }
 
+# g. 커밋 정리: 커밋이 하나면 통과. 여럿이면 커밋마다 제목 줄에 이슈 번호(#N)가 있고, 한 이슈의 커밋은 하나다. 통과면 아무것도 출력하지 않는다.
+# 입력은 표준 입력의 커밋 메시지들이고, 메시지 사이는 레코드 구분 문자(0x1e)다.
+# why: 한 세션의 이슈를 PR 하나로 묶으므로(ADR-0039) 추적성은 이슈 ↔ 커밋 연결이 지킨다.
+#      교정 커밋이 이슈마다 쌓이면 그 연결이 흐려져, 이슈 하나에 커밋 하나로 합친다.
+commit_issue_failure() {
+  python3 -c '
+import re, sys
+msgs = [m.strip() for m in sys.stdin.read().split("\x1e") if m.strip()]
+if not msgs:
+    print("커밋이 없다"); sys.exit(0)
+if len(msgs) == 1:
+    sys.exit(0)  # 커밋 하나는 이슈 번호 표기와 관계없이 통과 (트래커 링크를 본문에 두는 레포 호환)
+seen = {}
+for i, m in enumerate(msgs, 1):
+    title = m.splitlines()[0]
+    nums = sorted(set(re.findall(r"#(\d+)", title)))
+    if not nums:
+        print(f"커밋 제목에 이슈 번호가 없다: {title}"); sys.exit(0)
+    for n in nums:
+        if n in seen:
+            print(f"이슈 #{n} 의 커밋이 둘 이상이다 ({seen[n]} / {title}). 이슈마다 커밋 하나로 합친다"); sys.exit(0)
+        seen[n] = title
+'
+}
+
 # 테스트가 함수만 불러 쓸 때는 여기서 멈춘다. gh 를 부르지 않는다.
 [ "${FINAL_CHECK_LIB:-}" = "1" ] && return 0
 
@@ -126,11 +151,11 @@ if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-# merge-base 이후 커밋 수. 머지할 커밋이 로컬에 있으면 git 으로, 없으면 PR 의 커밋 목록으로 집계한다.
-commits_since_merge_base() {
+# merge-base 이후 커밋 메시지(0x1e 구분). 머지할 커밋이 로컬에 없으면 실패를 돌려 PR 의 커밋 목록으로 넘긴다.
+commit_messages_since_merge_base() {
   local base="$1" head="$2" mb
   if git cat-file -e "$head^{commit}" 2>/dev/null && mb=$(git merge-base "$base" "$head" 2>/dev/null); then
-    git rev-list --count "$mb..$head"
+    git log --format='%B%x1e' "$mb..$head"
   else
     return 1
   fi
@@ -247,11 +272,11 @@ else
   [ -n "$input_failure" ] && fail h "주장 검증 입력: $input_failure"
 fi
 
-# g. 커밋 정리: merge-base 이후 커밋이 1개여야 한다. 세지 못하면 PR 의 커밋 목록으로 집계한다.
-ncommits=$(commits_since_merge_base "origin/$BASE_BRANCH" "$HEAD_SHA" 2>/dev/null || gh pr view "$PR" --json commits -q '.commits | length' 2>/dev/null || echo "?")
-if [ "$ncommits" != "1" ]; then
-  fail g "merge-base 이후 커밋이 ${ncommits}개다. 1개로 스쿼시한다 (푸시는 git push --force-with-lease=<브랜치>:<원격 현재 sha>)"
-fi
+# g. 커밋 정리: 이슈마다 커밋 하나 (ADR-0039). 머지할 커밋이 로컬에 없으면 PR 의 커밋 목록으로 판정한다.
+commit_msgs=$(commit_messages_since_merge_base "origin/$BASE_BRANCH" "$HEAD_SHA" 2>/dev/null \
+  || gh pr view "$PR" --json commits -q '.commits[] | (.messageHeadline + "\n" + .messageBody + "\u001e")' 2>/dev/null || true)
+commit_failure=$(printf '%s' "$commit_msgs" | commit_issue_failure)
+[ -n "$commit_failure" ] && fail g "$commit_failure (합친 뒤 푸시는 git push --force-with-lease=<브랜치>:<원격 현재 sha>)"
 
 record() {
   local result="$1" end_ms
