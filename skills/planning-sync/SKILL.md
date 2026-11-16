@@ -8,6 +8,7 @@ requires:
     check: python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py --check
     install: claude mcp add-json chrome-devtools '{"type":"stdio","command":"npx","args":["-y","chrome-devtools-mcp@latest","--isolated"]}' -s local
     why: 「1. 조회」의 기본 도구. 등록마다 격리 프로필 인자가 있어야 동시 세션이 서로 막지 않는다
+    when: 「1. 조회」에서 오버레이에 `도구` 가 없어 기본 도구로 조회할 때
 ---
 
 # 기획 최신화
@@ -78,7 +79,7 @@ requires:
 
 기본 도구는 Chrome DevTools MCP 다. 기획서 형태(화면 기획 · 문서 · 위키)를 가리지 않고 브라우저로 열 수 있으면 같은 경로로 읽는다. 오버레이에 `도구` 가 있으면 그것을 쓴다.
 
-기본 도구로 조회하기 전에 `requires:` 를 확인한다. 미충족이면 [`bootstrap`](../bootstrap/SKILL.md) 의 미충족 보고를 내고 멈춘다. 오버레이의 `도구` 를 쓰면 이 의존은 쓰이지 않으므로 확인하지 않는다.
+기본 도구의 의존은 `when` 조건부 의존이다. 기본 도구로 조회하기 직전에 확인하고, 미충족이면 [`bootstrap`](../bootstrap/SKILL.md) 의 미충족 보고를 내고 멈춘다. 오버레이의 `도구` 를 쓰면 확인하지 않는다.
 
 | 한다. | 하지 않는다. |
 |------|-------------|

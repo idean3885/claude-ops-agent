@@ -172,6 +172,12 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, out, calls = run(tmp, conf, ["127.0.0.1:*/*"], sub)
     check("scheme 없는 패턴은 거부한다", rc == 1 and out["status"] == "error" and not calls, (rc, out))
 
+    for wide in ("https://*/*", "https://*.com/*", "https://*", "http://a*.example.com/*", "https://*.*.example.com/*"):
+        rc, out, calls = run(tmp, conf, [wide], sub)
+        check(f"넓은 호스트 와일드카드는 거부한다: {wide}", rc == 1 and out.get("step") == "broad" and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, conf, ["https://*.example.com/*", "http://localhost:*/*", "--dry-run"], sub)
+    check("도메인이 고정된 와일드카드 · 포트 와일드카드는 받는다", rc == 0 and out["status"] == "dry-run", (rc, out))
+
     rc, out, calls = run(tmp, conf, ["http://y/*", "--dry-run"], sub)
     check("dry-run 은 CLI 를 부르지 않는다", out["status"] == "dry-run" and not calls, (out, calls))
 
