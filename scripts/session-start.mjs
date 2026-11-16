@@ -528,6 +528,19 @@ function buildTrialsContext() {
   }
 }
 
+// --- 자동 메모리 점검 (#1050) ---
+// 메모리에는 아무것도 남기지 않는다(docs/working-principles.md 「메모리에 아무것도 두지 않는다」).
+// 메모리는 그 기기 · 그 레포 경로에만 남아, 설치가 같아도 기기마다 동작이 달라진다. 기기 동일성은 이 설정에 달려
+// 꺼져 있지 않으면(false 가 아니면) 세션마다 한 줄 알린다. 끄는 것은 사용자가 한다.
+function buildAutoMemoryNotice() {
+  try {
+    const path = join(homedir(), '.claude', 'settings.json');
+    const settings = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
+    if (settings && settings.autoMemoryEnabled === false) return '';
+  } catch { /* 읽을 수 없으면 꺼졌다고 확인할 수 없다. 알린다 */ }
+  return ['', `[자동 메모리 켜짐] ${join(homedir(), '.claude', 'settings.json')} 에 "autoMemoryEnabled": false 가 없다. 메모리에는 아무것도 남기지 않는다(교정은 사례 기록 · 이슈 · 레슨런으로 원천에). 끄도록 사용자에게 한 번 알린다.`].join('\n');
+}
+
 // --- Sync marketplace metadata to latest remote (prevents stale version path) ---
 function syncMarketplace() {
   try {
@@ -594,6 +607,7 @@ if (identity) {
 parts.push(buildSkillContext(provider));
 parts.push(buildTermsContext());
 parts.push(buildTrialsContext());
+parts.push(buildAutoMemoryNotice());
 
 const context = parts.filter(Boolean).join('\n');
 
