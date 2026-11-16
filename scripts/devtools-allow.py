@@ -33,12 +33,13 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
     problem: missing(격리 인자 없음) · disabled(격리 끔) · fixed-profile · connect(떠 있는 브라우저에 붙음,
              fix 는 제거 명령)
     지워진 디렉토리의 등록만 있으면 none 이다
-종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 넓은 호스트 와일드카드 · check 에서 격리 빠짐,
+종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 고정되지 않은 호스트 · check 에서 격리 빠짐,
           2 argparse 인자 오류 · 설정 파일 없음 · 등록 없음 · 등록 디렉토리 없음 · CLI 실패 ·
             떠 있는 브라우저에 붙는 등록 · 차단 패턴이 있는 등록에 허용 패턴 추가
 
-패턴 넓이: 호스트에 * 를 쓰면 `*.` 뒤에 고정 라벨이 둘 이상이어야 한다(https://*.example.com/*).
-https://*/* · https://*.com/* 처럼 도메인이 고정되지 않은 패턴은 거부한다. 포트의 * 는 상관없다.
+패턴 넓이: 호스트는 고정 이름이어야 한다. 와일드카드는 `*.` 뒤에 고정 라벨이 둘 이상일 때만 받는다
+(https://*.example.com/*). https://*/* · https://*.com/* 와 URLPattern 의 이름 그룹(https://:host/*) ·
+정규식 그룹 · 수식어처럼 호스트를 여는 표기는 거부한다. 포트의 숫자 · * 는 상관없다.
 
 범위: 로컬 범위(~/.claude.json 의 projects)와 사용자 범위만 다룬다. 프로젝트 범위(.mcp.json)는
 레포에 커밋되는 공유 설정이라 이 스크립트가 고치지 않는다.
@@ -49,6 +50,7 @@ https://*/* · https://*.com/* 처럼 도메인이 고정되지 않은 패턴은
 
 import argparse
 import json
+import re
 import os
 import subprocess
 import sys
@@ -85,15 +87,28 @@ def isolation_problem(args):
     return None
 
 
+HOST_LABEL = re.compile(r"[A-Za-z0-9-]+")
+IPV6 = re.compile(r"\[[0-9A-Fa-f:.]+\]")
+PORT = re.compile(r":(\d+|\*)$")
+
+
 def too_broad(pattern):
-    """호스트 와일드카드가 도메인을 고정하지 않으면 True. `*.` 뒤 고정 라벨이 둘 이상이어야 받는다."""
-    host = pattern.split("://", 1)[1].split("/", 1)[0].rsplit("@", 1)[-1].split(":", 1)[0]
-    if "*" not in host:
+    """호스트가 고정 이름이 아니면 True.
+
+    받는 것은 고정 라벨(`a.example.com` · `localhost` · IP) · IPv6 리터럴 · `*.` 뒤 고정 라벨 둘 이상뿐이다.
+    URLPattern 의 이름 그룹(`:host`) · 정규식 그룹 · 수식어처럼 `*` 없이 호스트를 여는 표기도 거부한다.
+    포트(`:숫자` · `:*`)는 상관없다.
+    """
+    host = pattern.split("://", 1)[1].split("/", 1)[0].rsplit("@", 1)[-1]
+    host = PORT.sub("", host)
+    if IPV6.fullmatch(host):
         return False
-    if not host.startswith("*."):
-        return True
-    labels = host[2:].split(".")
-    return len(labels) < 2 or any(not l or "*" in l for l in labels)
+    labels = host.split(".")
+    if labels[0] == "*":
+        labels = labels[1:]
+        if len(labels) < 2:
+            return True
+    return not all(HOST_LABEL.fullmatch(l) for l in labels)
 
 
 def config_path():
@@ -247,7 +262,7 @@ def main():
     broad = [p for p in a.patterns if too_broad(p)]
     if broad:
         print(json.dumps({"status": "error", "step": "broad",
-                          "message": f"도메인이 고정되지 않은 호스트 와일드카드는 받지 않는다(예: https://*.example.com/* 는 된다): {broad}"},
+                          "message": f"호스트가 고정되지 않은 패턴은 받지 않는다(예: https://*.example.com/* 는 된다): {broad}"},
                          ensure_ascii=False))
         return 1
 
