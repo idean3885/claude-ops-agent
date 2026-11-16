@@ -173,11 +173,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check("scheme 없는 패턴은 거부한다", rc == 1 and out["status"] == "error" and not calls, (rc, out))
 
     for wide in ("https://*/*", "https://*.com/*", "https://*", "http://a*.example.com/*", "https://*.*.example.com/*",
-                 "https://*ab.example.com/*", "https://a*b.example.com/*", "https://*..com/*", "https://u:p@*/*"):
+                 "https://*ab.example.com/*", "https://a*b.example.com/*", "https://*..com/*", "https://u:p@*/*",
+                 "https://:host/*", "https://:sub.example.com/*", "https://(.*)/*", "https://{a.}?example.com/*", "https://a+.example.com/*"):
         rc, out, calls = run(tmp, conf, [wide], sub)
-        check(f"넓은 호스트 와일드카드는 거부한다: {wide}", rc == 1 and out.get("step") == "broad" and not calls, (rc, out, calls))
-    rc, out, calls = run(tmp, conf, ["https://*.example.com/*", "http://localhost:*/*", "--dry-run"], sub)
-    check("도메인이 고정된 와일드카드 · 포트 와일드카드는 받는다", rc == 0 and out["status"] == "dry-run", (rc, out))
+        check(f"고정되지 않은 호스트는 거부한다: {wide}", rc == 1 and out.get("step") == "broad" and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, conf, ["https://*.example.com/*", "http://localhost:*/*", "http://127.0.0.1:8080/*", "http://[::1]:*/*", "https://u:p@a.example.com/*", "--dry-run"], sub)
+    check("고정 호스트 · 도메인이 고정된 와일드카드 · 포트 · IP · IPv6 · userinfo 는 받는다", rc == 0 and out["status"] == "dry-run", (rc, out))
 
     rc, out, calls = run(tmp, conf, ["http://y/*", "--dry-run"], sub)
     check("dry-run 은 CLI 를 부르지 않는다", out["status"] == "dry-run" and not calls, (out, calls))
