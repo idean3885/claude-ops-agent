@@ -71,7 +71,7 @@ case "$1 $2" in
   "label list") printf '%s\\n' $FAKE_LABELS_REPO;;
   "label create") exit 0;;
   "issue create") [ "$FAKE_GH_FAIL" = create ] && exit 1; echo "https://github.com/o/r/issues/42";;
-  "issue view") printf '%s\\n' $FAKE_ISSUE_LABELS;;
+  "issue view") case "$*" in *title,url*) printf '%s\\t%s\\n' "$FAKE_ISSUE_URL" "$FAKE_ISSUE_TITLE";; *) printf '%s\\n' $FAKE_ISSUE_LABELS;; esac;;
   "issue edit") [ "$FAKE_GH_FAIL" = edit ] && exit 1; exit 0;;
   "issue comment") [ "$FAKE_GH_FAIL" = comment ] && exit 1; exit 0;;
   "issue develop") [ "$FAKE_GH_FAIL" = develop ] && exit 1; exit 0;;
@@ -102,7 +102,9 @@ function run(args, env = {}) {
     encoding: 'utf8',
     env: {
       ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LOG: LOG, FAKE_TOPLEVEL: join(sandbox, 'proj'),
-      FAKE_LABELS_REPO: 'feat fix', FAKE_ISSUE_LABELS: '', FAKE_GH_FAIL: '', FAKE_GIT_FAIL: '', ...env,
+      FAKE_LABELS_REPO: 'feat fix', FAKE_ISSUE_LABELS: '', FAKE_GH_FAIL: '', FAKE_GIT_FAIL: '',
+      // 세션 인덱스를 실제 홈에 쓰지 않는다. 세션 번호는 인덱스 사례만 넣는다
+      HOME: sandbox, CLAUDE_CODE_SESSION_ID: '', ...env,
     },
   });
   const log = existsSync(LOG) ? readFileSync(LOG, 'utf8') : '';
@@ -163,6 +165,58 @@ adapterCase('start: -R 전달', ['start', '42', '--type', 'docs', '-R', 'o/r'], 
 adapterCase('start: 브랜치 없이도 성공', ['start', '42', '--type', 'docs'], 0, { logNot: ['git '] });
 adapterCase('start: gh 실패는 종료 2', ['start', '42', '--type', 'docs'], 2, { env: { FAKE_GH_FAIL: 'edit' }, json: { status: 'error', number: '42' } });
 adapterCase('모르는 서브커맨드', ['close', '42'], 1);
+
+// 세션 인덱스 (#1050): 생성 · 시작이 성공하면 세션 파일에 한 줄씩. 어시스턴트가 아니라 어댑터가 쓴다
+const idxDir = join(sandbox, '.claude', 'ops-agent', '.cache', 'session-issues');
+function indexRows(sid) {
+  const p = join(idxDir, `${sid}.jsonl`);
+  if (!existsSync(p)) return [];
+  return readFileSync(p, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+}
+function indexCase(name, args, sid, want, env = {}) {
+  rmSync(idxDir, { recursive: true, force: true });
+  const r = run(args, { CLAUDE_CODE_SESSION_ID: sid, ...env });
+  const got = indexRows(sid.replace(/[^A-Za-z0-9_-]/g, '')).map(x => `${x.repo}|${x.number}|${x.title}|${x.action}`);
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  report(ok, '세션 인덱스', name, ok ? '' : `want ${JSON.stringify(want)} got ${JSON.stringify(got)} (종료 ${r.code})`);
+}
+indexCase('--no-start 생성은 생성 한 줄', [...CREATE, '--no-start', '후속'], 'sid-1', ['o/r|42|t|생성']);
+indexCase('--start 생성은 생성 · 시작 두 줄 (제목을 다시 조회하지 않는다)', [...CREATE, '--start'], 'sid-1', ['o/r|42|t|생성', 'o/r|42|t|시작']);
+{
+  rmSync(idxDir, { recursive: true, force: true });
+  const r = run([...CREATE, '--start'], { CLAUDE_CODE_SESSION_ID: 'sid-1' });
+  report(!r.log.includes('--json title,url'), '세션 인덱스', '생성에서 이어진 시작은 issue view 를 부르지 않는다');
+}
+indexCase('단독 시작은 제목 · 주소를 조회해 한 줄', ['start', '42', '--type', 'docs'], 'sid-1', ['o/r|42|제목 하나|시작'], { FAKE_ISSUE_URL: 'https://github.com/o/r/issues/42', FAKE_ISSUE_TITLE: '제목 하나' });
+indexCase('github.com 밖 호스트는 host/owner/repo', ['start', '5', '--type', 'docs'], 'sid-1', ['ghe.example/o/r|5|x|시작'], { FAKE_ISSUE_URL: 'https://ghe.example/o/r/issues/5', FAKE_ISSUE_TITLE: 'x' });
+indexCase('세션 번호가 없으면 쓰지 않는다', [...CREATE, '--start'], '', []);
+indexCase('본문 검사 실패(생성 안 됨)는 쓰지 않는다', ['create', '--title', 't', '--body-file', badBody, '--type', 'feat', '--start'], 'sid-1', []);
+indexCase('생성 실패는 쓰지 않는다', [...CREATE, '--start'], 'sid-1', [], { FAKE_GH_FAIL: 'create' });
+indexCase('시작 실패는 생성 줄만', [...CREATE, '--start'], 'sid-1', ['o/r|42|t|생성'], { FAKE_GH_FAIL: 'comment' });
+indexCase('세션 번호의 경로 문자는 걷는다', [...CREATE, '--no-start', 'x'], '../sid-2', ['o/r|42|t|생성']);
+{
+  rmSync(idxDir, { recursive: true, force: true });
+  run([...CREATE, '--no-start', 'x'], { CLAUDE_CODE_SESSION_ID: 'sid-a' });
+  run(['start', '42', '--type', 'docs'], { CLAUDE_CODE_SESSION_ID: 'sid-a', FAKE_ISSUE_URL: 'https://github.com/o/r/issues/42', FAKE_ISSUE_TITLE: 't' });
+  run([...CREATE, '--no-start', 'x'], { CLAUDE_CODE_SESSION_ID: 'sid-b' });
+  report(indexRows('sid-a').length === 2 && indexRows('sid-b').length === 1, '세션 인덱스', '호출이 쌓이고 세션마다 파일이 나뉜다');
+}
+{
+  // 인덱스 디렉토리를 만들 수 없어도 어댑터 결과는 그대로다
+  rmSync(join(sandbox, '.claude'), { recursive: true, force: true });
+  writeFileSync(join(sandbox, '.claude'), 'not a dir');
+  const r = run([...CREATE, '--no-start', 'x'], { CLAUDE_CODE_SESSION_ID: 'sid-1' });
+  report(r.code === 0 && r.json && r.json.status === 'ok', '세션 인덱스', '인덱스 쓰기 실패는 결과를 바꾸지 않는다', `종료 ${r.code}`);
+  rmSync(join(sandbox, '.claude'), { force: true });
+}
+{
+  // 디렉토리는 있는데 파일에 덧붙이기가 실패해도(그 자리가 디렉토리) 어댑터 결과는 그대로다
+  rmSync(idxDir, { recursive: true, force: true });
+  mkdirSync(join(idxDir, 'sid-1.jsonl'), { recursive: true });
+  const r = run([...CREATE, '--no-start', 'x'], { CLAUDE_CODE_SESSION_ID: 'sid-1' });
+  report(r.code === 0 && r.json && r.json.status === 'ok' && r.json.number === '42' && r.json.start === 'skipped', '세션 인덱스', '인덱스 파일 덧붙이기 실패는 결과를 바꾸지 않는다', `종료 ${r.code}`);
+  rmSync(idxDir, { recursive: true, force: true });
+}
 
 rmSync(sandbox, { recursive: true, force: true });
 console.log(failed ? `\n실패 ${failed}건` : `\n${count}건 전부 통과`);
