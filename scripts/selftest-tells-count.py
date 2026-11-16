@@ -43,6 +43,11 @@ ACTION_NOUN_MISS = [
 ]
 
 
+# T8 물리 동사 「집다」 (#910). 집은 · 집고는 명사와 겹쳐 세지 않는다
+PHYSICAL_VERB_HIT = ["작업을 집어 실행한다", "작업을 먼저 집습니다", "폴러가 작업을 집는다"]
+PHYSICAL_VERB_MISS = ["값을 집어넣는다", "항목을 집어서 넣는다", "집계 결과를 본다", "집은 서울에 있다"]
+
+
 def main() -> int:
     failures = []
     for s in ACTION_NOUN_HIT:
@@ -52,13 +57,20 @@ def main() -> int:
         if tc.action_noun_agent_count(s) != 0:
             failures.append(f"잡히면 안 됨: {s!r} → {tc.action_noun_agent_count(s)}")
 
+    for s in PHYSICAL_VERB_HIT:
+        if tc.physical_verb_count(s) != 1:
+            failures.append(f"잡혀야 함: {s!r} → {tc.physical_verb_count(s)}")
+    for s in PHYSICAL_VERB_MISS:
+        if tc.physical_verb_count(s) != 0:
+            failures.append(f"잡히면 안 됨: {s!r} → {tc.physical_verb_count(s)}")
+
     result = tc.compute_all("본문. 검증이 읽지 못한다.\n```\n검증이 읽지 못한다\n```\n")
     if result["metrics"].get("action_noun_agent_count") != 1:
         failures.append("compute_all: 코드 블록을 빼고 1건이어야 함")
     if "D-13" not in result["covers"]:
         failures.append("compute_all: covers 에 D-13 이 없음")
 
-    total = len(ACTION_NOUN_HIT) + len(ACTION_NOUN_MISS) + 2
+    total = len(ACTION_NOUN_HIT) + len(ACTION_NOUN_MISS) + len(PHYSICAL_VERB_HIT) + len(PHYSICAL_VERB_MISS) + 2
     for f in failures:
         print("FAIL", f)
     print(f"{total - len(failures)}/{total} 통과")
