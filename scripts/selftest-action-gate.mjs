@@ -520,6 +520,29 @@ const ISSUE_CASES = [
 ];
 for (const [name, want, command, opts] of ISSUE_CASES) issueCase(name, want, command, opts);
 
+// 도구 경계 조치 한 줄 (#1035). 어댑터 생성은 통과하면서 로드맵 알림을 붙이고, 시작 · 직접 호출 거부 문구에도 같은 줄이 있다.
+function issueNotice(command) {
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', cwd: storageRepo, session_id: 'selftest', tool_input: { command } }),
+    encoding: 'utf8',
+    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg },
+  });
+  try {
+    const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput || {};
+    return { deny: hs.permissionDecision === 'deny', text: hs.additionalContext || hs.permissionDecisionReason || '' };
+  } catch { return { deny: false, text: '' }; }
+}
+for (const [name, command, wantDeny, wantNotice] of [
+  ['어댑터 생성은 통과 + 로드맵 알림', `${ADAPTER} create --title "x" --body-file ${cleanBody} --type feat --no-start "후속"`, false, true],
+  ['어댑터 시작은 알림 없음', `${ADAPTER} start 12 --worktree`, false, false],
+  ['직접 호출 거부 문구에 로드맵 알림', 'gh issue create --title "x" --body "y"', true, true],
+]) {
+  const r = issueNotice(command);
+  const ok = r.deny === wantDeny && r.text.includes('로드맵 이슈') === wantNotice;
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  이슈 생성 로드맵 알림: ${name} — deny ${r.deny}, 알림 ${r.text.includes('로드맵 이슈')}`);
+}
+
 // 초안 PR 가드 (#876). 초안 플래그 없는 PR 생성은 거부한다. 훅 호출 방식이 같아 issueCase 로 돌린다. 플로우 진입 가드는 끈다.
 const PR_DRAFT_DENY = '초안 PR 가드';
 const PR_GUIDE = 'guides/pr.md';
