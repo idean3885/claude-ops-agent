@@ -294,7 +294,7 @@ node scripts/selftest-action-gate.mjs
 
 남는 위험: 어시스턴트가 「이 문장을 입력해 주세요」라고 요청할 수 있습니다. Chrome 문장이 막으려는 것도 남이 시켜서 치게 하는 일입니다. 터미널 개방도 어시스턴트가 명령을 건네고 사람이 실행하므로 노출은 같고, 범위를 갈래 하나 · 세션 하나로 묶어 피해를 줄입니다. 치기 쉬워 습관적으로 칠 수 있으므로 문장은 무게 있는 낱말(「위임」)로 둡니다.
 
-판정 · 기록: `scripts/push-delegation.mjs`, 입력 훅 `scripts/push-delegation-prompt.mjs`. 자체 점검 `node scripts/selftest-push-delegation.mjs` 가 실제 훅 두 개와 실제 git 레포로 27건(여는 조건 · 범위 · 닫힘 · 기록 편집 차단)을 봅니다.
+판정 · 기록: `scripts/push-delegation.mjs`, 입력 훅 `scripts/push-delegation-prompt.mjs`. 자체 점검 `node scripts/selftest-push-delegation.mjs` 가 실제 훅 두 개와 실제 git 레포로 29건(여는 조건 · 범위 · 닫힘 · 기록 편집 차단 · 자율 위임 알림 제외)을 봅니다. 위임 문장은 권한을 여는 호출이라 「위임」에 반응하는 자율 위임 알림 훅이 이 문장 단독 메시지는 건너뜁니다 (#1048).
 
 ### 한계
 
