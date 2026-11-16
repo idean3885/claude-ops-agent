@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.53.1] - 2026-11-16
+
 ### Fixed
 * DevTools 허용 패턴은 `scheme://호스트[:포트][/경로]` 형식만 받는다. scheme 자리의 `*` · 그룹, userinfo · 쿼리 · 해시를 섞은 표기로 호스트 판정을 비켜 가던 것을 막고, URLPattern 이 만들지 못하는 IPv6 · 비 ASCII 라벨 · 0 · 65535 초과 포트를 거부한다. 형식을 통과한 패턴도 DevTools MCP 와 같은 해석기(node 의 URLPattern)로 만들어 보고, 예외가 나거나 scheme · 호스트 · 포트가 다르게 해석되면 거부한다(node 가 없으면 종료 2) (#1021)
 
