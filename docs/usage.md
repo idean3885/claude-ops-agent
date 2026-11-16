@@ -45,6 +45,7 @@ claude plugin update ops-agent@ops-agent
 | PostToolUse | 문서 편집 후 표현·구조 위반 위치와 수치 | 알림 (마커 파일 있을 때만) |
 | PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU8) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
 | UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`) |
+| UserPromptSubmit | 세션 마무리 신호(세션 마무리 · 마무리합니다)를 받은 턴에 종결 절차(대상 수집 · 잔여 처리 · 판결) 주입 | 알림 (발동은 `metrics/session-wrap-prompt.jsonl`) |
 | Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 교정 요청 |
 
 구조 검출은 문단 길이·산문 연속·시각 요소 주기·목록 항목 수·테이블 열 수·헤딩 레벨·코드 언어를 집계합니다. 정규식은 어휘만 보므로 산문이 몇 문단 쌓였는지는 따로 세야 알 수 있습니다.
@@ -53,7 +54,7 @@ claude plugin update ops-agent@ops-agent
 
 ```mermaid
 flowchart LR
-  U["요청"] --> P["UserPromptSubmit<br/>표현 규칙 위반 통지 · 자율 위임 절차 주입"]
+  U["요청"] --> P["UserPromptSubmit<br/>표현 규칙 위반 통지 · 자율 위임 절차 주입 · 세션 마무리 절차 주입"]
   P --> W["작업"]
   W --> T{"도구 실행"}
   T -->|"공개 표면 쓰기"| C["대외비 가드"]
