@@ -36,7 +36,7 @@ LIST_ITEM = re.compile(r"^(?:[-*]\s|\d+\.\s)")
 UNQUOTE = re.compile(r"`[^`]*`|「[^」]*」|\]\([^)]*\)")
 PREDICATE_END = re.compile(r"[가-힣](?:(?<!과)다|니까)\**(?:\s*\([^()]*\))?$")
 BR = re.compile(r"<br\s*/?>")
-# PN8: GFM 은 한 인라인 범위(문단 · 제목 · 표 셀 · 목록 항목 문단) 안의 물결표 한 쌍을 취소선으로 렌더한다.
+# PN8: GFM 은 한 인라인 범위(문단 · 제목 · 표 셀 · 목록 항목 문단) 안의 물결표 두 개를 취소선으로 렌더한다.
 # 블록 분류는 위 blocks() 와 따로 한다. 인라인 범위가 GitHub 파서와 같아야 과검출 · 놓침이 없다.
 CODE_SPAN = re.compile(r"`[^`]*`")
 TILDE = re.compile(r"(?<!~)~(?!~)")
@@ -74,7 +74,7 @@ def _inline_units(text):
 
 
 def strikes(text):
-    """인라인 범위 하나에 취소선으로 렌더될 물결표 쌍이 있는가.
+    """인라인 범위 하나에 취소선으로 렌더될 물결표 두 개가 있는가.
 
     여닫는 조건은 CommonMark 의 left · right-flanking 이다. 문자열 끝은 공백으로 본다.
     역슬래시가 홀수 개 앞서면 이스케이프다.
@@ -164,7 +164,7 @@ def _units(lines, base):
 
 
 def pn8(text):
-    """취소선으로 렌더될 물결표 쌍이 있는 인라인 범위에서, 물결표가 있는 줄마다 (줄, 규칙, 안내).
+    """취소선으로 렌더될 물결표 두 개가 있는 인라인 범위에서, 물결표가 있는 줄마다 (줄, 규칙, 안내).
 
     why: 범위의 첫 줄만 내면, 기존 줄의 홑 물결표에 PR 이 덧붙인 줄이 짝을 이룰 때 최종 점검이
     그 검출을 「기존 줄」로 분류해 통과시킨다.
@@ -174,7 +174,7 @@ def pn8(text):
     for start, unit, n in _units(lines, 0):
         if strikes(unit):
             hits.update(k for k in range(start, start + n) if TILDE.search(CODE_SPAN.sub("", lines[k])))
-    return [(k + 1, "PN8", "물결표 한 쌍이 취소선으로 렌더된다. 역슬래시로 이스케이프한다") for k in sorted(hits)]
+    return [(k + 1, "PN8", "물결표 두 개가 취소선으로 렌더된다. 역슬래시로 이스케이프한다") for k in sorted(hits)]
 
 
 def unterminated(text, cell=False):

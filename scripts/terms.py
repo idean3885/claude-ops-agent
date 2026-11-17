@@ -191,7 +191,7 @@ def stats(text: str, transcript_dir: str) -> dict:
         after = [s for s in sessions if s[0] > registered]
         used = wrong = 0
         for _, joined, targets in after:
-            # 쌍 항목은 두 용어가 모두 나와야 그 구분을 다룬 세션이다. 한쪽이 일반어면 한쪽만 집계하면 부풀려진다
+            # 두 용어로 된 항목은 두 용어가 모두 나와야 그 구분을 다룬 세션이다. 한쪽이 일반어면 한쪽만 집계하면 부풀려진다
             mentioned = all(t.lower() in joined.lower() for t in terms)
             # 섞어 쓴 말만 쓰고 교정받은 세션은 표준 용어가 발화에 없다. 버리면 틀린 기록이 사라진다
             corrected = any(target == title or target in terms for target in targets)
