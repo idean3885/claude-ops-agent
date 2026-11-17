@@ -51,6 +51,7 @@ import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
 import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
+import { harnessShapeMismatch, bashAllowRulesFrom } from './harness-rule-shape.mjs';
 import {
   ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, REGISTER_HINT, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
 } from './repo-allowlist-rules.mjs';
@@ -533,6 +534,47 @@ if (!DISABLE) {
               },
             }));
             process.exit(0);
+          }
+        }
+
+        // 하네스 허용 규칙 형태 대조 (#1082): 갈래가 열려 있어도 명령이 하네스 허용 규칙과 글자 형태가
+        // 다르면 자동 모드 분류기가 다시 판정한다. 통과 여부가 분류기 판단에 맡겨지지 않게 여기서 먼저 막는다.
+        if (!gateResult.blocked && (gateResult.detected || []).length) {
+          const shapeDir = extractCwdFromCommand(command, hookInput.cwd);
+          const shapeGit = args => {
+            try {
+              return execSync(`git ${args}`, { cwd: shapeDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: budgeted(800) });
+            } catch {
+              return null;
+            }
+          };
+          const targets = gateSegments(command).filter(segment => [
+            ...detectClusterMutations(segment),
+            ...detectRepoActions(segment),
+            ...detectGitRiskActions([segment], { runGit: shapeGit }),
+          ].length);
+          const mismatch = harnessShapeMismatch({ targets, rules: harnessBashAllowRules(shapeDir) });
+          if (mismatch) {
+            const header = GATE_DRYRUN
+              ? '[ops-agent 한시 권한 · 드라이런]'
+              : '[ops-agent 한시 권한 · 형태 불일치]';
+            const why = '하네스 허용 규칙과 글자 형태가 다릅니다. 첫 `*` 앞까지 글자 그대로 비교하고, ` *` 의 공백은 단어 경계라 옵션 선행 · `=` 결합 · `git -C` 는 맞지 않습니다.';
+            const msg = `${header} 갈래는 열려 있지만 이 형태로는 하네스 자동 모드가 다시 판정합니다.\n` +
+              `대상: ${mismatch.target.length > 160 ? mismatch.target.slice(0, 160) + '…' : mismatch.target}\n` +
+              `이유: ${why}\n` +
+              `맞는 허용 규칙:\n${mismatch.related.map(r => `  - Bash(${r})`).join('\n')}\n\n` +
+              `해결: 위 규칙의 \`*\` 앞 글자 그대로 시작하게 다시 실행합니다. 옵션은 규칙 글자 뒤에 둡니다.\n` +
+              `      출력 가공(| tail 등)을 붙이면 그 명령도 규칙이 있어야 하므로 붙이지 않는 쪽이 안전합니다.\n` +
+              `사람에게 명령을 넘기지 않습니다. 대화창은 게이트 개방 · 해제 줄 말고는 실행하지 않습니다.\n` +
+              `근거: docs/action-gate.md 「하네스 허용 규칙」 · Claude Code permissions 문서 「Wildcard patterns」`;
+            if (GATE_DRYRUN) {
+              process.stderr.write(msg + '\n');
+            } else {
+              process.stdout.write(JSON.stringify({
+                hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+              }));
+              process.exit(0);
+            }
           }
         }
 
@@ -1251,6 +1293,19 @@ function detectGateCohabitation(command, hookCwd) {
     }
   }
   return null;
+}
+
+// 하네스 Bash 허용 규칙 (#1082). 사용자 설정과, 명령이 향한 레포의 프로젝트 설정을 모은다.
+function harnessBashAllowRules(dir) {
+  const files = [join(homedir(), '.claude', 'settings.json'), join(homedir(), '.claude', 'settings.local.json')];
+  const root = dir ? findRepoRoot(dir) : null;
+  if (root) files.push(join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json'));
+  const objs = [];
+  for (const f of files) {
+    if (!existsSync(f)) continue;
+    try { objs.push(JSON.parse(readFileSync(f, 'utf8'))); } catch { /* 읽지 못한 설정은 건너뛴다 */ }
+  }
+  return bashAllowRulesFrom(objs);
 }
 
 // 마커가 담은 허용 갈래 집합. 비어 있으면 아무것도 열려 있지 않다.
