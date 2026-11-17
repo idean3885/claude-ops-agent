@@ -126,7 +126,7 @@ const PR_DRAFT_GUARD_DISABLE = process.env.OPS_AGENT_PR_DRAFT_GUARD_DISABLE === 
 const PR_DRAFT_GUARD_DRYRUN = process.env.OPS_AGENT_PR_DRAFT_GUARD_DRYRUN === '1';
 // 최상위 생성 명령. `env` 접두와 `create` 앞의 -R/--repo 도 같은 생성이다. 판정은 detectNonDraftPrCreate.
 const PR_CREATE_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*create\b/;
-// 준비 완료 전환(#977). 전환은 리뷰어에게 알림이 가는 행동이라 작성자가 웹에서 한다. 머지 준비는 초안 상태로 진행한다.
+// 준비 완료 전환(#977). 전환은 리뷰어에게 알림이 가는 행동이라 작성자가 웹에서 한다. 리뷰 준비와 머지 준비는 초안 상태로 진행한다.
 // `--undo`(초안으로 되돌림)는 대상이 아니다. GraphQL 전환 mutation 도 같은 전환이다. 판정은 detectPrReady.
 const PR_READY_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*ready\b/;
 const PR_READY_GRAPHQL_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+api\s+graphql\b.*\bmarkPullRequestReadyForReview\b/;
@@ -426,7 +426,7 @@ if (!DISABLE) {
             ? '[ops-agent 초안 PR 가드 · 드라이런]'
             : '[ops-agent 초안 PR 가드 · 차단]';
           const msg = `${header} 준비 완료 전환은 작성자가 웹에서 합니다:\n${readyHits.map(h => `  - ${h}`).join('\n')}\n\n` +
-            `머지 준비(리뷰 요청 준비 · 머지 전 최종 점검)는 초안 상태 그대로 진행합니다. 초안이라서 못 하는 단계는 없습니다.\n` +
+            `리뷰 준비와 머지 준비(머지 전 최종 점검)는 초안 상태 그대로 진행합니다. 초안이라서 못 하는 단계는 없습니다.\n` +
             `가이드: ~/.claude/ops-agent/current/skills/flow/guides/pr.md 「초안으로 생성하고 작성자가 먼저 본다」\n` +
             `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1`;
           if (PR_DRAFT_GUARD_DRYRUN) {
@@ -581,7 +581,7 @@ if (!DISABLE) {
             `  bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" ${prArg} --notes <파일>\n\n` +
             `노트 파일에는 다음 세 절이 있고 각 본문이 비어 있지 않아야 합니다 (「해당 없음」 한 줄은 허용):\n` +
             `  ## 설계 반영\n  ## 서브 에이전트 산출물\n  ## 교정\n` +
-            `그리고 ## 주장 검증 절에 드래프트 단계 주장 검증의 회차를 한 줄씩 적고, 마지막 회차의 차단 지적이 0건이어야 합니다:\n` +
+            `그리고 ## 주장 검증 절에 리뷰 준비 주장 검증의 회차를 한 줄씩 적고, 마지막 회차의 차단 지적이 0건이어야 합니다:\n` +
             `  - 1회: 차단 2건 · 권장 3건 · 사소 1건 (HEAD 1a2b3c4)\n  - 2회: 차단 0건 · 권장 1건 · 사소 1건 (HEAD 5d6e7f8)\n` +
             `푸시로 HEAD 가 바뀌면 통과 기록은 무효가 되므로 다시 실행합니다.\n` +
             `전체 절차: docs/action-gate.md 「최종 점검 통과 기록」 · 해제: OPS_AGENT_FINAL_CHECK_DISABLE=1`;
