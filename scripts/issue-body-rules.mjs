@@ -30,11 +30,16 @@ const HEADING = /^#{1,6}\s+/;
 const TABLE = /^\s*\|/;
 const RECORD_LINE = /^(?:[-*]|\d+\.)\s+(?:\*\*)?기존 기록(?:\*\*)?\s*[:：]/;
 const NESTED_BULLET = /^\s+(?:[-*]|\d+\.)\s+/;
-// 점검 기록: 날짜와 점검 낱말이 한 줄에 있다. 「알파 실측 (2026-11-17, …)」 같은 절 머리가 대상이다 (#1067)
-const DATE = /\d{4}-\d{2}-\d{2}/;
-const INSPECTION = /실측|점검|조사|측정/;
-// 버전 표기: 점으로 이은 숫자 셋. IP 주소처럼 넷 이상 이은 것은 넘긴다
-const VERSION = /(?<![\d.])v?\d+\.\d+\.\d+(?![\d.])/;
+// 점검 기록: 점검 낱말 바로 곁에 날짜가 붙은 절 머리. 「알파 실측 (2026-11-17, …)」 꼴이 대상이다 (#1067).
+// 날짜만 있는 사실(「2026-10-02 정리에서」)과 명사로 쓴 점검(「자체 점검이 … 비었다」)은 넘긴다
+const DATE_SRC = String.raw`\d{4}[-.]\d{1,2}[-.]\d{1,2}`;
+const INSPECTION_RECORD = new RegExp(
+  String.raw`(?:실측|점검|조사|측정)\s*[(\[]?\s*${DATE_SRC}|${DATE_SRC}\s*[)\]]?\s*(?:실측|점검|조사|측정)`);
+// 버전 표기: 점으로 이은 숫자 셋, 또는 v 를 붙인 둘 이상. IP 주소처럼 넷 이상 이은 것과
+// 네 자리 연도로 시작하는 점 표기 날짜(2026.11.17)는 넘긴다. 문장 끝 마침표는 버전의 일부가 아니다
+const VERSION = /(?<![\w.])(?:v\d+\.\d+(?:\.\d+)?|(?!\d{4}\.)\d+\.\d+\.\d+)(?!\d|\.\d)/;
+// 링크 주소 안의 날짜 · 버전은 원천 위치라 판정하지 않는다
+const URL = /\]\([^)]*\)|https?:\/\/\S+|dooray:\/\/\S+/g;
 
 export const STRUCTURES = {
   // 절 제목이 요소명으로 시작하면 존재로 본다. 레포 템플릿은 `## 재현 절차 (ISS1, ISS4)` 처럼 접미가 달린다.
@@ -53,7 +58,8 @@ function countSentences(line) {
 
 // 코드 블록 안은 검사하지 않는다. 명령 · 재현 절차는 문장 규칙의 대상이 아니다.
 function stripCodeBlocks(body) {
-  return String(body || '').replace(/```[\s\S]*?```/g, '```\n```');
+  // 줄 수는 지킨다. 행 번호를 원문 기준으로 내기 위해서다
+  return String(body || '').replace(/```[\s\S]*?```/g, m => m.replace(/[^\n]/g, ''));
 }
 
 function parseSections(lines) {
@@ -131,24 +137,19 @@ export function checkIssueBody(body, structure) {
       }
     }
 
-    // What · Why 의 버전 표기. 기존 기록 줄은 이전 결정의 릴리스를 가리킬 수 있어 넘긴다
-    for (const sec of [what, why]) {
-      if (!sec) continue;
-      for (const l of sec.lines) {
-        if (RECORD_LINE.test(l)) continue;
-        const m = l.match(VERSION);
-        if (m) {
-          failures.push({ check: 'version', message: `## ${sec.title} 에 버전 표기 「${m[0]}」. 라이브러리 · 버전은 PR 본문으로 (ISS5 금지 항목)` });
-        }
-      }
-    }
-
-    // 점검 기록: 결론이 아니라 점검 과정이다. 결론 한 줄과 원천 링크만 남긴다
-    let inCodeRecord = false;
+    // What · Why 영역(그 아래 ### 하위 절 포함)의 버전 표기와 점검 기록. Todo 등 다른 절은 넘긴다.
+    // 기존 기록 줄은 이전 결정의 릴리스 · 날짜를 가리킬 수 있어 넘긴다
+    let region = null;
     lines.forEach((line, i) => {
-      if (/^\s*```/.test(line)) { inCodeRecord = !inCodeRecord; return; }
-      if (inCodeRecord || RECORD_LINE.test(line)) return;
-      if (DATE.test(line) && INSPECTION.test(line)) {
+      const h2 = line.match(/^##\s+(.+?)\s*$/);
+      if (h2) { region = /^(What|Why)/.test(h2[1]) ? h2[1] : null; return; }
+      if (!region || RECORD_LINE.test(line)) return;
+      const text = line.replace(URL, ' ');
+      const v = text.match(VERSION);
+      if (v) {
+        failures.push({ check: 'version', message: `${i + 1}행: ## ${region} 에 버전 표기 「${v[0]}」. 라이브러리 · 버전은 PR 본문으로 (ISS5 금지 항목)` });
+      }
+      if (INSPECTION_RECORD.test(text)) {
         failures.push({ check: 'inspection-record', message: `${i + 1}행: 점검 기록 (날짜 붙은 실측 · 점검). 이슈에는 결론만 두고 수치는 PR · 위키로` });
       }
     });
