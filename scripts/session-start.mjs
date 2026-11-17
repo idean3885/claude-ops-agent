@@ -145,7 +145,6 @@ function buildSkillContext(provider) {
   // 빠진 키워드로 부른 요청은 인접 스킬로 새어 그 스킬의 게이트가 조용히 건너뛰어진다.
   const TABLE_SKILLS = [
     { name: 'flow', extra: 'natural language change request' },
-    { name: 'org-flow' },
     { name: 'setup' },
   ];
 

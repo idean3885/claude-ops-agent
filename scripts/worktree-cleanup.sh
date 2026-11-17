@@ -1,5 +1,5 @@
 #!/bin/bash
-# org-flow: 워크트리 제거 + bare clone 정리 + vcs.xml 정리 + 상태 파일 삭제
+# flow 여러 레포 작업: 워크트리 제거 + bare clone 정리 + vcs.xml 정리 + 상태 파일 삭제
 #
 # 리모트 원소스 전략: 워크트리 제거 후 해당 레포에 다른 활성 워크트리가 없으면
 # bare clone도 삭제한다. 로컬에 레포 흔적을 남기지 않는다.

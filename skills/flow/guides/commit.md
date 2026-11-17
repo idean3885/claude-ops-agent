@@ -82,7 +82,7 @@
    node ~/.claude/ops-agent/current/scripts/resolve-manifest.mjs
    ```
 
-   `manifests` 를 나온 순서대로 병합한다 (레포 선언 > org 선언 > 외부 어댑터 org 선언). `notes` 가 비어 있지 않으면 그대로 사용자에게 보인다. org-flow 의 매니페스트 발견과 같은 해석기다
+   `manifests` 를 나온 순서대로 병합한다 (레포 선언 > org 선언 > 외부 어댑터 org 선언). `notes` 가 비어 있지 않으면 그대로 사용자에게 보인다. 여러 레포 가이드([multi-repo.md](multi-repo.md))의 매니페스트 발견과 같은 해석기다.
 2. **레포 문서 선언**: 레포 `CLAUDE.md` 에 타입 목록이 적혀 있으면 그것
 3. **최근 이력 표본**: 위 둘이 없으면 최근 커밋 제목에서 표기를 추정하고 **사용자에게 확인한 뒤** 쓴다
 4. **기본값**: 전부 없으면 위 기본 목록

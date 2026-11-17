@@ -1,6 +1,6 @@
 ---
 name: flow
-description: 이슈 플로우 단일 진입점 (issue → spec → implement → commit → pr). Git 상태 감지 후 단계별 작업 수행. 트리거 "flow", "플로우", "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "spec", "명세".
+description: 이슈 플로우 단일 진입점 (issue → spec → implement → commit → pr). Git 상태 감지 후 단계별 작업 수행. 트리거 "flow", "플로우", "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "spec", "명세", "멀티레포", "multi-repo", "여러 레포", "org 셋업", "org 시작", "org 완료".
 ---
 
 # Issue Flow Skill
@@ -17,6 +17,7 @@ Git 상태와 무관하게 **명시적 요청**이 있으면 해당 가이드를
 | "커밋", "commit" | `guides/commit.md` |
 | "PR", "풀리퀘", "pull request" | `guides/pr.md` |
 | "spec", "명세", "설계" | `guides/spec.md` |
+| "멀티레포", "multi-repo", "여러 레포", "org 셋업", "org 시작", "org 완료" | `guides/multi-repo.md` |
 
 명시적 키워드 없이 `/flow`만 호출하면 아래 상태 감지로 진행한다.
 
@@ -132,7 +133,7 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 
 ## Provider 연동
 
-- provider는 session-start 훅에서 감지됨
+- provider는 session-start 훅에서 감지됨. 조직 매니페스트가 `providers.issue` 를 지정하면 그 어댑터가 이긴다 ([guides/multi-repo.md](guides/multi-repo.md#provider-지정)).
 - 각 가이드가 provider 정의를 직접 읽음
 - `gh pr view`는 GH_HOST 설정 필요 (provider별 상이)
 
