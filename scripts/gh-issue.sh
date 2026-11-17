@@ -20,7 +20,8 @@
 #   --checkout   현재 작업 트리에서 이슈에 연결된 브랜치로 직접 체크아웃
 #                브랜치는 `gh issue develop` 이 `origin/{base}` 에서 원격에 만든다. 이슈에서 만든 브랜치라
 #                그 브랜치의 PR 이 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다 (#813)
-#   --branch     브랜치 이름. 기본 `{타입}/{번호}`. 리모트 머지 이력의 접두가 provider 패턴과 다를 때 넘긴다
+#   --branch     브랜치 이름. 기본 `{타입}/{번호}`. 리모트 머지 이력의 접두가 provider 패턴과 다를 때 넘긴다.
+#                원격에 이미 있는 브랜치(세션 묶음)면 이슈 연결 브랜치를 만들지 않고 그 브랜치를 열며 bundled=true 를 낸다
 #
 # 세션 인덱스: 생성 · 시작이 성공하면 ~/.claude/ops-agent/.cache/session-issues/<세션 번호>.jsonl 에
 #   한 줄(repo · number · title · action)을 더한다. 세션 마무리 훅이 이 파일로 대상 이슈를 확정하고 지운다 (#1050).
@@ -125,20 +126,48 @@ cmd_start() {
   if [ -n "$MODE" ]; then
     local PROJECT
     PROJECT="$(basename "$(git rev-parse --show-toplevel)")" || err_json 2 "git 레포가 아니다" number="$NUMBER"
-    # why: 로컬에서 만든 브랜치는 이슈와 이어지지 않는다. 이슈에서 만든 브랜치만 PR 이 이슈에 자동 연결된다
-    gh issue develop "$NUMBER" ${R[@]+"${R[@]}"} --name "$BRANCH" --base "$BASE" >/dev/null \
-      || err_json 2 "이슈 연결 브랜치 생성 실패: $BRANCH" number="$NUMBER" branch="$BRANCH"
+    # 세션 묶음(ADR-0039): 한 PR 브랜치에 이슈를 더하면 브랜치가 이미 원격에 있다.
+    # why: gh issue develop 은 있는 이름에서 실패하면서 git 설정에 이름 빈 브랜치 절을 남겨 레포의 git 명령을 모두 깨뜨린다 (#1078)
+    # 전체 참조 이름으로 본다. 짧은 이름은 끝자리 일치라 backup/fix/42 가 fix/42 로 읽힌다.
+    # 종료 0 있음 · 2 없음. 그 밖(네트워크 · 인증)은 있는지 모르므로 develop 전에 멈춘다
+    local EXISTING="" LS_RC=0
+    git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1 || LS_RC=$?
+    case "$LS_RC" in
+      0) EXISTING=1;;
+      2) ;;
+      *) err_json 2 "원격 브랜치 조회 실패: $BRANCH (종료 $LS_RC)" number="$NUMBER" branch="$BRANCH";;
+    esac
+    # 로컬 브랜치가 없으면 origin 을 명시해 만든다. 원격이 둘이면 이름만으로는 모호하다
+    local LOCAL=""
+    [ -n "$EXISTING" ] && git show-ref --verify --quiet "refs/heads/$BRANCH" && LOCAL=1
+    if [ -z "$EXISTING" ]; then
+      # why: 로컬에서 만든 브랜치는 이슈와 이어지지 않는다. 이슈에서 만든 브랜치만 PR 이 이슈에 자동 연결된다
+      gh issue develop "$NUMBER" ${R[@]+"${R[@]}"} --name "$BRANCH" --base "$BASE" >/dev/null \
+        || err_json 2 "이슈 연결 브랜치 생성 실패: $BRANCH" number="$NUMBER" branch="$BRANCH"
+    fi
     git fetch origin >/dev/null 2>&1 || err_json 2 "git fetch origin 실패" number="$NUMBER"
     if [ "$MODE" = worktree ]; then
       local WT="../${PROJECT}-${TYPE}-${NUMBER}"
-      git worktree add "$WT" -b "$BRANCH" --track "origin/$BRANCH" >/dev/null \
-        || err_json 2 "git worktree add 실패: $WT" number="$NUMBER" branch="$BRANCH"
+      if [ -n "$LOCAL" ]; then
+        git worktree add "$WT" "$BRANCH" >/dev/null \
+          || err_json 2 "git worktree add 실패: $WT" number="$NUMBER" branch="$BRANCH"
+      else
+        git worktree add "$WT" -b "$BRANCH" --track "origin/$BRANCH" >/dev/null \
+          || err_json 2 "git worktree add 실패: $WT" number="$NUMBER" branch="$BRANCH"
+      fi
       out+=(branch="$BRANCH" worktree="$WT")
+    elif [ -n "$LOCAL" ]; then
+      git checkout "$BRANCH" >/dev/null \
+        || err_json 2 "git checkout 실패: $BRANCH" number="$NUMBER" branch="$BRANCH"
+      out+=(branch="$BRANCH")
     else
       git checkout -b "$BRANCH" --track "origin/$BRANCH" >/dev/null \
         || err_json 2 "git checkout -b 실패: $BRANCH" number="$NUMBER" branch="$BRANCH"
       out+=(branch="$BRANCH")
     fi
+    # 있는 브랜치에 붙인 이슈는 브랜치가 이슈와 이어지지 않는다. PR 본문의 닫는 키워드로 잇는다
+    # 그 이슈 자신의 기본 브랜치를 다시 연 것(재시작)은 이미 이슈와 이어져 있어 묶음이 아니다
+    [ -n "$EXISTING" ] && [ "$BRANCH" != "$TYPE/$NUMBER" ] && out+=(bundled=true)
   fi
   if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
     # 생성에서 이어진 시작이면 제목 · 주소를 이미 안다. 단독 시작만 조회한다

@@ -196,6 +196,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
    - **여러 레포 · 조직 매니페스트**: 조직 매니페스트나 프로젝트 매니페스트가 있으면 작업 범위 · 통합 브랜치 · 레포별 워크트리를 [여러 레포 가이드 「시작」](multi-repo.md#시작) 순서로 한다. 7번은 그 안의 주 레포 단계에서 실행한다.
    - **No**: 브랜치 인자 없이
 7. **어댑터로 시작**: provider 의 시작 어댑터 한 호출 (github: `scripts/gh-issue.sh start <번호> [--worktree|--checkout] [--base <브랜치>] [--branch <이름>]`). 어댑터가 상태 전환 · 담당자 · 시작 일시 기록 · (코드 작업이면) 이슈 연결 브랜치를 원격에 만들고(github: `gh issue develop`) `git fetch origin` 뒤 그 브랜치를 여는 일을 이어서 한다. 시작 일시 텍스트는 어댑터가 만들고 대외비 가드(GATE 0)는 어댑터 호출에 적용된다.
+   - 세션 묶음(ADR-0039)으로 이미 있는 PR 브랜치에 이슈를 더할 때는 그 브랜치의 워크트리 안에서 `--checkout --branch <그 브랜치>` 로 부른다(`--worktree` 는 그 브랜치가 이미 워크트리에 열려 있어 실패한다). 어댑터는 원격에 그 브랜치가 있으면 이슈 연결 브랜치를 만들지 않고 그 브랜치로 열며 `bundled=true` 를 낸다. 이 이슈는 PR 본문의 닫는 키워드(`Closes #N`)로 잇는다.
 8. **Extensions 실행**: provider에 post-start Extensions이 정의되어 있으면 실행
 
 ### 중단 · 재개
