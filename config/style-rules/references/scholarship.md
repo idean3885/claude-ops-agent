@@ -37,7 +37,7 @@
 | 번역 보편소 넷 | Baker 1993 (Text and Technology) | simplification, explicitation, normalisation, levelling-out(1996) |
 | 두 법칙 | Toury 1995 (Descriptive Translation Studies) | growing standardisation, law of interference (번역투 90%+ 가 간섭으로 환원) |
 | S/T-universals 구분 | Chesterman 2004 | 원천→목표(S) vs 목표언어 내(T) |
-| post-editese | Toral 2019 (MT Summit XVII, arXiv:1907.00900) | PE = "악화된 translationese" (단순화·정규화·간섭 강화). 5개 언어쌍, **한국어 미포함** |
+| post-editese | Toral 2019 (MT Summit XVII, arXiv:1907.00900) | PE = "악화된 translationese" (단순화·정규화·간섭 강화). 5개 번역 방향, **한국어 미포함** |
 | English accent | Guo et al. 2025 (ACL, arXiv:2410.15956) | 비영어 출력의 측정 가능한 영어 액센트. **프랑스어·중국어, 한국어 미포함** |
 | 학습 데이터 비중 | Hayase et al. 2024 (arXiv:2407.16607) | GPT-4o 한국어 비중 1% 미만 추정 (토크나이저 역추론) |
 
@@ -76,7 +76,7 @@
 ### CV1. post-editese·합성 지수 미채택 (U: 업스트림 C3)
 
 Toral 2019 의 post-editese 지표 셋(simplification·normalisation·interference)과 이를 가중 합한 합성 지수는 **speculative** 다.
-검증 언어쌍(en→de, de→en, es→de, en→fr, zh→en)에 **한국어가 없고**, baseline(비번역 한국어 대비) 없이는 정량 판정이 불가하다.
+검증 번역 방향(en→de, de→en, es→de, en→fr, zh→en)에 **한국어가 없고**, baseline(비번역 한국어 대비) 없이는 정량 판정이 불가하다.
 → 우리는 이 지수들을 metrics 로 **채택하지 않는다**. 정성 anchor 로만 참조한다.
 
 ### CV2. A-6(대명사)는 번역·요약 맥락 한정 조건부 (U: 대명사 밀도 근거 + C: 조건 게이팅)

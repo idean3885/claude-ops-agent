@@ -112,7 +112,7 @@ expect("등재 다음 날부터 세 세션 · 오답 0 이면 제거 후보 (당
        by_title["플러시 · 커밋"]["useSessions"] == 3 and by_title["플러시 · 커밋"]["removable"])
 expect("오답이 하나라도 있으면 제거 후보가 아니다 (도구 결과는 사용이 아니다)",
        by_title["envelope"]["useSessions"] == 3 and by_title["envelope"]["wrong"] == 1 and not by_title["envelope"]["removable"])
-expect("쌍 항목은 두 용어가 모두 나와야 사용이고, 섞어 쓴 말만 쓰고 교정받은 세션은 사용 1 · 오답 1 (교정 두 줄도 1)",
+expect("두 용어로 된 항목은 두 용어가 모두 나와야 사용이고, 섞어 쓴 말만 쓰고 교정받은 세션은 사용 1 · 오답 1 (교정 두 줄도 1)",
        by_title["도메인 · 애그리거트 루트"]["useSessions"] == 1 and by_title["도메인 · 애그리거트 루트"]["wrong"] == 1)
 expect("정답률은 0 과 1 사이", all(r["rate"] is None or 0 <= r["rate"] <= 1 for r in report["entries"]))
 expect("사용 세션이 셋 미만이면 정답률 100% 여도 제거 후보가 아니다",
