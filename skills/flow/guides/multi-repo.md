@@ -46,7 +46,7 @@ node ~/.claude/ops-agent/current/scripts/resolve-manifest.mjs
   "rootDir": "/path/to/<org>",
   "providers": { "issue": "<adapter-id>", "dailylog": "<adapter-id>", "apiGuard": "<adapter-id>" },
   "branchPattern": "feature/{ticket}",
-  "scriptOverrides": { "worktreeCleanup": "<adapter-id>:scripts/<script>.sh" }
+  "scriptOverrides": { "worktreeCreate": "<adapter-id>:scripts/<script>.sh" }
 }
 ```
 
@@ -58,6 +58,7 @@ node ~/.claude/ops-agent/current/scripts/resolve-manifest.mjs
 | `rootDir` | string | 프로젝트 루트 절대 경로 |
 | `providers.*` | string | provider 어댑터 식별자 (선택). 아래 [provider 지정](#provider-지정) |
 | `branchPattern` | string | 브랜치 이름 패턴 (선택). 기본 `feature/{ticket}` |
+| `scriptOverrides.worktreeCreate` | string | 본체 워크트리 생성 스크립트 대신 쓸 외부 경로 (선택). 생성 뒤 조직 고유 후처리(커밋 훅 설치 등)를 더하는 wrapper 자리다. |
 | `scriptOverrides.worktreeCleanup` | string | 본체 정리 스크립트 대신 쓸 외부 경로 (선택) |
 | `conventions` | object | 커밋 · 체인지로그 표기 기본값 (선택). 레포 선언이 이긴다 ([docs/conventions-slot.md](../../../docs/conventions-slot.md)). |
 | `pullMainsOnStart` | boolean | 시작 때 메인 클론 일괄 갱신 여부 (기본 true) |
@@ -113,7 +114,7 @@ issue 가이드 「/issue start」 6번에서 코드 작업으로 정한 뒤, �
    - 레포마다 통합 브랜치가 원격에 있는지 본다. 없으면 원격 base 에서 만들어 푸시한다(워크트리 없이).
    - 하위 워크트리를 그 통합 브랜치에서 분기하고, 상태 파일에 `parentTicket` 과 레포별 `parentBranch` 를 적는다.
 6. **이슈 시작**: 주 레포에서 issue 가이드 「/issue start」 7번(어댑터로 시작)을 실행한다. `providers.issue` 가 있으면 그 어댑터가 트래커를 다룬다. 끝나면 주 레포에 브랜치가 있는지, 이슈가 진행 중인지 본다. `providers.dailylog` 가 있으면 일일 계획 항목도 본다.
-7. **상태 파일과 워크트리**: 아래 형식으로 상태 파일을 쓰고 레포별 워크트리를 만든다. 레포가 로컬에 없으면 bare clone 을 받아 워크트리를 만들고, IDE 매핑(`vcs.xml`)을 더한다.
+7. **상태 파일과 워크트리**: 아래 형식으로 상태 파일을 쓰고 레포별 워크트리를 만든다. 레포가 로컬에 없으면 bare clone 을 받아 워크트리를 만들고, IDE 매핑(`vcs.xml`)을 더한다. `scriptOverrides.worktreeCreate` 가 있으면 본체 대신 그 스크립트를 같은 상태 파일 인자로 실행한다.
 
    ```bash
    bash ~/.claude/ops-agent/current/scripts/worktree-create.sh .ops-agent/state/org-flow-{ticket}.json
