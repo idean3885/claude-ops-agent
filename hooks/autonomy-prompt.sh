@@ -42,7 +42,7 @@ cat <<EOF
 [자율 위임 감지] 편집 · 실행 전에 계획과 권한을 한 번에 받는다 (flow SKILL.md GATE 3 0단계, $PLUGIN_ROOT/skills/flow/SKILL.md).
 1. 끝까지의 단계를 표로 펼친다: 단계 · 명령 · 하네스 허용 규칙 유무(~/.claude/settings.json) · 게이트 갈래
 2. 막히는 구간을 실측한다: bash ~/.claude/ops-agent/current/scripts/action-gate-allow.sh status
-3. 빠진 권한과 개방 명령(\`! bash … action-gate-allow.sh on <갈래>\`)을 같은 요청에 싣는다. 갈래 이름은 스크립트 머리의 목록에서 고른다
+3. 빠진 권한과 개방 명령(\`! bash … action-gate-allow.sh on <갈래>\`)을 같은 요청에 싣는다. \`!\` 를 실행하지 않는 대화창이면 같은 한 줄을 메시지로 입력하게 안내한다. 갈래 이름은 스크립트 머리의 목록에서 고른다
 4. 승인 전에는 편집하지 않는다. 승인 뒤에는 묻지 않고 끝까지 간다. 권한 프롬프트가 뜨면 그 자리에서 멈추고 다시 싣는다
 「게이트 오픈합니다」는 승인 문장이지 개방이 아니다. 개방은 사용자가 위 명령을 실행했을 때만이다.
 EOF

@@ -262,6 +262,14 @@ if (!DISABLE) {
       }));
       process.exit(0);
     }
+    // 어시스턴트의 게이트 개방 차단 (#1060). 개방 스크립트 on · 대화창 개방 훅 실행을 막아 개방이 사람의 행위로 남게 한다.
+    if ((hookInput.tool_name || '') === 'Bash' && opensGateByAssistant((hookInput.tool_input || {}).command || '')) {
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+          permissionDecisionReason: '[ops-agent 게이트 개방 · 차단] 게이트는 사람이 연다. 개방 스크립트의 on 과 대화창 개방 훅은 어시스턴트가 실행하지 않는다. 개방 명령을 사람에게 제시하고 기다린다 (터미널은 ! 명령, 셸 실행이 없는 대화창은 같은 한 줄을 메시지로).' },
+      }));
+      process.exit(0);
+    }
     // 빌드 스크립트 가드: 번들을 쓰는 레포의 모듈 빌드 스크립트에 라이브러리 좌표가 더해지면 알린다.
     // 편집은 되돌릴 수 있어 막지 않는다 (README 「되돌릴 수 없는 것만 막는다」). 컴파일이 되니 알리지 않으면 리뷰 전까지 드러나지 않는다 (#574).
     if (!BUILD_GUARD_DISABLE && /^(?:Write|Edit|MultiEdit)$/.test(hookInput.tool_name || '')) {
@@ -500,7 +508,8 @@ if (!DISABLE) {
           const scopeArg = [...blockedScopes, ...carried].join(',') || 'all';
           const msg = `${header} 되돌리기 어려운/외부 영향 행위를 감지했습니다:\n${opLines}\n\n` +
             `권한 개방은 사용자만 실행할 수 있습니다. 아래를 그대로 제시하고 기다리세요:\n` +
-            `  !bash ${gateRoot}/scripts/action-gate-allow.sh on ${scopeArg}\n\n` +
+            `  !bash ${gateRoot}/scripts/action-gate-allow.sh on ${scopeArg}\n` +
+            `대화창이 \`!\` 를 실행하지 않는 화면(Agent SDK 기반 데스크톱 대화창 등)이면 같은 한 줄을 메시지로 입력하게 안내합니다. 사용자 입력 훅이 사람이 친 그 한 줄만 받아 엽니다 (#1060).\n\n` +
             `이 명령은 위 갈래(${scopeArg})만 엽니다. 다른 갈래는 계속 차단되고 다시 사람에게 옵니다.\n` +
             (carried.length
               ? `\`on\` 은 열려 있던 갈래를 대체합니다. 이미 열린 갈래(${carried.join(',')})를 위 명령에 함께 담았으니 이 한 줄로 필요한 갈래가 모두 열립니다.\n`
@@ -870,6 +879,23 @@ function writesRepoTypeFile(toolName, toolInput) {
 }
 
 // 사람이 선언하는 파일(레포 유형 · 레포 허용 목록)을 쓰는 호출인지. `stem` 은 파일 이름에서 확장자 앞부분이다.
+// 어시스턴트가 게이트를 여는 명령인가 (#1060). 개방은 사람의 행위로만 남아야 한다.
+// 자기 수정 차단은 하네스 자동 모드에 있어 Agent SDK 기반 대화창에서 도는지 보장이 없으므로 여기서도 막는다.
+// 실행 형태(`!` · env · xargs · bash -c · 서브셸 · if · $( ))를 가려내지 않고, 명령 글자에 개방 스크립트의 on
+// 이나 대화창 개방 훅 파일이 있으면 막는다. 형태를 열거하면 우회가 끝없이 나온다 (주장 검증 2회차).
+// 비용: 그 명령을 글로 담는 작업(문서 편집 · 커밋 메시지 · PR 본문)은 Bash 가 아니라 파일 도구나 본문 파일로 한다.
+// status · off 와 이름에 그 파일명을 담은 다른 파일(selftest-action-gate-prompt.mjs)은 막지 않는다.
+function opensGateByAssistant(command) {
+  // on 뒤는 낱말 경계만 본다. 공백만 보면 `on;` · `on)` · `on|` 처럼 셸 글자가 붙은 형태가 빠지고, 갈래 없는 on 은 all 로 연다 (주장 검증 3회차).
+  // 스크립트 뒤 같은 명령 안(; & | 줄바꿈 전)에 독립 인자 on 이 있으면 막는다. 사이에 리다이렉션(2>&1 · >/dev/null)이
+  // 끼어도 같다 (4회차). on 이 스크립트보다 앞에 오는 간접 전달(변수 · set -- · xargs 입력)은 위장으로 보고 막지 않는다.
+  const allowOn = /action-gate-allow\.sh["']?(?:[^;&|\n]*?[\s"'`(])?["']?on\b/;
+  const hook = /(?<![\w-])action-gate-prompt\.mjs/;
+  // 2>&1 · >&2 · &> 의 & 는 명령 구분자가 아니라 리다이렉션이다. 판정 전에 지운다.
+  const plain = command.replace(/\d*[<>]&\d*-?|&>>?/g, ' ');
+  return allowOn.test(plain) || hook.test(plain);
+}
+
 function writesGuardedFile(toolName, toolInput, fileRe, stem) {
   const ti = toolInput || {};
   if (/^(?:Edit|Write|MultiEdit|NotebookEdit)$/.test(toolName)) {

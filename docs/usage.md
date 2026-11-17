@@ -46,6 +46,7 @@ claude plugin update ops-agent@ops-agent
 | PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU8) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
 | UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`) |
 | UserPromptSubmit | 세션 마무리 신호(세션 마무리 · 마무리합니다)를 받은 턴에 종결 절차(대상 수집 · 잔여 처리 · 판결) 주입 | 알림 (발동은 `metrics/session-wrap-prompt.jsonl`) |
+| UserPromptSubmit | 메시지 전체가 게이트 개방 명령 한 줄이면 `!` 를 실행하지 않는 대화창에서도 그 명령을 실행한다 ([대화창 개방](action-gate.md#대화창-개방)). | 개방 마커 (`.cache/action-gate-allow.json`) |
 | UserPromptSubmit | 메시지 전체가 「푸시 권한 위임」이면 선언한 레포의 기본 브랜치 push 를 그 세션 동안 연다 ([대화창 위임](action-gate.md#대화창-위임)) | 개방 기록 (`.cache/<세션>.push-delegation.json`) |
 | Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 교정 요청 |
 
