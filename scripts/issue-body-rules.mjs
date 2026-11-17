@@ -30,14 +30,14 @@ const HEADING = /^#{1,6}\s+/;
 const TABLE = /^\s*\|/;
 const RECORD_LINE = /^(?:[-*]|\d+\.)\s+(?:\*\*)?기존 기록(?:\*\*)?\s*[:：]/;
 const NESTED_BULLET = /^\s+(?:[-*]|\d+\.)\s+/;
-// 점검 기록: 점검 낱말 바로 곁에 날짜가 붙은 절 머리. 「알파 실측 (2026-11-17, …)」 꼴이 대상이다 (#1067).
-// 날짜만 있는 사실(「2026-10-02 정리에서」)과 명사로 쓴 점검(「자체 점검이 … 비었다」)은 넘긴다
-const DATE_SRC = String.raw`\d{4}[-.]\d{1,2}[-.]\d{1,2}`;
-const INSPECTION_RECORD = new RegExp(
-  String.raw`(?:실측|점검|조사|측정)\s*[(\[]?\s*${DATE_SRC}|${DATE_SRC}\s*[)\]]?\s*(?:실측|점검|조사|측정)`);
-// 버전 표기: 점으로 이은 숫자 셋, 또는 v 를 붙인 둘 이상. IP 주소처럼 넷 이상 이은 것과
-// 네 자리 연도로 시작하는 점 표기 날짜(2026.11.17)는 넘긴다. 문장 끝 마침표는 버전의 일부가 아니다
-const VERSION = /(?<![\w.])(?:v\d+\.\d+(?:\.\d+)?|(?!\d{4}\.)\d+\.\d+\.\d+)(?!\d|\.\d)/;
+// 점검 기록: 날짜와 점검 낱말이 한 줄에 있다. 「알파 실측 (2026-11-17, …)」 · 「점검 일시: 2026-11-17」 꼴이 대상이다 (#1067).
+// 점검 낱말 뒤에 주격 · 목적격 조사가 붙으면 명사로 쓴 사실(「자체 점검이 … 비었다」)이라 넘긴다
+const DATE = /\d{4}[-.]\d{1,2}[-.]\d{1,2}/;
+const INSPECTION = /(?:실측|점검|조사|측정)(?![이가은는을를]\s)/;
+const isInspectionRecord = text => DATE.test(text) && INSPECTION.test(text);
+// 버전 표기: 점으로 이은 숫자 셋, 또는 v 를 붙인 둘 이상. IP 주소처럼 넷 이상 이은 것,
+// 네 자리 연도로 시작하는 점 표기 날짜(2026.11.17), 뒤에 「절」이 오는 절 번호는 넘긴다. 문장 끝 마침표는 버전의 일부가 아니다
+const VERSION = /(?<![\d.])(?:v\d+\.\d+(?:\.\d+)?|(?!\d{4}\.)\d+\.\d+\.\d+)(?!\d|\.\d|\s*절)/;
 // 링크 주소 안의 날짜 · 버전은 원천 위치라 판정하지 않는다
 const URL = /\]\([^)]*\)|https?:\/\/\S+|dooray:\/\/\S+/g;
 
@@ -141,15 +141,20 @@ export function checkIssueBody(body, structure) {
     // 기존 기록 줄은 이전 결정의 릴리스 · 날짜를 가리킬 수 있어 넘긴다
     let region = null;
     lines.forEach((line, i) => {
+      // 절 머리의 점검 기록(「## 알파 실측 (2026-11-17)」)은 어느 절이든 잡는다
+      if (HEADING.test(line) && isInspectionRecord(line.replace(URL, ' '))) {
+        failures.push({ check: 'inspection-record', message: `${i + 1}행: 점검 기록 절 (날짜 붙은 실측 · 점검). 이슈에는 결론만 두고 수치는 PR · 위키로` });
+      }
       const h2 = line.match(/^##\s+(.+?)\s*$/);
       if (h2) { region = /^(What|Why)/.test(h2[1]) ? h2[1] : null; return; }
+      if (HEADING.test(line)) return;
       if (!region || RECORD_LINE.test(line)) return;
       const text = line.replace(URL, ' ');
       const v = text.match(VERSION);
       if (v) {
         failures.push({ check: 'version', message: `${i + 1}행: ## ${region} 에 버전 표기 「${v[0]}」. 라이브러리 · 버전은 PR 본문으로 (ISS5 금지 항목)` });
       }
-      if (INSPECTION_RECORD.test(text)) {
+      if (isInspectionRecord(text)) {
         failures.push({ check: 'inspection-record', message: `${i + 1}행: 점검 기록 (날짜 붙은 실측 · 점검). 이슈에는 결론만 두고 수치는 PR · 위키로` });
       }
     });
