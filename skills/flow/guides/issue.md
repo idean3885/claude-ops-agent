@@ -193,6 +193,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
    - **Yes**: 브랜치명·베이스를 확정하기 전에 [레슨런 인덱스 대조](#대조-판단-지점마다) 를 수행하고 `대조 N건 / 걸림 M건` 을 적는다. 그다음 provider의 브랜치 패턴과 리모트 머지 이력에 남은 접두를 대조해 브랜치명을 정한다. 접두가 provider 패턴과 다르면 어댑터에 `--branch` 로 넘긴다.
      - 워크트리 (기본): `--worktree`. 레포가 하나뿐이거나 프로젝트 매니페스트가 없어도 같다. 현재 브랜치에 고유 커밋이 있어도 워크트리로 한다 ([이슈 불일치 감지](../SKILL.md#이슈-불일치-감지)).
      - 직접 체크아웃: `--checkout`. 사용자가 지시할 때만 쓴다. 메인 클론에 브랜치를 걸면 분석 참조용 자리가 사라진다.
+   - **여러 레포 · 조직 매니페스트**: 조직 매니페스트나 프로젝트 매니페스트가 있으면 작업 범위 · 통합 브랜치 · 레포별 워크트리를 [여러 레포 가이드 「시작」](multi-repo.md#시작) 순서로 한다. 7번은 그 안의 주 레포 단계에서 실행한다.
    - **No**: 브랜치 인자 없이
 7. **어댑터로 시작**: provider 의 시작 어댑터 한 호출 (github: `scripts/gh-issue.sh start <번호> [--worktree|--checkout] [--base <브랜치>] [--branch <이름>]`). 어댑터가 상태 전환 · 담당자 · 시작 일시 기록 · (코드 작업이면) 이슈 연결 브랜치를 원격에 만들고(github: `gh issue develop`) `git fetch origin` 뒤 그 브랜치를 여는 일을 이어서 한다. 시작 일시 텍스트는 어댑터가 만들고 대외비 가드(GATE 0)는 어댑터 호출에 적용된다.
 8. **Extensions 실행**: provider에 post-start Extensions이 정의되어 있으면 실행
@@ -223,6 +224,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 **워크플로우**:
 1. provider 정의 파일 읽기
 2. 이슈 식별 (번호, URL, 또는 사용자에게 질문)
+   - 상태 파일(`.ops-agent/state/org-flow-{ticket}.json`)이 있으면 여기서 [여러 레포 가이드 「완료」](multi-repo.md#완료) 1번(머지 확인)을 먼저 한다. 하나라도 머지되지 않았으면 닫지 않고 멈춘다.
 3. 작업 결과 정리:
    - 사용자에게 작업 결과 요약 질문
    - provider의 완료 기록 형식에 따라 본문에 "작업 결과" 섹션 추가
@@ -230,7 +232,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 5. **대외비 가드 (GATE 0)**: 작업 결과 요약을 포함한 모든 추가 텍스트 검증. 사용자 제공 요약이 핵심 방어 지점 (내부 용어 유입 가능성)
 6. provider의 완료 상태 변경 API 실행 (provider의 dedicated API 사용)
 7. 본문 업데이트 (provider의 PUT API, 기존 cc·태그·본문 보존 필수)
-8. 브랜치가 있었으면 정리, 없었으면 스킵
+8. 브랜치가 있었으면 정리, 없었으면 스킵. 상태 파일이 있으면 [여러 레포 가이드 「완료」](multi-repo.md#완료) 2 · 3번으로 정리한다.
 9. workflow.json의 `currentIssues` 맵에서 현재 브랜치 항목 제거 (`del currentIssues[branch]`)
 10. **Extensions 실행**: provider에 post-complete Extensions이 정의되어 있으면 실행
 11. **자산 수집**: 이 이슈 기간의 교정 항목과 **조사로 확정한 참조 사실**을 함께 수집한다 ([../../../docs/lessons.md](../../../docs/lessons.md))

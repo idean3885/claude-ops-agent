@@ -95,8 +95,7 @@ flowchart LR
 
 | 스킬 | 역할 | 트리거 |
 |------|------|--------|
-| `/flow` | 이슈 플로우 단일 진입점 | "flow", "플로우", 자연어 수정 요청 |
-| `/org-flow` | 멀티레포 오케스트레이션, 레포별 provider 분기 | "org-flow", "멀티레포" |
+| `/flow` | 이슈 플로우 단일 진입점. 여러 레포 작업 포함 | "flow", "플로우", "멀티레포", 자연어 수정 요청 |
 | `/setup` | provider 등록, 상태 확인, overlay 설정 | "setup", "설정" |
 | `/write` | 글 작성·수정 (계획 → 초고 → 퇴고) | "글 작성", "계획", "초고", "퇴고", "지면 활용" |
 | `/lint` | 교정. 규칙과 대조해 위반 위치를 찾는다 (AI 티·가독성·톤·구두점). | "교정", "검증", "가독성 검사", "지면 활용" |
@@ -187,7 +186,7 @@ bash ~/.claude/ops-agent/current/scripts/action-gate-allow.sh status
 | `~/.claude/ops-agent/experts/` | 로컬 전용 전문가. expert 로스터에 합쳐지고, 파일명이 겹치면 내장보다 먼저 열린다 |
 | `templates/` | 소비 프로젝트용 CLAUDE.md·프로파일·워크플로우 템플릿 |
 
-여러 레포에 걸친 변경은 `/org-flow` 가 통일 브랜치명·레포별 provider·git identity·워크트리를 한 흐름으로 맞춥니다.
+여러 레포에 걸친 변경도 `/flow` 로 진행합니다. 작업 범위를 정할 때 레포별 워크트리 · 통합 브랜치 · 조직별 provider 를 함께 맞춥니다 (`skills/flow/guides/multi-repo.md`).
 
 ## 요구사항
 

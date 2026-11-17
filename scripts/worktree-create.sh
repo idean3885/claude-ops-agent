@@ -1,5 +1,5 @@
 #!/bin/bash
-# org-flow: clone-on-demand + 워크트리 일괄 생성 + vcs.xml 매핑
+# flow 여러 레포 작업: clone-on-demand + 워크트리 일괄 생성 + vcs.xml 매핑
 #
 # 리모트 원소스 전략: 로컬에 베이스 브랜치 디렉토리를 두지 않는다.
 # 레포가 없으면 bare clone → worktree 생성. 정리 시 bare clone도 삭제.
