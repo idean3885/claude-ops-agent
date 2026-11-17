@@ -11,6 +11,7 @@
 | hook | 시점 | 싣는 것 |
 |------|------|---------|
 | Stop (`hooks/forbidden-words-stop.sh`) | 응답 종료 시 | 직전 응답 스캔 → 위반을 `.forbidden-violations-pending` 에 기록 |
+| Stop (`hooks/language-stop.py`) | 응답 종료 시 | 한국어 대화에서 이번 턴에 한글 비율 0.3 미만이고 영어 문장이 있는 문단(빈 줄 단위, 코드 · 인라인 코드 · URL · 경로 · 링크 · 표 · 상자 그림 · `>` 인용 · JSON 제외)이 있으면 막고 한국어로 다시 쓰게 한다. 글자 20자 미만 문단은 세지 않는다. 대화 언어는 한글 비율 0.2 이상인 마지막 사람 입력(로마자 10자 미만 입력은 건너뜀)으로, 사람이 친 입력(CLI 는 origin.kind=human)으로 잰다. 같은 턴 재차단 없음 (#792) |
 | UserPromptSubmit (`hooks/forbidden-words-prompt.sh`) | 위반이 있는 턴만 | pending 내역으로 교정 요청 후 파일 삭제. 위반이 없으면 무출력 종료 |
 
 세션 컨텍스트(provider·git identity·스킬 트리거)는 SessionStart 에서 1회 전달됩니다. `~/.claude/settings.json` 의 `autoMemoryEnabled` 가 `false` 가 아니면 자동 메모리가 켜져 있다는 알림 한 줄이 더해집니다 (#1050). PreToolUse 는 가드 판정만 담당하며 컨텍스트를 싣지 않습니다.
