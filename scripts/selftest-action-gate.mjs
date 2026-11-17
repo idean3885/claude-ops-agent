@@ -573,5 +573,37 @@ for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, 
 rmSync(issueHome, { recursive: true, force: true });
 rmSync(storageRepo, { recursive: true, force: true });
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length}건 전부 통과`);
+// 하네스 허용 규칙 형태 대조 (#1082). 임시 HOME 에 사용자 설정을 두고, 갈래(git-force)를 연 상태에서
+// 규칙과 글자 형태가 다른 강제 푸시는 훅이 막고 규칙 형태 단독 실행은 통과하는지 본다.
+const SHAPE_DENY = '형태 불일치';
+const SHAPE_RULES = { permissions: { allow: ['Bash(git push --force-with-lease *)'] } };
+const SHAPE_CASES = [
+  ['규칙 형태 단독은 통과', 'pass', 'git push --force-with-lease origin feature/x', SHAPE_RULES],
+  ['옵션 선행', 'deny', 'git push -q --force-with-lease origin feature/x', SHAPE_RULES],
+  ['= 결합', 'deny', 'git push --force-with-lease=feature/x:abc123 origin feature/x', SHAPE_RULES],
+  ['옵션 선행 + 파이프 (처음 막힌 형태)', 'deny', 'git push -q --force-with-lease=feature/x:abc origin feature/x 2>&1 | tail -3', SHAPE_RULES],
+  ['cd 뒤 규칙 형태는 통과', 'pass', 'cd /tmp && git push --force-with-lease origin feature/x', SHAPE_RULES],
+  ['규칙이 없는 환경은 종전대로 통과', 'pass', 'git push -q --force-with-lease origin feature/x', null],
+  // 2회차 반례: 같은 명령 경로의 다른 행위는 대조하지 않는다 · 더 넓은 규칙이 맞으면 통과
+  ['강제 푸시 규칙만 있으면 원격 브랜치 삭제는 대조하지 않음', 'pass', 'git push --delete origin feature/x', SHAPE_RULES],
+  ['더 넓은 규칙이 맞으면 통과', 'pass', 'git push -q --force-with-lease origin feature/x', { permissions: { allow: ['Bash(*)', 'Bash(git push --force-with-lease *)'] } }],
+  // 주장 검증 차단 반례: 같은 도구의 읽기 규칙만 있으면 쓰기 명령은 대조하지 않는다 (종전대로 통과)
+  ['gh release 읽기 규칙만 있으면 create 는 대조하지 않음', 'pass', 'gh release create v1', { permissions: { allow: ['Bash(gh release view:*)', 'Bash(gh release list *)'] } }, 'repo-release'],
+  ['git 읽기 규칙만 있으면 reset 은 대조하지 않음', 'pass', 'git reset --hard HEAD~1', { permissions: { allow: ['Bash(git status)', 'Bash(git diff *)'] } }, 'worktree-destructive'],
+  ['규칙 머리 옵션이 없는 다른 행위는 대조하지 않음 (gh release)', 'pass', 'gh release create v1', { permissions: { allow: ['Bash(gh release create --draft *)'] } }, 'repo-release'],
+  ['규칙 머리 옵션이 있는데 형태 다름은 차단 (gh release)', 'deny', 'gh release create -q --draft v1', { permissions: { allow: ['Bash(gh release create --draft *)'] } }, 'repo-release'],
+  ['다른 도구 규칙만 있으면 대조하지 않음', 'pass', 'git push -q --force-with-lease origin feature/x', { permissions: { allow: ['Bash(gh pr merge *)'] } }],
+];
+for (const [name, want, command, settings, scope = 'git-force'] of SHAPE_CASES) {
+  const ctx = typeRepo(null);
+  mkdirSync(join(ctx.home, '.claude'), { recursive: true });
+  if (settings) writeFileSync(join(ctx.home, '.claude', 'settings.json'), JSON.stringify(settings));
+  const { got, reason } = runHook(ctx, 'Bash', { command }, scope);
+  rmSync(ctx.home, { recursive: true, force: true });
+  const ok = got === want && (want === 'pass' || reason.includes(SHAPE_DENY));
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  허용 규칙 형태: ${name} — want ${want}, got ${got}${got === 'deny' && !reason.includes(SHAPE_DENY) ? ` (${reason.split('\n')[0]})` : ''}`);
+}
+
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + SHAPE_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);
