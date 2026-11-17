@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.60.1] - 2026-11-17
+
 ### Changed
 * org-flow 를 flow 로 합쳐 여러 레포 작업을 flow 의 여러 레포 가이드로 옮긴다. org-flow 는 안내만 남긴다 (#701).
 
