@@ -7,8 +7,10 @@
  * 같은 모듈을 불러 쓴다 (`what-guard-rules.mjs` 와 같은 꼴). 룰이 호출부마다 복제되면 같은 본문이
  * 경로에 따라 통과·차단으로 달라진다.
  *
- * 분담: 이 모듈은 구조(절 제목 · 불릿 수 · 기존 기록 줄 · 줄글)만 본다. 어휘(대외비 · 구현 세부)는
- * 훅의 대외비 가드 · What 가드가, 나머지(ISS2 제목 등)는 lint 가 본다.
+ * 분담: 이 모듈은 구조(절 제목 · 불릿 수 · 기존 기록 줄 · 줄글 · 중첩 불릿 · 점검 기록 · What · Why 의
+ * 버전 표기)만 본다. 어휘(대외비 · 구현 세부)는 훅의 대외비 가드 · What 가드가, 나머지(ISS2 제목 등)는
+ * lint 가 본다. 버전 표기를 What 가드가 아니라 여기서 보는 것은, What 가드가 PR · 커밋 본문에도 걸려
+ * 버전을 적어야 하는 자리까지 막기 때문이다. 이슈의 What · Why 에서만 금지다 (#1067).
  *
  * 사용:
  *   import { checkIssueBody } from './issue-body-rules.mjs';
@@ -27,6 +29,12 @@ const TOP_BULLET = /^(?:[-*]|\d+\.)\s+/;
 const HEADING = /^#{1,6}\s+/;
 const TABLE = /^\s*\|/;
 const RECORD_LINE = /^(?:[-*]|\d+\.)\s+(?:\*\*)?기존 기록(?:\*\*)?\s*[:：]/;
+const NESTED_BULLET = /^\s+(?:[-*]|\d+\.)\s+/;
+// 점검 기록: 날짜와 점검 낱말이 한 줄에 있다. 「알파 실측 (2026-11-17, …)」 같은 절 머리가 대상이다 (#1067)
+const DATE = /\d{4}-\d{2}-\d{2}/;
+const INSPECTION = /실측|점검|조사|측정/;
+// 버전 표기: 점으로 이은 숫자 셋. IP 주소처럼 넷 이상 이은 것은 넘긴다
+const VERSION = /(?<![\d.])v?\d+\.\d+\.\d+(?![\d.])/;
 
 export const STRUCTURES = {
   // 절 제목이 요소명으로 시작하면 존재로 본다. 레포 템플릿은 `## 재현 절차 (ISS1, ISS4)` 처럼 접미가 달린다.
@@ -108,6 +116,11 @@ export function checkIssueBody(body, structure) {
       if (facts < WHY_MIN || facts > WHY_MAX) {
         failures.push({ check: 'why-count', message: `## Why 배경 사실 불릿은 ${WHY_MIN}~${WHY_MAX}개 (지금 ${facts}개, 기존 기록 줄 제외)` });
       }
+      // 하위 불릿은 2~5개 상한을 우회한다. 배경 사실 하나가 하위 목록을 거느리면 점검 기록이 된다 (#1067)
+      const nested = why.lines.filter(l => NESTED_BULLET.test(l));
+      if (nested.length > 0) {
+        failures.push({ check: 'why-nested', message: `## Why 에 하위 불릿 ${nested.length}개. Why 는 한 단계 불릿만 둔다` });
+      }
       if (records.length !== 1) {
         failures.push({
           check: 'record-line',
@@ -117,6 +130,28 @@ export function checkIssueBody(body, structure) {
         });
       }
     }
+
+    // What · Why 의 버전 표기. 기존 기록 줄은 이전 결정의 릴리스를 가리킬 수 있어 넘긴다
+    for (const sec of [what, why]) {
+      if (!sec) continue;
+      for (const l of sec.lines) {
+        if (RECORD_LINE.test(l)) continue;
+        const m = l.match(VERSION);
+        if (m) {
+          failures.push({ check: 'version', message: `## ${sec.title} 에 버전 표기 「${m[0]}」. 라이브러리 · 버전은 PR 본문으로 (ISS5 금지 항목)` });
+        }
+      }
+    }
+
+    // 점검 기록: 결론이 아니라 점검 과정이다. 결론 한 줄과 원천 링크만 남긴다
+    let inCodeRecord = false;
+    lines.forEach((line, i) => {
+      if (/^\s*```/.test(line)) { inCodeRecord = !inCodeRecord; return; }
+      if (inCodeRecord || RECORD_LINE.test(line)) return;
+      if (DATE.test(line) && INSPECTION.test(line)) {
+        failures.push({ check: 'inspection-record', message: `${i + 1}행: 점검 기록 (날짜 붙은 실측 · 점검). 이슈에는 결론만 두고 수치는 PR · 위키로` });
+      }
+    });
 
     // 줄글: 불릿 · 제목 · 표가 아닌 줄에 문장 종결 2개 이상. ISS5 「What 1줄」의 기계 해석이다.
     // L7: 불릿 한 줄에 문장 종결 2개 이상. 두 문장이 필요하면 판단이 둘이라는 신호다.
