@@ -1,6 +1,6 @@
 ---
 name: flow
-description: 이슈 플로우 단일 진입점 (issue → spec → implement → commit → pr). Git 상태 감지 후 단계별 작업 수행. 트리거 "flow", "플로우", "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "spec", "명세", "멀티레포", "multi-repo", "여러 레포", "org 셋업", "org 시작", "org 완료".
+description: 이슈 플로우 단일 진입점 (issue → spec → implement → commit → pr). Git 상태 감지 후 단계별 작업 수행. 트리거 "flow", "플로우", "이슈", "issue", "커밋", "commit", "PR", "풀리퀘", "리뷰 준비", "머지 준비", "spec", "명세", "멀티레포", "multi-repo", "여러 레포", "org 셋업", "org 시작", "org 완료".
 ---
 
 # Issue Flow Skill
@@ -15,7 +15,7 @@ Git 상태와 무관하게 **명시적 요청**이 있으면 해당 가이드를
 |--------|--------|
 | "이슈 생성", "이슈 시작", "이슈 완료", "issue create/start/complete" | `guides/issue.md` |
 | "커밋", "commit" | `guides/commit.md` |
-| "PR", "풀리퀘", "pull request" | `guides/pr.md` |
+| "PR", "풀리퀘", "pull request", "리뷰 준비", "머지 준비" | `guides/pr.md` |
 | "spec", "명세", "설계" | `guides/spec.md` |
 | "멀티레포", "multi-repo", "여러 레포", "org 셋업", "org 시작", "org 완료" | `guides/multi-repo.md` |
 
@@ -91,7 +91,7 @@ provider의 이슈 조회 API로 현재 이슈 상태를 확인한다.
 | 우선순위 | 판단 기준 | 실행 | 가이드 |
 |---------|----------|------|--------|
 | 1 | PR merged (`gh pr view --json state` → MERGED) | 정리: 브랜치 삭제 + base 전환 | `guides/issue.md` (complete) |
-| 2 | PR 있음, 초안 (`gh pr view --json isDraft` → true) | 작성자 검토 대기. URL 만 전달한다. 리뷰 요청 준비를 요청받으면 단계 표의 「리뷰 요청 준비」(커밋 합치기 · 본문 대조)를 실행하고, 전환 요청을 받으면 준비 완료로 바꾼다 | `guides/pr.md` (초안으로 생성하고 작성자가 먼저 본다) |
+| 2 | PR 있음, 초안 (`gh pr view --json isDraft` → true) | 작성자 검토 대기. URL 만 전달한다. 리뷰 준비를 요청받으면 남은 부분인 단계 표의 「리뷰 준비」 행(커밋 합치기 · 본문 대조 · 주장 검증)을 실행한다. 머지 준비를 요청받으면 초안 그대로 단계 표의 「머지 준비 (머지 전 최종 점검)」를 실행한다. 준비 완료 전환과 리뷰 요청은 작성자가 한다. | `guides/pr.md` (초안으로 생성하고 작성자가 먼저 본다). |
 | 3 | PR 있음, 리뷰 변경요청/대기 | 리뷰 대응 | `guides/pr.md` (리뷰 대응) |
 | 4 | PR 있음, approved, 미머지 | 머지 전 최종 점검 → 상황 보고 → 사람의 판단 (ADR-0028). 업무 · 사상 유형은 웹 머지 안내로 끝난다. 저장소 유형만 사용자가 머지를 승인했으면 GATE 3 으로 들어간다. | `guides/pr.md` (머지 전 최종 점검과 상황 보고) |
 | 5 | 커밋 있음, PR 없음 | 커밋 리뷰 + 초안 PR 생성 | `guides/commit.md` → `guides/pr.md` |

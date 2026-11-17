@@ -368,7 +368,7 @@ function guidanceCase(type, wantMerge) {
 guidanceCase('storage', true);
 guidanceCase('work', false);
 guidanceCase('principle', false);
-// 주장 검증 기록 (#772 · #810). 드래프트 단계 주장 검증을 건너뛴 노트를 통과시키지 않는다. 함수만 불러 쓴다(FINAL_CHECK_LIB=1).
+// 주장 검증 기록 (#772 · #810). 리뷰 준비 주장 검증을 건너뛴 노트를 통과시키지 않는다. 함수만 불러 쓴다(FINAL_CHECK_LIB=1).
 const reviewDir = mkdtempSync(join(tmpdir(), 'final-check-review-'));
 function reviewCase(name, notes, wantPass, reasonHas = '') {
   const file = join(reviewDir, `${typeCaseCount}.md`);

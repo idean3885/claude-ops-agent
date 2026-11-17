@@ -64,7 +64,7 @@ issue · spec · implement · commit · pr 은 별도 스킬이 아니라 `/flow
 
 CLAUDE.md 조각·스킬·훅·서브에이전트의 구조는 예외다. `code.claude.com/docs` 의 문장을 먼저 찾아 그대로 따르고, 벗어날 때만 ADR 에 그 문장을 인용해 반박한다 ([ADR-0016](docs/adr/0016-official-docs-are-the-default.md)).
 
-일반 구현·문서 작업에는 별도 검증 단계를 두지 않는다. 예외는 드래프트 단계의 주장 검증이다. 머지 차단의 통과 조건이라 맥락 없는 에이전트로 주장 표를 원천과 대조한다 ([PR 가이드](skills/flow/guides/pr.md#주장-검증), ADR-0030). [제로베이스 검토](skills/zero-base-review/SKILL.md)는 사용자가 부를 때만 실행한다. 되돌리기 어려운 행위(대외비 노출, 머지, 릴리즈)를 막는 차단은 검증 단계가 아니라 안전장치이므로 그대로 유지한다.
+일반 구현·문서 작업에는 별도 검증 단계를 두지 않는다. 예외는 리뷰 준비의 주장 검증이다. 머지 차단의 통과 조건이라 맥락 없는 에이전트로 주장 표를 원천과 대조한다 ([PR 가이드](skills/flow/guides/pr.md#주장-검증), ADR-0030). [제로베이스 검토](skills/zero-base-review/SKILL.md)는 사용자가 부를 때만 실행한다. 되돌리기 어려운 행위(대외비 노출, 머지, 릴리즈)를 막는 차단은 검증 단계가 아니라 안전장치이므로 그대로 유지한다.
 
 ## 다이어그램
 
@@ -221,6 +221,10 @@ main ────────────────●─────
 - [ ] **`skills/flow/SKILL.md` 상태 표나 `skills/flow/guides/` 의 절 제목을 고쳤으면 자체 점검을 실행한다.** 상태 표가 없는 절을 가리켜도 단계에 들어가기 전까지 신호가 없다.
   ```bash
   node scripts/selftest-flow-routes.mjs
+  ```
+- [ ] **세션 시작 트리거 표에 실리는 스킬(flow · setup)의 트리거(description)를 고쳤으면 PR 단계 트리거 점검을 실행한다.** 「리뷰 요청」이 트리거로 돌아오면 사람이 할 행위를 어시스턴트가 받는다.
+  ```bash
+  node scripts/selftest-pr-stage-triggers.mjs
   ```
 - [ ] **`config/style-rules/metrics/tells_count.py` 를 고쳤으면 자체 점검을 실행한다.** 진단 앵커는 탐지가 무너져도 0 을 내며 조용히 통과한다.
   ```bash
