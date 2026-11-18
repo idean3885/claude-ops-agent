@@ -28,7 +28,7 @@
 #   한 줄(repo · number · title · action)을 더한다. 세션 마무리 훅이 이 파일로 대상 이슈를 확정하고 지운다 (#1050).
 #   세션 번호는 CLAUDE_CODE_SESSION_ID 다. 없으면 쓰지 않는다(마무리는 대화에서 대상을 모은다). 쓰기 실패는 결과를 바꾸지 않는다.
 #
-# 종료 코드: 0 성공, 1 인자 · 본문 검사 · 한자 섞임 검사 실패(생성 안 됨), 2 gh · git 오류, 3 생성됐으나 시작 실패
+# 종료 코드: 0 성공, 1 인자 · 본문 검사 · 한자 섞임 검사 · 글 판정 실패(생성 안 됨), 2 gh · git 오류, 3 생성됐으나 시작 실패
 # 출력: JSON 한 줄. 성공은 stdout, 오류는 stderr. status · number · start(started|skipped|failed) · reason
 
 set -euo pipefail
@@ -243,6 +243,21 @@ cmd_create() {
 
   # 한자 섞임 검사. 제목 · 본문에 한글과 붙은 한자가 있으면 생성하지 않는다 (#1090). 사유는 모듈이 stderr 에 낸다
   node "$SCRIPT_DIR/han-intrusion.mjs" --text "$TITLE" "$BODY" || exit 1
+
+  # 글 판정. 본문이 문서 규칙의 확정 항목(L9 불릿 안 머리말 · PN8 물결표 취소선)에 걸리면 생성하지 않는다 (#1112).
+  # 판정은 문서 규칙 카운터가 하고, PreToolUse 훅의 글 판정 가드와 같은 규칙 목록을 쓴다
+  if [ "${OPS_AGENT_BODY_LINT_DISABLE:-}" != 1 ]; then
+    local LINT
+    LINT=$(python3 "$SCRIPT_DIR/../config/style-rules/metrics/readability_count.py" --only L9,PN8 "$BODY" 2>/dev/null) || true
+    if [ -n "$LINT" ]; then
+      python3 -c '
+import json, sys
+hits = [l.split(" ", 1)[1] if " " in l else l for l in sys.argv[1].splitlines() if l.strip()]
+print(json.dumps({"status": "error", "step": "body-lint", "hits": hits,
+                  "message": "글 판정 실패. 생성하지 않았다. 머리말은 소제목 줄로 올린다 (readability L9) · 물결표는 이스케이프한다 (punctuation PN8)"}, ensure_ascii=False))' "$LINT" >&2
+      exit 1
+    fi
+  fi
 
   # 본문 구조 검사. 실패하면 생성하지 않는다.
   local CHECK

@@ -37,8 +37,8 @@
 | 항목 | 계약 |
 |------|------|
 | 필수 판단 | 생성 시 `--start` \| `--no-start "<사유>"`. 둘 다 없으면 생성하지 않는다. |
-| 본문 검사 | 생성 전에 `scripts/han-intrusion.mjs` 로 제목 · 본문의 한자 섞임을, `scripts/issue-body-rules.mjs` 로 구조를 검사한다. 실패하면 생성하지 않는다. |
-| 종료 코드 | 0 성공 · 1 인자 · 본문 검사 · 한자 섞임 검사 실패(생성 안 됨) · 2 API 오류(생성 실패) · 3 생성됐으나 시작 실패 |
+| 본문 검사 | 생성 전에 `scripts/han-intrusion.mjs` 로 제목 · 본문의 한자 섞임을, `config/style-rules/metrics/readability_count.py --only L9,PN8` 으로 문서 규칙의 확정 항목을, `scripts/issue-body-rules.mjs` 로 구조를 검사한다. 실패하면 생성하지 않는다. 본문을 고치거나 코멘트 · 결과 보고를 쓰는 어댑터도 보내기 전에 앞의 둘을 부른다. |
+| 종료 코드 | 0 성공 · 1 인자 · 본문 검사 · 한자 섞임 검사 · 글 판정 실패(생성 안 됨) · 2 API 오류(생성 실패) · 3 생성됐으나 시작 실패 |
 | 출력 | JSON 한 줄. 성공은 stdout, 오류는 stderr. `status`(`ok` \| `error`) · `start`(`started` \| `skipped` \| `failed`) · `reason`(`--no-start` 사유) · 식별자(키는 provider 가 정한다. github `number`) |
 | 생성 뒤 실패 | 식별자를 반드시 담는다. 이슈는 남아 있으므로 start 를 다시 부른다. |
 | 세션 인덱스 | 생성 · 시작이 성공하면 `~/.claude/ops-agent/.cache/session-issues/<세션 번호>.jsonl` 에 한 줄(`repo` · `number` · `title` · `action`)을 더한다. 세션 번호는 `CLAUDE_CODE_SESSION_ID` 이고 없으면 쓰지 않는다. 쓰기 실패는 결과를 바꾸지 않는다. 세션 마무리 훅이 이 파일로 대상 이슈를 확정하고 지운다. |

@@ -591,6 +591,27 @@ const HAN_CASES = [
   ['비활성은 통과', 'pass', 'git commit -m "fix: 외部 연동"', { env: { OPS_AGENT_HAN_GUARD_DISABLE: '1' } }],
 ];
 for (const [name, want, command, opts] of HAN_CASES) issueCase(name, want, command, { ...opts, label: HAN_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
+
+// 글 판정 가드 (#1112). 트래커 · PR 본문이 문서 규칙의 확정 항목(L9 불릿 안 머리말 · PN8)에 걸리면 거부한다.
+// 고친 본문 · 형식이 정한 키(기존 기록) · 제목 · 본문 쓰기가 아닌 명령은 통과한다. 플로우 진입 가드는 끈다.
+const LINT_DENY = '글 판정 가드';
+const labelBody = bodyOf('label.md', '## 결과\n\n- 확인: 스테이징에서 재현되지 않는다\n- 원인: 캐시 만료가 짧다\n');
+const fixedBody = bodyOf('fixed.md', '## 결과\n\n### 확인\n\n- 스테이징에서 재현되지 않는다\n\n### 원인\n\n- 캐시 만료가 짧다\n');
+const recordBody = bodyOf('record.md', '## Why\n\n- 기존 기록: 없음 · 찾은 자리\n- 배경 사실 하나\n');
+const LINT_CASES = [
+  ['이슈 본문 갱신 --body-file', 'deny', `gh issue edit 3 --body-file ${labelBody}`, { reasonHas: LINT_DENY }],
+  ['이슈 코멘트 --body', 'deny', 'gh issue comment 3 --body "- 확인: 재현 안 됨\n- 원인: 캐시"', { reasonHas: '[L9]' }],
+  ['PR 본문 -F', 'deny', `gh pr create --draft --title "x" -F ${labelBody}`, { reasonHas: LINT_DENY }],
+  ['PR 코멘트 heredoc (--body-file -)', 'deny', "gh pr comment 3 --body-file - <<'EOF'\n- 영향: 없음\nEOF", { reasonHas: LINT_DENY }],
+  ['차단 안내에 판단 재료 점검', 'deny', `gh pr edit 3 --body-file ${labelBody}`, { reasonHas: 'tech-comm TC5 · TC6' }],
+  ['PN8 물결표 취소선', 'deny', 'gh pr comment 3 --body "범위 1~2 와 3~4"', { reasonHas: '[PN8]' }],
+  ['고친 본문은 통과', 'pass', `gh issue edit 3 --body-file ${fixedBody}`],
+  ['형식이 정한 키(기존 기록)는 통과', 'pass', `gh issue edit 3 --body-file ${recordBody}`],
+  ['제목은 보지 않는다', 'pass', 'gh pr edit 3 --title "원인: 캐시"'],
+  ['본문 쓰기가 아닌 명령은 통과', 'pass', `cat ${labelBody}`],
+  ['비활성은 통과', 'pass', `gh issue edit 3 --body-file ${labelBody}`, { env: { OPS_AGENT_BODY_LINT_DISABLE: '1' } }],
+];
+for (const [name, want, command, opts] of LINT_CASES) issueCase(name, want, command, { ...opts, label: LINT_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
 rmSync(issueHome, { recursive: true, force: true });
 rmSync(storageRepo, { recursive: true, force: true });
 
@@ -626,5 +647,5 @@ for (const [name, want, command, settings, scope = 'git-force'] of SHAPE_CASES) 
   console.log(`${ok ? '  OK' : '  XX'}  허용 규칙 형태: ${name} — want ${want}, got ${got}${got === 'deny' && !reason.includes(SHAPE_DENY) ? ` (${reason.split('\n')[0]})` : ''}`);
 }
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + HAN_CASES.length + SHAPE_CASES.length}건 전부 통과`);
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + HAN_CASES.length + LINT_CASES.length + SHAPE_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""readability_count.py PN8(물결표 취소선) 자체 점검.
+"""readability_count.py PN8(물결표 취소선) · L9(불릿 안 머리말) 자체 점검.
 
-소스에서는 보이지 않고 렌더해야 드러나는 결함이라, 검출이 무너지면 신호가 없다.
+PN8 은 소스에서는 보이지 않고 렌더해야 드러나는 결함이라, 검출이 무너지면 신호가 없다.
 예문의 기댓값은 GitHub 마크다운 API(gfm 모드)가 <del> 을 내는지로 정했다 (#823).
+L9 는 트래커 본문을 보내기 전 글 판정이 차단에 쓴다. 검출이 무너지면 머리말 불릿이 신호 없이 전송되고,
+예외가 무너지면 형식이 정한 정의 목록까지 막는다 (#1111 · #1112).
 
     python3 scripts/selftest-readability-count.py
 """
@@ -90,6 +92,22 @@ DOCS = {
 }
 
 
+# L9: (예문, 검출 줄 수). 위반 예문 · 고친 예문 · 정의 목록 예외.
+L9_DOCS = {
+    'report_labels': ('## 결과\n\n- 확인: 재현되지 않는다\n- 원인: 캐시 만료가 짧다\n', 2),
+    'bold_label': ('## 결과\n\n- **영향**: 없음\n', 1),
+    'checkbox_label': ('## 할 일\n\n- [ ] 검출력: 사본에서 실패를 본다\n', 1),
+    'nested_label': ('## 결과\n\n- 결론 한 줄\n  - 근거: 실측 값\n', 1),
+    'fullwidth_colon': ('## 결과\n\n- 원인： 캐시\n', 1),
+    'fixed': ('## 결과\n\n### 확인\n\n- 재현되지 않는다\n\n### 원인\n\n- 캐시 만료가 짧다\n', 0),
+    'meta_after_h1': ('# ADR-1: 제목\n\n- 상태: accepted\n- 일시: 2026-11-18\n\n## 배경\n\n본문\n', 0),
+    'record_repeated': ('### a\n- 말: 하나\n- 글: 둘\n\n### b\n- 말: 셋\n- 글: 넷\n', 0),
+    'format_key': ('## Why\n\n- 기존 기록: 없음 · 찾은 자리\n- 사실\n', 0),
+    'not_label': ('## 본문\n\n- 시간은 10:30 이다\n- 주소 https://x.y 를 연다\n- 예시 (예: a) 를 든다\n- `VERSION`: 버전 파일\n- 도입 문장:\n', 0),
+    'code_fence': ('## 틀\n\n```markdown\n- 확인: 값\n```\n', 0),
+}
+
+
 def main() -> int:
     fails = [f"놓침: {s}" for s in STRIKE if not rc.strikes(s)]
     fails += [f"과검출: {s}" for s in PLAIN if rc.strikes(s)]
@@ -101,9 +119,17 @@ def main() -> int:
     os.unlink(f.name)
     if lines != [3, 4]:
         fails.append(f"check() 진입점: PN8 줄 {lines} (기대 [3, 4])")
+    # L9: check() 진입점으로 파일을 읽어 검출 줄 수를 본다. --only 로 고른 규칙만 내는지도 본다.
+    for k, (doc, want) in L9_DOCS.items():
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(doc)
+        got = sum(1 for _, rule, _ in rc.check(f.name) if rule == "L9")
+        os.unlink(f.name)
+        if got != want:
+            fails.append(f"L9 {k}: 검출 {got}줄 (기대 {want})")
     for f in fails:
         print(f)
-    print(f"PN8 {len(STRIKE) + len(PLAIN) + len(DOCS) + 1}건 중 실패 {len(fails)}건")
+    print(f"PN8 · L9 {len(STRIKE) + len(PLAIN) + len(DOCS) + 1 + len(L9_DOCS)}건 중 실패 {len(fails)}건")
     return 1 if fails else 0
 
 

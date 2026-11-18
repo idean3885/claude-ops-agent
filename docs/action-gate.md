@@ -1,6 +1,6 @@
 # 차단 규칙 레퍼런스
 
-`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 아홉 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
+`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 열 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
 
 이 hook 은 판정만 합니다. 세션 컨텍스트 주입은 `scripts/session-start.mjs` 가 맡습니다.
 
@@ -9,6 +9,7 @@
 | 대외비 가드 | 공개 표면에 노출되는 대외비 키워드·패턴 | 본문 수정 (해제 플래그는 오탐 조정용) |
 | 도메인 What 가드 | 커밋·PR·이슈 본문의 구현 세부 | 본문 수정 |
 | 한자 섞임 가드 | 커밋 메시지 · PR 제목 · 본문 · 코멘트에서 한글과 붙은 한자 | 본문 수정 |
+| 글 판정 가드 | 이슈 · PR 본문 · 코멘트에서 문서 규칙의 확정 항목(불릿 안 머리말 · 물결표 취소선) | 본문 수정 |
 | 이슈 생성 가드 | 어댑터를 거치지 않은 `gh issue create` · `gh api …/issues` 생성 | 어댑터(`scripts/gh-issue.sh create`)로 호출 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
 | 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
@@ -95,6 +96,21 @@
 |---------|--------------|
 | `git commit` 의 메시지(`-m` · `--message` · `-F` · `--file`, `-F -` 면 heredoc 본문) | 커밋 대상 파일 내용. 검사 사례 · 다국어 자원처럼 한자를 정당하게 담는 파일까지 막게 됩니다. |
 | `gh pr create · edit · comment · review` 의 제목 · 본문(`--title` · `--body` · `--body-file`, 단축 옵션 포함) | 이슈. 이슈 어댑터가 같은 모듈로 봅니다. |
+
+---
+
+## 글 판정 가드
+
+다른 사람이 읽는 글(결과 보고 · 이슈 본문 · PR 본문 · 코멘트)이 문서 규칙 판정 없이 전송되는 것을 막습니다 (#1112). 글쓰기 · 교정 스킬과 기술 커뮤니케이션 전문가는 부를 때만 돌고, 편집 뒤 교정 훅은 마커가 있는 프로젝트 파일에만 발동하며, 이슈 어댑터는 생성만 검사했습니다. 그래서 본문 갱신 · 코멘트 · PR 본문은 아무 판정도 거치지 않고 전송됐습니다.
+
+판정은 문서 규칙 카운터(`config/style-rules/metrics/readability_count.py --only L9,PN8`)가 하고, 이 훅과 이슈 생성 어댑터는 부르기만 합니다. 다른 트래커의 본문 쓰기 어댑터도 같은 명령을 부릅니다 ([PROVIDER.md](../providers/PROVIDER.md) 「어댑터 계약」).
+
+| 보는 것 | 보지 않는 것 |
+|---------|--------------|
+| `gh issue create · edit · comment` 와 `gh pr create · edit · comment · review` 의 본문(`--body` · `--body-file` · 단축 옵션, `--body-file -` 면 heredoc 본문) | 제목. 한 줄이라 불릿 규칙이 걸리지 않습니다. 이슈 생성 어댑터 호출은 어댑터가 스스로 판정합니다. |
+| 확정 항목: 불릿 안 머리말(readability L9) · 물결표 취소선(punctuation PN8) | 그 밖의 카운터 항목. 문단 길이 같은 항목은 의도를 읽어야 해 차단하면 과검출로 비활성이 일상이 됩니다. 서술 종결 부호(PN7)는 이슈 본문 불릿을 완결 문장으로 쓰는 규칙(readability L7 적용 범위)과 부딪쳐 넣지 않습니다. |
+
+받는 사람의 판단 재료(무엇이 대상인지 · 「영향 없음」의 근거, `experts/tech-comm.md` TC5 · TC6)는 기계로 가를 수 없어 막지 않습니다. 차단 안내에 점검 질문으로 싣고, 보내기 직전 확인은 flow 이슈 가이드 「보내기 전 글 판정」이 맡습니다. 보낼 때마다 한 번씩 멈추게 하는 방식은 모든 쓰기에 왕복을 더하면서 판정을 했는지는 증명하지 못해 택하지 않았습니다.
 
 ---
 
@@ -497,6 +513,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 대외비 가드 | `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` | `OPS_AGENT_CONFIDENTIAL_DISABLE=1` |
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
 | 한자 섞임 가드 | 없음 | `OPS_AGENT_HAN_GUARD_DISABLE=1` (이슈 어댑터의 검사도 함께 끕니다) |
+| 글 판정 가드 | 없음 | `OPS_AGENT_BODY_LINT_DISABLE=1` (이슈 어댑터의 판정도 함께 끕니다) |
 | 이슈 생성 가드 | `OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1` | `OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1` |
 | 초안 PR 가드 | `OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1` | `OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
