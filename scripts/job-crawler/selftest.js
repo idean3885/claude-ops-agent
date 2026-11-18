@@ -95,6 +95,33 @@ test('939 --url 은 프로파일 targets 를 건너뛰고 그 대상 하나만 �
   assert.throws(() => selectTargets(profile, { only: [], adhoc: { url: A } }), /함께/);
 });
 
+const job = (title, score, reasons) => ({
+  title, url: `https://a.example/${encodeURIComponent(title)}`, score, verdict: '불일치', reasons,
+});
+
+test('1053 생략분의 배제 공고는 제목·URL·규칙 라벨과 점수·근거를 남기고 건수를 따로 센다', () => {
+  const neg = [{ label: '신입', delta: -10 }];
+  const jobs = [
+    job('상위1', 2, [{ label: 'x', delta: 2 }]),
+    job('상위2', 1, [{ label: 'x', delta: 1 }]),
+    job('생략-일반', 0, []),
+    job('생략-배제', -10, neg),
+  ];
+  const r = { name: 'A', url: A, count: jobs.length, jobs };
+  const md = renderReport([r], { ...ctx, detail: false, restCap: 2 });
+  assert.match(md, /임계 미만 2건, 이 중 배제 규칙 1건은 생략했습니다/);
+  assert.match(md, /\[생략-배제\]\(https:\/\/a\.example\/%EC[^)]*\)/);
+  assert.match(md, /\| -10 \|[^\n]*\| 신입 \| 신입\(-10\) \|/);
+  assert.doesNotMatch(md, /\[생략-일반\]/);
+});
+
+test('1053 배제 공고가 없으면 생략 줄에 배제 건수를 붙이지 않는다', () => {
+  const jobs = [job('a', 2, []), job('b', 1, []), job('c', 0, [])];
+  const md = renderReport([{ name: 'A', url: A, count: 3, jobs }], { ...ctx, detail: false, restCap: 2 });
+  assert.match(md, /임계 미만 1건은 생략했습니다/);
+  assert.doesNotMatch(md, /배제 규칙/);
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {
