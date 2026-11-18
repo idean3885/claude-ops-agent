@@ -32,7 +32,9 @@ const ISS5_OK = '## What\n한 줄\n\n## Why\n- 사실 1\n- 사실 2\n- 기존 �
 const BODY_CASES = [
   ['ISS5 정상', 'iss5', ISS5_OK, []],
   ['ISS5 What 2줄', 'iss5', ISS5_OK.replace('한 줄\n', '한 줄\n둘째 줄\n'), ['what-one-line']],
-  ['ISS5 Why 1개', 'iss5', '## What\n한 줄\n\n## Why\n- 사실 1\n- 기존 기록: 없음 · docs\n', ['why-count']],
+  // 이유가 한 줄로 서는 이슈는 통과한다. 하한 1 은 배경이 빈 Why 를 막는 최소선이다 (#1077)
+  ['ISS5 Why 1개는 통과', 'iss5', '## What\n한 줄\n\n## Why\n- 사실 1\n- 기존 기록: 없음 · docs\n', []],
+  ['ISS5 Why 0개 (기존 기록 줄만)', 'iss5', '## What\n한 줄\n\n## Why\n- 기존 기록: 없음 · docs\n', ['why-count']],
   ['ISS5 Why 6개', 'iss5', '## What\n한 줄\n\n## Why\n- 1\n- 2\n- 3\n- 4\n- 5\n- 6\n- 기존 기록: 없음 · docs\n', ['why-count']],
   ['ISS5 기존 기록 줄 없음', 'iss5', '## What\n한 줄\n\n## Why\n- 사실 1\n- 사실 2\n', ['record-line']],
   ['ISS5 기존 기록 줄은 계수에서 뺀다 (사실 5 + 기록 1)', 'iss5', '## What\n한 줄\n\n## Why\n- 1\n- 2\n- 3\n- 4\n- 5\n- 기존 기록: 이전 A · 지금 B · 바뀐 점 C\n', []],
