@@ -390,6 +390,18 @@ function guidanceCase(type, wantMerge) {
 guidanceCase('storage', true);
 guidanceCase('work', false);
 guidanceCase('principle', false);
+// 미해결 리뷰 스레드 (#1130). 실패로 세지 않고 목록만 안내한다. 조회 실패만 실패 b 다. 함수만 불러 쓴다(FINAL_CHECK_LIB=1).
+function threadCase(name, rc, threads, wantStatus, wantLines) {
+  const res = spawnSync('bash', ['-c', 'set -uo pipefail; FINAL_CHECK_LIB=1 . "$1"; thread_notice "$2" "$3"', 'selftest', FC, String(rc), threads], { encoding: 'utf8' });
+  const lines = (res.stdout || '').split('\n').filter(Boolean);
+  const ok = res.status === wantStatus && JSON.stringify(lines) === JSON.stringify(wantLines);
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  리뷰 스레드: ${name} — exit ${res.status}, ${lines.length}줄`);
+}
+threadCase('미해결 2건은 안내만', 0, 'a.java:1 (x)\nb.java:- (y)', 0, ['안내 b: 미해결 리뷰 스레드 2건. 실패로 세지 않는다. 상황 보고에 아래 목록을 싣는다', '  - a.java:1 (x)', '  - b.java:- (y)']);
+threadCase('미해결 0건은 조용히 통과', 0, '', 0, []);
+threadCase('조회 실패는 실패', 1, '', 1, []);
 // 주장 검증 기록 (#772 · #810). 리뷰 준비 주장 검증을 건너뛴 노트를 통과시키지 않는다. 함수만 불러 쓴다(FINAL_CHECK_LIB=1).
 const reviewDir = mkdtempSync(join(tmpdir(), 'final-check-review-'));
 function reviewCase(name, notes, wantPass, reasonHas = '') {
