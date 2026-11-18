@@ -229,7 +229,7 @@ main ────────────────●─────
   ```bash
   node scripts/selftest-flow-routes.mjs
   ```
-- [ ] **세션 시작 트리거 표에 실리는 스킬(flow · setup)의 트리거(description)를 고쳤으면 PR 단계 트리거 점검을 실행한다.** 「리뷰 요청」이 트리거로 돌아오면 사람이 할 행위를 어시스턴트가 받는다.
+- [ ] **세션 시작 트리거 표에 실리는 스킬(flow · setup · backlog-refinement)의 트리거(description)를 고쳤으면 PR 단계 트리거 점검을 실행한다.** 「리뷰 요청」이 트리거로 돌아오면 사람이 할 행위를 어시스턴트가 받는다.
   ```bash
   node scripts/selftest-pr-stage-triggers.mjs
   ```
@@ -274,6 +274,10 @@ main ────────────────●─────
 - [ ] **`skills/transcribe/cleanup.py` 를 고쳤으면 자체 점검을 실행한다.** 교정은 한 번에 끝내므로 치환이 무너지면 틀린 정리본이 그대로 굳는다.
   ```bash
   python3 scripts/selftest-transcribe-cleanup.py
+  ```
+- [ ] **`scripts/backlog-log.py` 를 고쳤으면 자체 점검을 실행한다.** 값 검사가 무너지면 처리 수가 정리 전 수를 넘는 줄이 쌓여 줄어든 비율이 틀린다.
+  ```bash
+  python3 scripts/selftest-backlog-log.py
   ```
 - [ ] **`scripts/lessons-judge.py` 를 고쳤으면 자체 점검을 실행한다.** 판정은 작업 시간 밖에서 조용히 돌아 재귀 가드 · 대상 선정 · 고지 조건이 무너져도 신호가 없다.
   ```bash

@@ -146,6 +146,8 @@ function buildSkillContext(provider) {
   const TABLE_SKILLS = [
     { name: 'flow', extra: 'natural language change request' },
     { name: 'setup' },
+    // 「이슈 정리」는 flow 의 「이슈」와 겹친다. 같은 표에 두어 더 구체적인 행이 보이게 한다 (#1134)
+    { name: 'backlog-refinement' },
   ];
 
   const rows = TABLE_SKILLS.map(({ name, extra }) => {
