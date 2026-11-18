@@ -142,6 +142,11 @@ git checkout {타겟브랜치} && git pull
 ```
 워크트리 사용 시: `git worktree remove ../{워크트리 경로}`
 
+레포에 `scripts/post-merge-sync.sh` 가 있으면 정리 끝에 실행한다 (flow 「머지 안전장치」). 실패하면 출력의 원인을 보고하고 멈춘다.
+```bash
+[ -x scripts/post-merge-sync.sh ] && ./scripts/post-merge-sync.sh
+```
+
 #### 코드 없는 이슈 (브랜치 없음)
 
 **이슈 닫기**:
