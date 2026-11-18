@@ -7,7 +7,7 @@
 | `base/purpose.md` | 문서의 목적과 범위 (PU1~PU6). 쓰기 전에 판정하는 축(PU1·PU2)을 가진 유일한 파일 |
 | `base/ai-tells.md` | AI 티 분류 (A~K, im-not-ai MIT 차용) |
 | `base/readability.md` | 구조 가독성 (P·H·L·C·V·CJ·BQ·LB·SC) |
-| `base/tone.md` | 저자 톤 (T1~T24) |
+| `base/tone.md` | 저자 톤 (T1~T25) |
 | `base/punctuation.md` | 한국어 구두점 (PN1\~PN8) |
 | `base/length.md` | 산출물 분량 (LN1~LN2) |
 | `base/terms.md` | 표준 용어 목록. 용어 교정으로 바로잡은 말과 문장 시험 예문(글 · 말) |

@@ -72,7 +72,7 @@ Weaver 는 예술에서는 효과 판단에 미적 기준이 들어간다고 적
 | TC2 | readability V3 · P3, purpose 「짧은 글」, issue ISS5 · ISS7, deck D1 · D2, poc PC4, profiles 목적 분류, tone T18 |
 | TC3 | readability P1 · P5 · P12 · L2 · L3 · L7 · L9 · H4, purpose PU5, length LN1, info I2 · I3, ai-tells C-1 · C-2 · C-3 |
 | TC4 | readability P8 · P9 · P11, tone T2 · T5 · T8 · T9 · T17 · T20 · T23, terms, ai-tells A · F · H · I · K 계열 |
-| TC5 | readability P10 · SC1 · P6 · CJ3, tone T6 · T21 · T22 · T24, ai-tells B-3 · I-7, info I1, blog B4, architecture AR4 · AR5 |
+| TC5 | readability P10 · SC1 · P6 · CJ3, tone T6 · T21 · T22 · T24 · T25, ai-tells B-3 · I-7, info I1, blog B4, architecture AR4 · AR5 |
 | TC6 | purpose PU4 · PU6, readability L5, tone T11 · T14, ai-tells D · G 계열, poc PC3 · PC5 · PC7 · PC8, architecture AR9 · AR15 |
 | TC7 | purpose 「짧은 글」, issue ISS1 · ISS4, poc PC2 · PC6 |
 | TC8 | readability P11, tone T5, terms 등재 조건(말 예문) |
