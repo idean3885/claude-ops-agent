@@ -3,7 +3,7 @@
  * selftest-issue-adapter.mjs — 이슈 생성 · 시작 어댑터 자체 점검 (#696).
  *
  * 둘을 본다.
- *   1. `issue-body-rules.mjs` 가 본문 구조(ISS1 · ISS5 · ISS6 · ISS7)를 결정적으로 가르는가
+ *   1. `issue-body-rules.mjs` 가 본문 구조(ISS1 · ISS5 · ISS6 · ISS7 · ISS10)를 결정적으로 가르는가
  *   2. `gh-issue.sh create|start` 가 계약(필수 판단 · 종료 코드 · 출력 · 시작 체인)을 지키는가
  *      — 가짜 `gh` · `git` 을 PATH 앞에 두고 호출 기록으로 판정한다. 네트워크를 쓰지 않는다.
  *
@@ -73,6 +73,9 @@ const BODY_CASES = [
   ['ISS6 절 누락', 'iss6', '## 측정 조건\nx\n\n## 결과\ny\n', ['section', 'section']],
   ['ISS7 정상 + 산문 허용', 'iss7', '## 판정\n한 문장이다. 둘이다.\n\n## 확정된 외부 조건\nx\n\n## 달라지는 것\ny\n\n## 설계 기준\nz\n\n## 남은 논의\nw\n', []],
   ['ISS7 절 누락', 'iss7', '## 판정\nx\n', ['section', 'section', 'section', 'section']],
+  // #1108: 설계 이슈(ISS10)도 구조 목록에서 고를 수 있다
+  ['ISS10 정상 + 산문 허용', 'iss10', '## 문제\n막힌다. 둘이다.\n\n## 필수 조건\n- x\n\n## 현재 상태\n```\nA -> B\n```\n\n## 미결 질문\n- 어디서 정하는가?\n', []],
+  ['ISS10 절 누락', 'iss10', '## 문제\nx\n\n## 미결 질문\n- y?\n', ['section', 'section']],
   ['모르는 구조', 'iss9', ISS5_OK, ['structure']],
 ];
 for (const [name, structure, body, wantChecks] of BODY_CASES) {

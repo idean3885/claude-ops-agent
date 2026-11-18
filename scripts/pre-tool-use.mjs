@@ -397,7 +397,7 @@ if (!DISABLE) {
           const msg = `${header} 이슈 생성은 어댑터로만 합니다. 직접 호출:\n${issueHits.map(h => `  - ${h}`).join('\n')}\n\n` +
             `어댑터 (본문 구조 검사 → 라벨 → 생성 → 시작 결정을 한 호출로):\n` +
             `  bash ~/.claude/ops-agent/current/scripts/gh-issue.sh create --title "<제목>" --body-file <본문.md> --type <feat|fix|docs|refactor|chore> \\\n` +
-            `       (--start [--worktree|--checkout] | --no-start "<사유>") [-R <레포>] [--structure <iss1|iss5|iss6|iss7>]\n` +
+            `       (--start [--worktree|--checkout] | --no-start "<사유>") [-R <레포>] [--structure <iss1|iss5|iss6|iss7|iss10>]\n` +
             `필수 판단 둘:\n` +
             `  - 시작 결정: 지금 손대는 이슈면 --start, 백로그 · 후속이면 --no-start "<사유>"\n` +
             `  - 기존 기록: ISS5 본문 ## Why 에 「- 기존 기록: {이전 · 지금 · 바뀐 점 | 없음 · 찾은 자리}」 한 줄 (ADR-0027)\n` +

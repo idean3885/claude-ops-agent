@@ -47,6 +47,7 @@ export const STRUCTURES = {
   iss5: { sections: ['What', 'Why'], forbidden: ['변경 범위', '구현 방안', '검증 절차'] },
   iss6: { sections: ['측정 조건', '합격 기준', '결과', '발견 사항'] },
   iss7: { sections: ['판정', '확정된 외부 조건', '달라지는 것', '설계 기준', '남은 논의'] },
+  iss10: { sections: ['문제', '필수 조건', '현재 상태', '미결 질문'] },
 };
 
 export const WHY_MIN = 2;
@@ -83,13 +84,13 @@ function hasSection(sections, prefix) {
 
 /**
  * @param {string} body
- * @param {'iss1'|'iss5'|'iss6'|'iss7'} structure
+ * @param {'iss1'|'iss5'|'iss6'|'iss7'|'iss10'} structure
  * @returns {{ok: boolean, structure: string, failures: Array<{check: string, message: string}>}}
  */
 export function checkIssueBody(body, structure) {
   const spec = STRUCTURES[structure];
   if (!spec) {
-    return { ok: false, structure, failures: [{ check: 'structure', message: `모르는 구조: ${structure}. iss1 · iss5 · iss6 · iss7 중 하나` }] };
+    return { ok: false, structure, failures: [{ check: 'structure', message: `모르는 구조: ${structure}. iss1 · iss5 · iss6 · iss7 · iss10 중 하나` }] };
   }
   const failures = [];
   const lines = stripCodeBlocks(body).split('\n');
