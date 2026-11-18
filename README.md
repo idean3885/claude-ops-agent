@@ -179,6 +179,7 @@ claude plugin install ops-agent@ops-agent
 | [docs/design-philosophy.md](docs/design-philosophy.md) | 설계 판단과 되돌린 결정 |
 | [docs/action-gate.md](docs/action-gate.md) | 차단 규칙 |
 | [docs/lessons.md](docs/lessons.md) | 레슨런 수집·자산화, 재발 분석 |
+| [docs/learning-flow.md](docs/learning-flow.md) | 이해가 필요한 이슈의 진행 순서 |
 | [docs/adr/](docs/adr/) | 개별 결정 기록 |
 | [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | 이 레포의 작업 규칙, 수정 플로우(이슈 전 갭 확인 · 컨펌 전 재검사), 반영 경로 |
 
