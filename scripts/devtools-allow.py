@@ -15,6 +15,10 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
   devtools-allow.py --lang <code> [--project <dir>] [--server <name>] [--dry-run]
   사용자에게 건네는 경로: ~/.claude/ops-agent/current/scripts/devtools-allow.py
     pattern    예: 'http://127.0.0.1:*/*'  'https://*.example.com/*'
+               셸이 `*` 를 파일 이름 확장으로 지우지 않게 작은따옴표로 감싼다. 끝이 `/` 인 패턴은
+               `*` 가 지워진 것으로 보고 거부한다(종료 1)
+               http 패턴이 목록에 있으면 `--chromeArg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable` 도 함께 둔다
+               (Chrome 이 http 주소를 https 로 먼저 시도해 허용 목록에서 막히는 것을 막는다)
                생략하면 격리 인자만 맞춘다
     --check    로컬 · 사용자 범위 등록을 모두 훑어 격리가 아닌 등록(격리 인자 없음 ·
                고정 프로필 지정 · 떠 있는 브라우저에 붙음)과 고칠 명령을 낸다.
@@ -34,7 +38,7 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
                세션 시작 뒤 등록하면 /reload-plugins 뒤 /mcp 에서 그 서버를 연결한다.
                쓰지 않을 때는 등록 디렉토리에서 `claude mcp remove <server>-<code> -s <범위>` 로 지운다
 
-출력: JSON {status, scope, project, added[], already[], isolated_added, args}
+출력: JSON {status, scope, project, added[], already[], isolated_added, https_upgrade_off_added, args}
   status: ok | noop | dry-run | error
   profile_removed: 격리를 맞추며 걷은 인자(고정 프로필 지정 · 격리 끄기)
   --check: JSON {status: ok | missing | none, checked, missing[{scope, project, problem, fix, message?}], stale[]}
@@ -75,6 +79,16 @@ FIXED_PROFILE = ("--userDataDir", "--user-data-dir")
 # 이미 떠 있는 브라우저에 붙는 인자(별칭 포함). 격리 프로필을 쓰지 않는다
 CONNECT = ("--autoConnect", "--auto-connect", "--browserUrl", "--browser-url", "-u",
            "--wsEndpoint", "--ws-endpoint", "-w")
+# Chrome 은 http 주소 이동을 https 로 먼저 시도한다(HttpsUpgrades 기능). 그러면 http 패턴만 허용해도 https 주소가
+# 허용 목록에서 막혀 「인터넷 연결 끊김」으로 보인다. 그 기능을 끄는 Chrome 실행 인자를 MCP 의 --chromeArg 로 넘긴다.
+# 근거: 기능 이름 HttpsUpgrades ("Enables automatically upgrading main frame navigations to HTTPS")
+#   https://github.com/chromium/chromium/blob/main/chrome/common/chrome_features.cc  (BASE_FEATURE(kHttpsUpgrades, ...))
+# 스위치 이름 --disable-features (쉼표로 잇는 기능 이름 목록)
+#   https://github.com/chromium/chromium/blob/main/base/base_switches.cc  (kDisableFeatures = "disable-features")
+# 실측(Chrome 157, 2026-11-18, http://example.com/ 이동): HttpsUpgrades 만 끄면 여전히 https 로 바뀌고,
+# HttpsFirstBalancedModeAutoEnable 을 함께 꺼야 http 로 남는다. 둘 중 하나만 끄면 둘 다 https 다 (#1123)
+HTTPS_UPGRADES = ("HttpsUpgrades", "HttpsFirstBalancedModeAutoEnable")
+DISABLE_FEATURES = "--chromeArg=--disable-features="
 # 허용 패턴과 함께 쓸 수 없다고 선언된 인자 (1.9.0 mcp-options.js conflicts)
 BLOCKED = ("--blockedUrlPattern", "--blocked-url-pattern")
 
@@ -220,6 +234,30 @@ def ensure_isolated(args):
     pkg = next((i for i, a in enumerate(new_args) if "chrome-devtools-mcp" in a), None)
     new_args.insert(pkg + 1 if pkg is not None else len(new_args), ISOLATED)
     return new_args, True, removed
+
+
+def has_http_pattern(args):
+    return any(p.lower().startswith("http://") for p in existing_patterns(args))
+
+
+def ensure_https_upgrades_off(args):
+    """http 패턴이 있으면 https 자동 전환을 끄는 인자를 맞춘다. (새 인자, 바꿨는가)
+    이미 --disable-features 인자가 있으면 그 목록에 빠진 기능 이름만 더한다."""
+    if not has_http_pattern(args):
+        return args, False
+    for i, a in enumerate(args):
+        if a.startswith(DISABLE_FEATURES):
+            names = [n for n in a[len(DISABLE_FEATURES):].split(",") if n]
+            missing = [n for n in HTTPS_UPGRADES if n not in names]
+            if not missing:
+                return args, False
+            return args[:i] + [DISABLE_FEATURES + ",".join(names + missing)] + args[i + 1:], True
+    return args + [DISABLE_FEATURES + ",".join(HTTPS_UPGRADES)], True
+
+
+def glob_stripped(pattern):
+    """끝이 `/` 인 패턴: 셸이 끝의 `*` 를 파일 이름 확장으로 지운 채 저장된 것일 수 있다"""
+    return pattern.endswith("/")
 
 
 def all_entries(conf, server):
@@ -375,6 +413,12 @@ def main():
     if bad:
         print(json.dumps({"status": "error", "message": f"패턴은 scheme 을 포함해야 한다: {bad}"}, ensure_ascii=False))
         return 1
+    stripped = [p for p in a.patterns if glob_stripped(p)]
+    if stripped:
+        print(json.dumps({"status": "error", "step": "glob",
+                          "message": f"끝이 `/` 인 패턴은 셸이 끝의 `*` 를 지운 것일 수 있어 받지 않는다. 패턴을 작은따옴표로 감싸 `/*` 로 끝내 다시 건넨다(예: 'http://127.0.0.1:*/*'): {stripped}"},
+                         ensure_ascii=False))
+        return 1
     broad = [p for p in a.patterns if too_broad(p)]
     if broad:
         print(json.dumps({"status": "error", "step": "broad",
@@ -412,9 +456,11 @@ def main():
         return 2
     new_args, added, already = add_patterns(args, a.patterns)
     new_args, isolated_added, profile_removed = ensure_isolated(new_args)
+    new_args, https_off_added = ensure_https_upgrades_off(new_args)
     out = {"scope": scope, "project": project, "added": added, "already": already,
-           "isolated_added": isolated_added, "profile_removed": profile_removed, "args": new_args}
-    if not added and not isolated_added:
+           "isolated_added": isolated_added, "https_upgrade_off_added": https_off_added,
+           "profile_removed": profile_removed, "args": new_args}
+    if not added and not isolated_added and not https_off_added:
         print(json.dumps({"status": "noop", **out}, ensure_ascii=False))
         return 0
     if a.dry_run:

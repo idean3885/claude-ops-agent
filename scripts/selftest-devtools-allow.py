@@ -115,14 +115,14 @@ with tempfile.TemporaryDirectory() as tmp:
 
     rc, out, calls = run(tmp, conf, ["http://127.0.0.1:*/*"], sub)
     check("하위 디렉토리에서 가장 가까운 로컬 등록을 고른다", out.get("scope") == "local" and out.get("project") == org, out)
-    check("패턴을 뒤에 더한다", out["args"][-2:] == ["--allowedUrlPattern", "http://127.0.0.1:*/*"], out["args"])
+    check("패턴을 뒤에 더한다", out["args"][-3:-1] == ["--allowedUrlPattern", "http://127.0.0.1:*/*"], out["args"])
     check("기존 인자를 보존한다", out["args"][:len(BASE)] == BASE)
     check("remove → add-json 순서로 같은 범위 · 등록 디렉토리에서 부른다",
           len(calls) == 2 and calls[0] == f"{org}|mcp remove chrome-devtools -s local"
           and calls[1].startswith(f"{org}|mcp add-json chrome-devtools ") and calls[1].endswith(" -s local"), calls)
     sent = json.loads(calls[1].split("|", 1)[1][len("mcp add-json chrome-devtools "):-len(" -s local")])
     check("CLI 에 넘긴 등록은 패턴을 더한 인자이고 type · command · env 를 보존한다",
-          sent == {**entry, "args": BASE + ["--allowedUrlPattern", "http://127.0.0.1:*/*"]}, sent)
+          sent == {**entry, "args": BASE + ["--allowedUrlPattern", "http://127.0.0.1:*/*", "--chromeArg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable"]}, sent)
     check("성공 출력에 다시 연결 안내가 있다", out.get("next") == "/mcp → chrome-devtools → Reconnect", out)
 
     near = {**entry, "args": BASE + ["--allowedUrlPattern", "https://near/*"]}
@@ -337,6 +337,36 @@ with tempfile.TemporaryDirectory() as tmp:
     check("--lang 은 언어 부호 형식이 아니면 CLI 없이 종료 1", rc == 1 and not calls, (rc, out, calls))
     rc, out, calls = run(tmp, conf, ["--lang", "en", "--dry-run"], sub)
     check("--lang --dry-run 은 CLI 를 부르지 않는다", rc == 0 and out["status"] == "dry-run" and not calls, (rc, out, calls))
+
+    # #1123: http 패턴이면 https 자동 전환(HttpsUpgrades)을 끄는 인자를 함께 둔다
+    OFF = "--chromeArg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable"
+    rc, out, calls = run(tmp, conf, ["http://127.0.0.1:*/*"], sub)
+    check("http 패턴을 더하면 https 자동 전환을 끄는 인자를 함께 단다",
+          rc == 0 and out["args"][-3:] == ["--allowedUrlPattern", "http://127.0.0.1:*/*", OFF]
+          and out["https_upgrade_off_added"] is True and OFF in calls[1], (rc, out["args"]))
+    rc, out, calls = run(tmp, conf, ["https://b.example.com/*"], sub)
+    check("https 패턴만이면 그 인자를 달지 않는다", OFF not in out["args"] and out["https_upgrade_off_added"] is False, out["args"])
+    with_off = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowedUrlPattern", "http://h/*", OFF]}}}}}
+    rc, out, calls = run(tmp, with_off, ["http://h/*"], sub)
+    check("이미 http 패턴과 그 인자가 있으면 noop", rc == 0 and out["status"] == "noop" and not calls, (rc, out))
+    only_http = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowedUrlPattern", "http://h/*"]}}}}}
+    rc, out, calls = run(tmp, only_http, [], sub)
+    check("http 패턴은 있고 인자가 없는 등록은 인자만 맞춘다", rc == 0 and out["status"] == "ok" and out["args"][-1] == OFF, (rc, out))
+    merged = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--chromeArg=--disable-features=Foo"]}}}}}
+    rc, out, calls = run(tmp, merged, ["http://h/*"], sub)
+    check("기존 --disable-features 인자가 있으면 그 목록에 더한다",
+          out["args"].count("--chromeArg=--disable-features=Foo,HttpsUpgrades,HttpsFirstBalancedModeAutoEnable") == 1
+          and not any(a == OFF for a in out["args"]), out["args"])
+    # 실측: HttpsUpgrades 하나만 끄면 Chrome 157 은 여전히 https 로 바꾼다. 한쪽만 꺼진 등록은 빠진 이름을 더한다
+    half = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowedUrlPattern", "http://h/*", "--chromeArg=--disable-features=HttpsUpgrades"]}}}}}
+    rc, out, calls = run(tmp, half, [], sub)
+    check("https 전환 기능이 하나만 꺼진 등록은 빠진 이름을 더한다",
+          rc == 0 and out["status"] == "ok" and OFF in out["args"] and out["args"].count(OFF) == 1, (rc, out["args"]))
+    # #1123: 셸 글로빙이 끝 `*` 를 지운 패턴
+    for bad in ["http://127.0.0.1:8080/", "http://127.0.0.1:*/", "https://*.example.com/"]:
+        rc, out, calls = run(tmp, conf, [bad], sub)
+        check(f"끝이 / 인 패턴은 CLI 없이 종료 1 로 거부하고 작은따옴표 안내를 한다: {bad}",
+              rc == 1 and out.get("step") == "glob" and "작은따옴표" in out["message"] and not calls, (rc, out))
 
 CONTROL = "https://*#@a.example.com/*"  # 스크립트가 a.example.com 으로 보던 우회 표본. 대조가 이것을 잡아야 의미가 있다
 hosts = urlpattern_hosts(ACCEPTED + [CONTROL])

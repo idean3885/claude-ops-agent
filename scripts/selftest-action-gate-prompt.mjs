@@ -9,7 +9,7 @@
  * 종료 코드: 실패 1, 전부 통과 0
  */
 import { spawnSync } from 'child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -119,6 +119,87 @@ scenario(home => {
   prompt(home, `! ${CMD} on git-force`);
   const viaChat = readFileSync(marker(home), 'utf8').replace(/"expiresAt":\d+/, '');
   check('터미널로 연 마커와 모양이 같다', once.status === 0 && viaTerminal === viaChat, `${viaTerminal.trim()} / ${viaChat.trim()}`);
+});
+
+// 2-1. 브라우저 허용 목록 추가 줄 (#1123). 게이트 개방과 같은 판정: 메시지 전체가 그 한 줄일 때만
+console.log('2-1. 허용 목록 줄');
+const ALLOW = 'python3 ~/.claude/ops-agent/current/scripts/devtools-allow.py';
+const allowAccepts = [
+  [`! ${ALLOW} 'http://127.0.0.1:*/*'`, ['http://127.0.0.1:*/*']],
+  [`${ALLOW} http://127.0.0.1:*/*`, ['http://127.0.0.1:*/*']],
+  [`  ${ALLOW} 'https://*.example.com/*' 'http://a.example.com:8080/*'  `, ['https://*.example.com/*', 'http://a.example.com:8080/*']],
+  [`! ${ALLOW} --server devtools-b --dry-run 'http://n/*'`, ['--server', 'devtools-b', '--dry-run', 'http://n/*']],
+  [`! ${ALLOW} --project '/tmp/my proj' --user 'http://n/*'`, ['--project', '/tmp/my proj', '--user', 'http://n/*']],
+];
+for (const [text, args] of allowAccepts) {
+  const g = parseGatePrompt(text);
+  check(`받음: ${text.trim()}`, g && g.action === 'devtools-allow' && JSON.stringify(g.args) === JSON.stringify(args), JSON.stringify(g));
+}
+const allowRejects = [
+  `허용해 주세요 ${ALLOW} 'http://a/*'`,
+  `${ALLOW} 'http://a/*'\n그리고 진행`,
+  `${ALLOW} 'http://a/*'; rm -rf ~`,
+  `${ALLOW} 'http://a/*' && echo hi`,
+  `${ALLOW} 'http://a/*' | cat`,
+  `${ALLOW} $(echo http://a/*)`,
+  `${ALLOW} "http://a/*"`,
+  `${ALLOW} http://a/* > /tmp/x`,
+  `${ALLOW} --check`,
+  `${ALLOW} --lang en`,
+  `${ALLOW} --server`,
+  `${ALLOW} --server '-x' 'http://a/*'`,
+  `${ALLOW} --project`,
+  `${ALLOW} notapattern`,
+  `${ALLOW} --unknown 'http://a/*'`,
+  `sh ${ALLOW} 'http://a/*'`,
+];
+for (const text of allowRejects) {
+  check(`거절: ${text.replace(/\n/g, '⏎')}`, parseGatePrompt(text) === null);
+}
+
+const FAKE_CLAUDE = '#!/bin/sh\necho "$*" >> "$FAKE_LOG"\nexit 0\n';
+const BASE_ARGS = ['-y', 'chrome-devtools-mcp@1.9.0', '--isolated'];
+function allowScenario(fn) {
+  scenario(home => {
+    mkdirSync(join(home, 'bin'));
+    writeFileSync(join(home, 'bin', 'claude'), FAKE_CLAUDE);
+    chmodSync(join(home, 'bin', 'claude'), 0o755);
+    const conf = join(home, 'claude.json');
+    writeFileSync(conf, JSON.stringify({ mcpServers: { 'chrome-devtools': { type: 'stdio', command: 'npx', args: BASE_ARGS } } }));
+    const log = join(home, 'cli.log');
+    const send = text => {
+      const r = spawnSync('node', [promptHook], {
+        input: JSON.stringify({ prompt: text, session_id: 'selftest', cwd: home, hook_event_name: 'UserPromptSubmit' }),
+        encoding: 'utf8', cwd: home,
+        env: { ...ENV(home), CLAUDE_CONFIG_JSON: conf, FAKE_LOG: log, PATH: `${join(home, 'bin')}:${process.env.PATH}` },
+      });
+      return r.stdout || '';
+    };
+    const sent = () => (existsSync(log) ? readFileSync(log, 'utf8') : '');
+    fn({ send, sent });
+  });
+}
+allowScenario(({ send, sent }) => {
+  const out = send(`! ${ALLOW} 'http://127.0.0.1:*/*'`);
+  check('허용 목록 줄 → 같은 스크립트가 등록을 다시 만든다(remove → add-json)',
+    /mcp remove chrome-devtools -s user/.test(sent()) && /mcp add-json chrome-devtools .*http:\/\/127\.0\.0\.1:\*\/\*/.test(sent()), sent());
+  check('http 패턴이면 https 자동 전환을 끄는 인자가 함께 간다', sent().includes('--chromeArg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable'), sent());
+  check('결과 줄을 컨텍스트에 낸다', out.includes('[허용 목록]') && out.includes('Reconnect'), out.slice(0, 80));
+});
+allowScenario(({ send, sent }) => {
+  const out = send(`${ALLOW} http://127.0.0.1:*/*`);
+  check('따옴표 없는 패턴도 끝 * 가 지워지지 않고 저장된다', sent().includes('http://127.0.0.1:*/*'), sent());
+  check('성공 출력에 실패 표시가 없다', !out.includes('실패'), out.slice(0, 80));
+});
+allowScenario(({ send, sent }) => {
+  const out = send(`${ALLOW} 'http://127.0.0.1:*/'`);
+  check('끝이 / 인 패턴 → 등록을 바꾸지 않고 실패를 알린다', sent() === '' && out.includes('실패') && out.includes('작은따옴표'), out.slice(0, 120));
+});
+allowScenario(({ send, sent }) => {
+  const out = send(`허용해 주세요 ${ALLOW} 'http://a.example.com/*'`);
+  check('문장 속 명령 → 아무것도 하지 않는다', out === '' && sent() === '');
+  const out2 = send(`${ALLOW} 'http://a.example.com/*'; echo hi`);
+  check('이어 붙인 명령 → 아무것도 하지 않는다', out2 === '' && sent() === '');
 });
 
 // 3. 어시스턴트가 게이트를 열지 못한다. 실행 형태를 가리지 않고 명령 글자로 막는다
