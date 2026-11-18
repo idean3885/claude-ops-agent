@@ -115,14 +115,16 @@ PR 리뷰(주장 검증 · 리뷰 봇)까지 AI 가 합니다. 제로베이스 �
 - 위임 하나는 사용자가 목표를 주고 결과를 받기까지 맡긴 작업입니다. 답 하나의 정답률(레슨런 판정)보다 한 단계 위 단위입니다.
 - 위임이 끝나면 목표 항목 수, 교정 없이 끝난 수, 사용자 지적으로 되돌린 판정 수, 빠뜨린 항목 수를 한 줄로 쌓습니다.
 - 쌓인 줄로 정확도(교정 없이 끝난 수 / 목표 항목 수)와 원인(되돌림 · 누락)을 봅니다. 같은 원인이 반복되면 그 원인을 막는 장치를 하나 두고, 다음 위임들의 정확도로 효과를 판정합니다.
+- 호출 정확도는 따로 잽니다. 불러야 했던 판정 자리(보내기 전 전문가 판정 · 검증 단계) 가운데 스스로 부른 비율입니다. 결과가 나쁠 때 「불렀는데 판단이 틀림」과 「부르지 않음」은 고칠 자리가 달라서 한 숫자로 섞지 않습니다.
+- 기록은 이슈 완료 단계에서 남기고([이슈 가이드 「/issue complete」](skills/flow/guides/issue.md) 12번), 장치를 두면 시범으로 등록해 판정일(기본 1주)에 두 정확도로 유지 · 수정 · 폐기를 정합니다.
 
 ```text
-위임 시작(목표 항목) ─► 작업 ─► 끝: 항목마다 맞음 · 되돌림 · 누락 한 줄 기록
+위임 시작(목표 항목) ─► 작업 ─► 끝: 항목마다 맞음 · 되돌림 · 누락, 판정 자리마다 부름 · 안 부름 한 줄 기록
   ─► 통계(정확도 · 원인) ─► 반복 원인에 장치 하나 ─► 다음 위임 정확도로 효과 판정
 ```
 
 ```bash
-python3 ~/.claude/ops-agent/current/scripts/delegation-log.py add --goal "<목표>" --items <N> --done <N> --reverted <N> --missed <N>
+python3 ~/.claude/ops-agent/current/scripts/delegation-log.py add --goal "<목표>" --items <N> --done <N> --reverted <N> --missed <N> --calls-expected <N> --calls-made <N>
 python3 ~/.claude/ops-agent/current/scripts/delegation-log.py report --days 30
 ```
 

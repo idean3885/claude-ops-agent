@@ -51,6 +51,26 @@ with tempfile.TemporaryDirectory() as tmp:
     check("report 의 최근 목록은 5건까지", len(out["recent"]) == 5 and out["recent"][-1]["goal"] == "g4" and out["recent"][0]["goal"] == "g0", out)
 
 with tempfile.TemporaryDirectory() as tmp:
+    env = {**os.environ, "DELEGATION_LOG": os.path.join(tmp, "c.jsonl")}
+
+    def run(*args):
+        r = subprocess.run([sys.executable, SCRIPT, *args], env=env, capture_output=True, text=True)
+        return r.returncode, json.loads(r.stdout)
+
+    rc, out = run("report")
+    check("호출 기록이 없으면 호출 정확도는 없음", out["call_accuracy"] is None and out["call_count"] == 0, out)
+    rc, out = run("add", "--goal", "PR 본문", "--items", "3", "--done", "2", "--calls-expected", "15", "--calls-made", "0")
+    check("add 는 호출 수를 함께 쌓는다", rc == 0 and out["row"]["calls_expected"] == 15 and out["row"]["calls_made"] == 0, out)
+    run("add", "--goal", "호출 없음", "--items", "2", "--done", "2")
+    run("add", "--goal", "판정", "--items", "1", "--done", "1", "--calls-expected", "5", "--calls-made", "5")
+    rc, out = run("report")
+    check("호출 정확도는 호출을 기록한 위임만으로 낸다 (5/20)", out["call_accuracy"] == 0.25 and out["call_count"] == 2, out)
+    check("결과 정확도는 호출 기록과 무관하게 전체로 낸다 (5/6)", out["accuracy"] == round(5 / 6, 3) and out["count"] == 3, out)
+    for bad in (["--calls-expected", "3"], ["--calls-made", "1"], ["--calls-expected", "2", "--calls-made", "3"], ["--calls-expected", "-1", "--calls-made", "0"]):
+        rc, out = run("add", "--goal", "x", "--items", "1", "--done", "1", *bad)
+        check(f"호출 값 오류 거절: {' '.join(bad)}", rc == 1 and out["status"] == "error", out)
+
+with tempfile.TemporaryDirectory() as tmp:
     r = subprocess.run([sys.executable, SCRIPT, "add", "--goal", "g", "--items", "1", "--done", "1"],
                        env={**os.environ, "DELEGATION_LOG": "d.jsonl"}, cwd=tmp, capture_output=True, text=True)
     check("파일명만 준 기록 경로도 현재 디렉토리에 쌓는다", r.returncode == 0 and os.path.exists(os.path.join(tmp, "d.jsonl")), r.stderr)
