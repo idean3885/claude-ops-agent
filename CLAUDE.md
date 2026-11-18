@@ -91,6 +91,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 - 이슈 작업 → 워크트리가 기본. 단일 PR · 단일 레포여도 같다. 직접 체크아웃은 사용자가 지시할 때만 한다.
 - 같은 레포의 여러 PR 병렬 검토 → `scripts/worktree-create.sh`
 - 단발 isolation (실험·임시 빌드) → `Agent` 도구 isolation
+- 판정을 남기는 읽기 전용 분석 → fetch 뒤 원격 기준 브랜치의 detached 워크트리 ([docs/worktree.md](docs/worktree.md) 「적용 범위」)
 
 스크립트 사용법, state 파일 포맷, 경로 컨벤션은 [docs/worktree.md](docs/worktree.md) 참조.
 
