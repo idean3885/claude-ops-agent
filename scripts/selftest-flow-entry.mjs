@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * selftest-flow-entry.mjs — 플로우 진입 지표 자체 점검 (#769 · #1114).
+ * selftest-flow-entry.mjs — 플로우 진입 지표 자체 점검 (#769 · #1114 · #1116).
  *
  * `pre-tool-use.mjs` 를 고쳤으면 이것을 돌린다. 커밋 · push 는 한 줄만 남기므로 판정이 무너져도
  * 아무 신호가 없다. PR 생성 차단(#773)도 같은 판정에 기대므로 함께 본다. 특히 트리거 표의 가이드 경로를 읽음으로 오판하면
@@ -32,6 +32,37 @@ const READ_GUIDE = JSON.stringify({
 const BASH_GUIDE = JSON.stringify({
   type: 'assistant',
   message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'cd "/p" && sed -n 1,20p "/p/skills/flow/guides/pr.md"' } }] },
+});
+const READ_PR_GUIDE = JSON.stringify({
+  type: 'assistant',
+  message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/w/claude-ops-agent-fix-1/skills/flow/guides/pr.md', limit: 80 } }] },
+});
+// 아래는 가이드 경로가 문자열로만 나오는 줄이다 (#1116). 어느 것도 가이드 내용을 컨텍스트에 넣지 않는다.
+const GREP_GUIDE = JSON.stringify({
+  type: 'assistant',
+  message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'grep -n "초안" ~/.claude/ops-agent/current/skills/flow/guides/pr.md | head -3' } }] },
+});
+// 테스트 픽스처를 고치는 명령: Read 호출 모양의 문자열이 인자로 들어 있다.
+const FIXTURE_EDIT = JSON.stringify({
+  type: 'assistant',
+  message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: `python3 - <<'X'\nfix = '{"type":"tool_use","name":"Read","input":{"file_path":"/p/skills/flow/guides/pr.md"}}'\nX` } }] },
+});
+const EDIT_GUIDE = JSON.stringify({
+  type: 'assistant',
+  message: { content: [{ type: 'tool_use', name: 'Edit', input: { file_path: '/w/skills/flow/guides/pr.md', old_string: 'a', new_string: 'b' } }] },
+});
+const TEXT_PATH = JSON.stringify({
+  type: 'assistant',
+  message: { content: [{ type: 'text', text: '가이드는 ~/.claude/ops-agent/current/skills/flow/guides/pr.md 에 있습니다' }] },
+});
+const DELEGATION_PROMPT = JSON.stringify({
+  type: 'user',
+  message: { role: 'user', content: '마지막에 ~/.claude/ops-agent/current/skills/flow/guides/pr.md 대로 PR 을 만듭니다' },
+});
+// 도구 결과에 다른 기록의 Read 줄이 그대로 찍혀 나온 경우.
+const RESULT_ECHO = JSON.stringify({
+  type: 'user',
+  message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/p/skills/flow/guides/pr.md' } }] } }) }] },
 });
 const SKILL_FLOW = JSON.stringify({
   type: 'assistant',
@@ -100,7 +131,9 @@ const COMMIT = "git commit -q -F - <<'EOF'\ndocs: x\nEOF";
 
 scenario('트리거 표만 있으면 누락', [SESSION_START, OTHER], COMMIT, { flow: 'missed', actions: ['commit'] });
 scenario('가이드 파일 읽기는 읽음', [SESSION_START, READ_GUIDE], COMMIT, { flow: 'loaded', actions: ['commit'] });
-scenario('따옴표가 든 셸 명령으로 가이드를 열어도 읽음', [SESSION_START, BASH_GUIDE], 'git push -q origin feat/1',
+scenario('셸 명령으로 가이드를 출력해도 읽음이 아니다', [SESSION_START, BASH_GUIDE], 'git push -q origin feat/1',
+  { flow: 'missed', actions: ['push'] });
+scenario('워크트리 가이드를 Read 로 일부 읽으면 읽음', [SESSION_START, READ_PR_GUIDE], 'git push -q origin feat/1',
   { flow: 'loaded', actions: ['push'] });
 scenario('flow 스킬 호출은 읽음', [SKILL_FLOW], 'gh pr create --draft --base main --title x --body-file b.md',
   { flow: 'loaded', actions: ['pr'] });
@@ -128,10 +161,19 @@ denyCase('푸시와 함께 온 PR 생성도 막는다', [OTHER], 'git push -u or
 denyCase('가이드를 읽은 세션의 PR 생성은 통과', [SESSION_START, READ_GUIDE], PR, false);
 denyCase('읽지 않아도 커밋 · push 는 막지 않는다', [OTHER], 'git commit -m x && git push', false);
 
+// 가이드 경로가 문자열로만 나오는 줄은 읽음이 아니다 (#1116).
+denyCase('셸 인자(grep 대상)의 가이드 경로는 읽음이 아니다', [OTHER, GREP_GUIDE], PR, true);
+denyCase('테스트 픽스처 문자열의 Read 모양은 읽음이 아니다', [OTHER, FIXTURE_EDIT], PR, true);
+denyCase('가이드 파일 편집은 읽음이 아니다', [OTHER, EDIT_GUIDE], PR, true);
+denyCase('일반 텍스트의 가이드 경로는 읽음이 아니다', [OTHER, TEXT_PATH], PR, true);
+denyCase('위임 문구의 가이드 경로는 읽음이 아니다', [DELEGATION_PROMPT, OTHER], PR, true);
+denyCase('도구 결과에 찍힌 Read 줄은 읽음이 아니다', [OTHER, RESULT_ECHO], PR, true);
+denyCase('경로 문자열 줄 뒤에 Read 가 오면 읽음', [GREP_GUIDE, READ_PR_GUIDE], PR, false);
+
 // 압축 경계 (#891). 압축은 읽은 가이드를 요약으로 대체하므로 경계 앞의 읽음은 경계 뒤 절차의 근거가 아니다.
 const COMPACT = JSON.stringify({ type: 'system', subtype: 'compact_boundary', content: 'Conversation compacted' });
 denyCase('압축 전에만 읽은 세션의 PR 생성은 막는다', [READ_GUIDE, COMPACT, OTHER], PR, true);
-denyCase('압축 뒤 다시 읽으면 통과', [READ_GUIDE, COMPACT, BASH_GUIDE], PR, false);
+denyCase('압축 뒤 다시 읽으면 통과', [READ_GUIDE, COMPACT, READ_PR_GUIDE], PR, false);
 denyCase('압축 뒤 처음 읽어도 통과', [OTHER, COMPACT, READ_GUIDE], PR, false);
 
 // 실제 세션은 읽음 판정을 캐시에 둔다. 캐시가 loaded 인 뒤에 압축이 와도 판정이 풀려야 한다.
@@ -183,7 +225,8 @@ function subagentCase(name, { parent, agent, agentDir = '', agentId = 'a1b2c3', 
     rmSync(home, { recursive: true, force: true });
   }
 }
-subagentCase('서브에이전트가 가이드를 읽으면 PR 생성 통과', { parent: [OTHER], agent: [PROMPT_WITH_PATH, BASH_GUIDE] }, false);
+subagentCase('서브에이전트가 가이드를 읽으면 PR 생성 통과', { parent: [OTHER], agent: [PROMPT_WITH_PATH, READ_PR_GUIDE] }, false);
+subagentCase('셸 명령으로만 가이드를 연 서브에이전트는 막는다 (#1116)', { parent: [OTHER], agent: [PROMPT_WITH_PATH, BASH_GUIDE, FIXTURE_EDIT] }, true);
 subagentCase('워크플로 하위 디렉토리의 서브에이전트도 자기 기록으로 통과',
   { parent: [OTHER], agent: [READ_GUIDE], agentDir: join('workflows', 'wf_1') }, false);
 subagentCase('가이드를 읽지 않은 서브에이전트의 PR 생성은 막는다', { parent: [OTHER], agent: [OTHER] }, true);
