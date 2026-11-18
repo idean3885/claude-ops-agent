@@ -7,7 +7,7 @@
  * 원문 없이 판정할 수 있게 「한글 음절 바로 앞뒤의 한자」만 본다. 띄어 쓴 한자 낱말은 통과한다.
  *
  * 이 모듈이 판정의 단일 출처다. `scripts/gh-issue.sh` 가 이슈 생성 전에 부르고, 다른 트래커 어댑터도
- * 같은 모듈을 불러 쓴다 (`issue-body-rules.mjs` 와 같은 꼴). 판정이 호출부마다 복제되면 같은 글이
+ * 같은 모듈을 불러 쓸 수 있다 (`issue-body-rules.mjs` 와 같은 꼴). 판정이 호출부마다 복제되면 같은 글이
  * 경로에 따라 통과 · 차단으로 달라진다.
  *
  * 사용:
@@ -16,8 +16,7 @@
  * 종료 코드: 0 섞임 없음, 1 파일을 읽지 못함, 6 섞임 있음. 사유는 stderr JSON 한 줄
  * 비활성: OPS_AGENT_HAN_GUARD_DISABLE=1 (한자가 붙어야 하는 글만. 사람이 세션 환경변수로)
  */
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 const HAN = '\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF';
@@ -47,7 +46,12 @@ export function fileText(path) {
   try { return jsonStrings(JSON.parse(raw)).join('\n'); } catch { return raw; }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// 설치본은 링크 경로(~/.claude/ops-agent/current)로 불려 argv 와 import.meta.url 이 다르다.
+// 실제 경로로 비교하지 않으면 검사 없이 0 으로 통과한다 (#1109)
+const isEntry = (() => {
+  try { return realpathSync(process.argv[1] || '') === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+})();
+if (isEntry) {
   if (process.env.OPS_AGENT_HAN_GUARD_DISABLE === '1') process.exit(0);
   const args = process.argv.slice(2);
   let text = '';

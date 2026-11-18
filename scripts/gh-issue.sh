@@ -8,7 +8,7 @@
 # 사용법:
 #   gh-issue.sh create --title "<제목>" --body-file <본문.md> --type <feat|fix|docs|refactor|chore>
 #                      (--start | --no-start "<사유>")
-#                      [-R <owner/repo | host/owner/repo>] [--structure <iss1|iss5|iss6|iss7>]
+#                      [-R <owner/repo | host/owner/repo>] [--structure <iss1|iss5|iss6|iss7|iss10>]
 #                      (-R 이 owner/repo 뿐이면 현재 레포 원격 중 같은 레포의 호스트를 붙인다)
 #                      [--worktree | --checkout] [--base <브랜치>] [--branch <이름>]
 #   gh-issue.sh start <번호> [--type <타입>] [-R <레포>] [--worktree | --checkout] [--base <브랜치>] [--branch <이름>]

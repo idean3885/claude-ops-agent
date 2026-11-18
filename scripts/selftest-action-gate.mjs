@@ -570,6 +570,27 @@ const PR_DRAFT_CASES = [
   ['비활성은 통과', 'pass', 'gh pr create --title "x" --body "y"', { env: { OPS_AGENT_PR_DRAFT_GUARD_DISABLE: '1' } }],
 ];
 for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, command, { ...opts, label: PR_DRAFT_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
+
+// 한자 섞임 가드 (#1107). 커밋 메시지 · PR 제목 · 본문 · 코멘트에 한글과 붙은 한자가 있으면 거부한다.
+// 커밋 대상 파일 · 이슈 · 공개 표면이 아닌 명령은 보지 않는다. 플로우 진입 가드는 끈다.
+const HAN_DENY = '한자 섞임 가드';
+const hanBody = bodyOf('han.md', '## 요약\n- 남은 일은 외部 대기\n');
+const HAN_CASES = [
+  ['커밋 메시지 -m', 'deny', 'git commit -m "fix: 외部 연동"', { reasonHas: HAN_DENY }],
+  ['커밋 메시지 heredoc (-F -)', 'deny', "git commit -q -F - <<'EOF'\nfix: 남은 일은 외部 대기\nEOF", { reasonHas: HAN_DENY }],
+  ['커밋 메시지 $(cat <<EOF) (-m)', 'deny', `git commit -m "$(cat <<'EOF'\nfix: 部분 완료\nEOF\n)"`, { reasonHas: HAN_DENY }],
+  ['PR 본문 --body', 'deny', 'gh pr create --draft --title "x" --body "남은 일은 外部대기"', { reasonHas: HAN_DENY }],
+  ['PR 제목 --title', 'deny', 'gh pr create --draft --title "外部연동" --body "y"', { reasonHas: HAN_DENY }],
+  ['PR 본문 파일 --body-file', 'deny', `gh pr edit 3 --body-file ${hanBody}`, { reasonHas: HAN_DENY }],
+  ['PR 코멘트', 'deny', 'gh pr comment 3 --body "部분 완료"', { reasonHas: HAN_DENY }],
+  ['섞임 없는 커밋은 통과', 'pass', 'git commit -m "fix: 외부 연동"'],
+  ['띄어 쓴 한자 낱말은 통과', 'pass', 'git commit -m "docs: 회의 메모 部長 참석"'],
+  ['공개 표면 쓰기가 아닌 명령은 통과', 'pass', "cat > note.md <<'EOF'\n남은 일은 외部 대기\nEOF"],
+  ['표준 입력 본문이 아니면 heredoc 은 보지 않는다', 'pass', "git commit -m \"fix: x\" && cat > note.md <<'EOF'\n외部\nEOF"],
+  ['이슈 코멘트는 범위 밖', 'pass', 'gh issue comment 3 --body "部분 완료"'],
+  ['비활성은 통과', 'pass', 'git commit -m "fix: 외部 연동"', { env: { OPS_AGENT_HAN_GUARD_DISABLE: '1' } }],
+];
+for (const [name, want, command, opts] of HAN_CASES) issueCase(name, want, command, { ...opts, label: HAN_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
 rmSync(issueHome, { recursive: true, force: true });
 rmSync(storageRepo, { recursive: true, force: true });
 
@@ -605,5 +626,5 @@ for (const [name, want, command, settings, scope = 'git-force'] of SHAPE_CASES) 
   console.log(`${ok ? '  OK' : '  XX'}  허용 규칙 형태: ${name} — want ${want}, got ${got}${got === 'deny' && !reason.includes(SHAPE_DENY) ? ` (${reason.split('\n')[0]})` : ''}`);
 }
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + SHAPE_CASES.length}건 전부 통과`);
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + HAN_CASES.length + SHAPE_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);

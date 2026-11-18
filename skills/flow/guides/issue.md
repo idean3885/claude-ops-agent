@@ -151,7 +151,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
    **한 건이면 표 대신 한 줄로 제시한다.** 그 한 줄에도 겹침 후보(검사해서 없으면 「없음」, 상위가 없으면 「미확인 (상위 없음)」)를 적는다. 개수와 구조가 판단 대상인데 한 건에는 나눌 것이 없다. 표를 요구하면 게이트가 형식이 되고, 형식이 된 게이트는 읽히지 않는다.
 
 7. **시작 결정**: 지금 손대는 이슈면 `--start`, 백로그 · 후속이면 `--no-start "<사유>"`. 어댑터가 둘 중 하나 없이는 생성하지 않는다.
-8. 이슈 본문 작성. 구조는 `config/style-rules/extensions/issue.md` 「필수 구조」 절에서 고른다 (버그 ISS1 · 기능 ISS5 · 보고 ISS6 · 판정 ISS7). 본문은 파일로 쓴다 (Write).
+8. 이슈 본문 작성. 구조는 `config/style-rules/extensions/issue.md` 「필수 구조」 절에서 고른다 (버그 ISS1 · 기능 ISS5 · 보고 ISS6 · 판정 ISS7 · 설계 ISS10). 어댑터에는 같은 이름을 `--structure` 로 넘긴다 (설계면 `--structure iss10`). 본문은 파일로 쓴다 (Write).
 9. **대외비 가드 (GATE 0)**: 제목·본문 전체에 대해 `references/confidential-guard.md` 검증. 어댑터 호출의 `--title` · `--body-file` 에도 훅이 같이 적용된다. 히트 시 사용자 정정 후 재검증.
 10. **어댑터로 생성**: provider 의 생성 어댑터 한 호출 (github: `scripts/gh-issue.sh create`). 어댑터가 한자 섞임 검사 → 본문 구조 검사 → 라벨 보장 → 생성 → (`--start` 면) 시작을 이어서 한다. `gh issue create` 직접 호출은 훅이 거부한다 (`docs/action-gate.md` 「이슈 생성 가드」).
 11. **Extensions 실행**: provider에 post-create Extensions이 정의되어 있으면 실행

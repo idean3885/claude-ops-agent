@@ -17,7 +17,7 @@
  *   const { ok, failures } = checkIssueBody(body, 'iss5');
  *   node scripts/issue-body-rules.mjs --structure iss5 < body.md   # JSON 한 줄, 실패면 종료 1
  */
-import { readFileSync } from 'fs';
+import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 // 문장 종결. config/style-rules/metrics/readability_count.py 의 SENT 와 같은 식이다.
@@ -47,6 +47,7 @@ export const STRUCTURES = {
   iss5: { sections: ['What', 'Why'], forbidden: ['변경 범위', '구현 방안', '검증 절차'] },
   iss6: { sections: ['측정 조건', '합격 기준', '결과', '발견 사항'] },
   iss7: { sections: ['판정', '확정된 외부 조건', '달라지는 것', '설계 기준', '남은 논의'] },
+  iss10: { sections: ['문제', '필수 조건', '현재 상태', '미결 질문'] },
 };
 
 export const WHY_MIN = 2;
@@ -83,13 +84,13 @@ function hasSection(sections, prefix) {
 
 /**
  * @param {string} body
- * @param {'iss1'|'iss5'|'iss6'|'iss7'} structure
+ * @param {'iss1'|'iss5'|'iss6'|'iss7'|'iss10'} structure
  * @returns {{ok: boolean, structure: string, failures: Array<{check: string, message: string}>}}
  */
 export function checkIssueBody(body, structure) {
   const spec = STRUCTURES[structure];
   if (!spec) {
-    return { ok: false, structure, failures: [{ check: 'structure', message: `모르는 구조: ${structure}. iss1 · iss5 · iss6 · iss7 중 하나` }] };
+    return { ok: false, structure, failures: [{ check: 'structure', message: `모르는 구조: ${structure}. iss1 · iss5 · iss6 · iss7 · iss10 중 하나` }] };
   }
   const failures = [];
   const lines = stripCodeBlocks(body).split('\n');
@@ -179,7 +180,11 @@ export function checkIssueBody(body, structure) {
 }
 
 // CLI 진입점: stdin 본문 + --structure → JSON 한 줄. bash 어댑터가 부른다.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// 설치본은 링크 경로(~/.claude/ops-agent/current)로 불려 argv 와 import.meta.url 이 다르다. 실제 경로로 비교한다 (#1109)
+const isEntry = (() => {
+  try { return realpathSync(process.argv[1] || '') === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+})();
+if (isEntry) {
   const idx = process.argv.indexOf('--structure');
   const structure = idx >= 0 ? process.argv[idx + 1] : 'iss5';
   const body = readFileSync(0, 'utf8');

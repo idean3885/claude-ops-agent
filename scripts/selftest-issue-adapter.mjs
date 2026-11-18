@@ -3,7 +3,7 @@
  * selftest-issue-adapter.mjs — 이슈 생성 · 시작 어댑터 자체 점검 (#696).
  *
  * 둘을 본다.
- *   1. `issue-body-rules.mjs` 가 본문 구조(ISS1 · ISS5 · ISS6 · ISS7)를 결정적으로 가르는가
+ *   1. `issue-body-rules.mjs` 가 본문 구조(ISS1 · ISS5 · ISS6 · ISS7 · ISS10)를 결정적으로 가르는가
  *   2. `gh-issue.sh create|start` 가 계약(필수 판단 · 종료 코드 · 출력 · 시작 체인)을 지키는가
  *      — 가짜 `gh` · `git` 을 PATH 앞에 두고 호출 기록으로 판정한다. 네트워크를 쓰지 않는다.
  *
@@ -11,7 +11,7 @@
  * 종료 코드: 실패 1, 전부 통과 0
  */
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -73,6 +73,9 @@ const BODY_CASES = [
   ['ISS6 절 누락', 'iss6', '## 측정 조건\nx\n\n## 결과\ny\n', ['section', 'section']],
   ['ISS7 정상 + 산문 허용', 'iss7', '## 판정\n한 문장이다. 둘이다.\n\n## 확정된 외부 조건\nx\n\n## 달라지는 것\ny\n\n## 설계 기준\nz\n\n## 남은 논의\nw\n', []],
   ['ISS7 절 누락', 'iss7', '## 판정\nx\n', ['section', 'section', 'section', 'section']],
+  // #1108: 설계 이슈(ISS10)도 구조 목록에서 고를 수 있다
+  ['ISS10 정상 + 산문 허용', 'iss10', '## 문제\n막힌다. 둘이다.\n\n## 필수 조건\n- x\n\n## 현재 상태\n```\nA -> B\n```\n\n## 미결 질문\n- 어디서 정하는가?\n', []],
+  ['ISS10 절 누락', 'iss10', '## 문제\nx\n\n## 미결 질문\n- y?\n', ['section', 'section']],
   ['모르는 구조', 'iss9', ISS5_OK, ['structure']],
 ];
 for (const [name, structure, body, wantChecks] of BODY_CASES) {
@@ -123,9 +126,9 @@ writeFileSync(badBody, '## What\n한 줄\n\n## Why\n- 사실 1\n');
 const fixBody = join(sandbox, 'fix.md');
 writeFileSync(fixBody, '## 재현 절차\n1. x\n\n## 기대 동작\ny\n\n## 실제 동작\nz\n\n## 환경\nw\n\n## 영향 범위\nv\n');
 
-function run(args, env = {}) {
+function run(args, env = {}, via = adapter) {
   if (existsSync(LOG)) rmSync(LOG);
-  const res = spawnSync('bash', [adapter, ...args], {
+  const res = spawnSync('bash', [via, ...args], {
     encoding: 'utf8',
     env: {
       ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LOG: LOG, FAKE_TOPLEVEL: join(sandbox, 'proj'),
@@ -141,8 +144,8 @@ function run(args, env = {}) {
   }
   return { code: res.status, stdout: res.stdout || '', stderr: res.stderr || '', log, json };
 }
-function adapterCase(name, args, want, { env = {}, logHas = [], logNot = [], json = {} } = {}) {
-  const r = run(args, env);
+function adapterCase(name, args, want, { env = {}, logHas = [], logNot = [], json = {}, via } = {}) {
+  const r = run(args, env, via);
   const problems = [];
   if (r.code !== want) problems.push(`종료 ${want} 기대, ${r.code}`);
   for (const s of logHas) if (!r.log.includes(s)) problems.push(`호출 없음: ${s}`);
@@ -162,6 +165,16 @@ adapterCase('본문 검사 실패는 생성하지 않는다', ['create', '--titl
   writeFileSync(hanBody, ISS5_OK.replace('- 사실 1\n', '- 남은 일은 외部 대기\n'));
   adapterCase('본문의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', 't', '--body-file', hanBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create', 'gh label'], json: { step: 'han-intrusion' } });
   adapterCase('제목의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', '외部 연동', '--body-file', okBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
+}
+{
+  // #1109: 설치본은 링크 경로(~/.claude/ops-agent/current)로 부른다. 링크로 불러도 두 검사가 돈다
+  const linked = join(sandbox, 'current');
+  symlinkSync(dirname(here), linked);
+  const via = join(linked, 'scripts', 'gh-issue.sh');
+  const hanBody = join(sandbox, 'han-link.md');
+  writeFileSync(hanBody, ISS5_OK.replace('- 사실 1\n', '- 남은 일은 외部 대기\n'));
+  adapterCase('링크 경로로 불러도 한자 섞임은 생성하지 않는다 (#1109)', ['create', '--title', 't', '--body-file', hanBody, '--type', 'feat', '--no-start', 'x'], 1, { via, logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
+  adapterCase('링크 경로로 불러도 본문 검사 실패는 생성하지 않는다 (#1109)', ['create', '--title', 't', '--body-file', badBody, '--type', 'feat', '--no-start', 'x'], 1, { via, logNot: ['gh issue create'], json: { step: 'body-check' } });
 }
 adapterCase('fix 는 ISS1 기본 (ISS5 본문은 거부)', ['create', '--title', 't', '--body-file', okBody, '--type', 'fix', '--start'], 1, { logNot: ['gh issue create'] });
 adapterCase('fix + ISS1 본문 통과', ['create', '--title', 't', '--body-file', fixBody, '--type', 'fix', '--no-start', 'x'], 0, { logHas: ['gh issue create'] });
