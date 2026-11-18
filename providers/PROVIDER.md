@@ -51,6 +51,26 @@
 - 소요 시간 기록 방법 (선택. 조직 컨벤션이 요구할 때만 정의한다)
 - 브랜치 정리 규칙
 
+## 셸로 API 를 부를 때
+
+트래커와 무관하게 API 를 셸로 부르는 어댑터 · 스킬에서 되풀이되는 함정이다.
+
+| 함정 | 증상 | 쓰는 법 |
+|------|------|---------|
+| pipe 와 heredoc 의 stdin 경쟁 | `curl … \| python3 <<'EOF'` 처럼 응답을 pipe 로 넘기면서 같은 명령에 heredoc 스크립트를 붙이면 두 입력이 stdin 을 다퉈 가공이 깨진다. | 응답을 임시 파일에 저장하고, 가공 스크립트가 그 파일을 읽는다. 끝나면 임시 파일을 지운다. |
+| jq 의 `!=` 가 히스토리 확장으로 읽힘 | 대화형 셸에서 `!` 가 히스토리 확장으로 해석돼 jq 필터가 오류를 낸다. | `!=` 대신 긍정 일치(`==` 를 `or` 로 잇기)로 쓴다. |
+
+```bash
+curl -s "$API_URL" > "$TMP/resp.json"
+python3 - "$TMP/resp.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+PY
+rm -f "$TMP/resp.json"
+
+jq 'select(.status == "accepted" or .status == "tentative")'   # select(.status != "declined") 대신
+```
+
 ## Git Identity
 
 커밋/푸시 시 사용할 git 계정 정보.
