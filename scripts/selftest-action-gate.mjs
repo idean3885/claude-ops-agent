@@ -193,6 +193,20 @@ const SCOPE_GATE_CASES = [
   ['-C 선행 reset --hard 는 닫힘', 'deny', 'git -C . reset --hard HEAD~1', null],
   ['-C 선행 일반 push 는 통과', 'pass', 'git -C . push origin feature/x', null],
   ['-C 선행 강제 푸시는 열린 갈래에서 통과', 'pass', 'git -C /tmp/x push --force-with-lease origin feature/x', ['git-force']],
+  // 기본 브랜치 강제 푸시는 git-force 와 git-default-push 둘 다 열려야 통과한다 (#1133)
+  ['기본 브랜치 강제 푸시는 닫힘', 'deny', 'git push --force-with-lease origin main', null],
+  ['기본 브랜치 강제 푸시는 git-force 만으로 닫힘', 'deny', 'git push --force-with-lease origin main', ['git-force']],
+  ['기본 브랜치 강제 푸시는 git-default-push 만으로 닫힘', 'deny', 'git push --force origin main', ['git-default-push']],
+  ['기본 브랜치 강제 푸시는 두 갈래가 열리면 통과', 'pass', 'git push --force-with-lease origin main', ['git-force', 'git-default-push']],
+  ['기본 브랜치가 아닌 강제 푸시는 git-force 만으로 통과', 'pass', 'git push --force origin feature/x', ['git-force']],
+  ['기본 브랜치 일반 push 는 git-force 만으로 닫힘 (회귀)', 'deny', 'git push origin main', ['git-force']],
+  ['기본 브랜치가 아닌 일반 push 는 통과 (회귀)', 'pass', 'git push origin feature/x', null],
+  // `+` refspec 은 강제 푸시다 (#1133)
+  ['+refspec 강제 푸시는 닫힘', 'deny', 'git push origin +feature/x', null],
+  ['+refspec 강제 푸시는 git-force 로 통과', 'pass', 'git push origin +feature/x', ['git-force']],
+  ['+src:dst 강제 푸시는 닫힘', 'deny', 'git push origin +HEAD:feature/x', null],
+  ['+기본 브랜치 refspec 은 git-force 만으로 닫힘', 'deny', 'git push origin +HEAD:main', ['git-force']],
+  ['+기본 브랜치 refspec 은 두 갈래가 열리면 통과', 'pass', 'git push origin +HEAD:main', ['git-force', 'git-default-push']],
 ];
 for (const [name, want, command, scopes] of SCOPE_GATE_CASES) scopeGateCase(name, want, command, scopes);
 

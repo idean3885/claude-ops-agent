@@ -1542,7 +1542,9 @@ function detectRepoActions(command) {
     } else if ((m = seg.match(/^(?:\S*\/)?gh\s+repo\s+(delete|archive)\b/))) {
       ops.push({ category: 'repo', scope: 'repo-delete', tool: 'gh repo', verb: m[1] });
     } else if (/^(?:\S*\/)?git\s+push\b/.test(seg)) {
-      if (/(?:^|\s)(?:--force|--force-with-lease|-f)\b/.test(seg)) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'force' });
+      // `+<refspec>` 도 강제 push 다. 옵션이 아닌 낱말이 `+` 로 시작하는지 본다 (#1133).
+      const plusRefspec = seg.split(/\s+/).slice(2).some(t => /^["']?\+[^\s"']/.test(t));
+      if (/(?:^|\s)(?:--force|--force-with-lease|-f)\b/.test(seg) || plusRefspec) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'force' });
       else if (/(?:^|\s)(?:--delete|-d)\b/.test(seg)) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'delete' });
       else if (/\s:[^\s]+/.test(seg)) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'delete-refspec' });
     }
