@@ -185,6 +185,14 @@ const SCOPE_GATE_CASES = [
   ['cluster-exec 는 쓰기를 열지 않는다', 'deny', 'kubectl delete pod pod-a', ['cluster-exec']],
   ['cluster-write 는 exec 를 계속 연다 (호환)', 'pass', 'kubectl exec -it pod-a -- sh', ['cluster-write']],
   ['cluster-write 는 쓰기를 연다', 'pass', 'kubectl delete pod pod-a', ['cluster-write']],
+  // git 전역 옵션이 앞에 와도 같은 행위로 감지한다 (#1083)
+  ['-C 선행 강제 푸시는 닫힘', 'deny', 'git -C /tmp/x push --force-with-lease origin feature/x', null],
+  ['-c 선행 강제 푸시는 닫힘', 'deny', 'git -c core.quotepath=false push --force origin feature/x', null],
+  ['--git-dir= 선행 원격 브랜치 삭제는 닫힘', 'deny', 'git --git-dir=/tmp/x/.git push origin --delete feature/x', null],
+  ['-C 선행 기본 브랜치 push 는 닫힘', 'deny', 'git -C . push origin main', null],
+  ['-C 선행 reset --hard 는 닫힘', 'deny', 'git -C . reset --hard HEAD~1', null],
+  ['-C 선행 일반 push 는 통과', 'pass', 'git -C . push origin feature/x', null],
+  ['-C 선행 강제 푸시는 열린 갈래에서 통과', 'pass', 'git -C /tmp/x push --force-with-lease origin feature/x', ['git-force']],
 ];
 for (const [name, want, command, scopes] of SCOPE_GATE_CASES) scopeGateCase(name, want, command, scopes);
 

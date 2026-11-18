@@ -53,7 +53,7 @@ import { homedir, tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
 import { findIntrusions } from './han-intrusion.mjs';
-import { detectGitRiskActions } from './git-guard-rules.mjs';
+import { detectGitRiskActions, stripGitGlobalOptions } from './git-guard-rules.mjs';
 import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 import { harnessShapeMismatch, bashAllowRulesFrom } from './harness-rule-shape.mjs';
@@ -1531,7 +1531,9 @@ function detectClusterMutations(command) {
 // 레포 되돌리기 어려운 행위: PR 머지·릴리즈·레포 삭제/보관·force/삭제 push
 function detectRepoActions(command) {
   const ops = [];
-  for (const seg of gateSegments(command)) {
+  for (const raw of gateSegments(command)) {
+    // git 전역 옵션(-C · -c · --git-dir)이 앞에 와도 같은 행위다 (#1083)
+    const seg = stripGitGlobalOptions(raw);
     let m;
     if (/^(?:\S*\/)?gh\s+pr\s+merge\b/.test(seg)) {
       ops.push({ category: 'repo', scope: 'repo-merge', tool: 'gh pr', verb: 'merge' });

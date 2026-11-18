@@ -50,7 +50,7 @@ export const STRUCTURES = {
   iss10: { sections: ['문제', '필수 조건', '현재 상태', '미결 질문'] },
 };
 
-export const WHY_MIN = 2;
+export const WHY_MIN = 1;
 export const WHY_MAX = 5;
 
 function countSentences(line) {
@@ -123,7 +123,7 @@ export function checkIssueBody(body, structure) {
       if (facts < WHY_MIN || facts > WHY_MAX) {
         failures.push({ check: 'why-count', message: `## Why 배경 사실 불릿은 ${WHY_MIN}~${WHY_MAX}개 (지금 ${facts}개, 기존 기록 줄 제외)` });
       }
-      // 하위 불릿은 2~5개 상한을 우회한다. 배경 사실 하나가 하위 목록을 거느리면 점검 기록이 된다 (#1067)
+      // 하위 불릿은 5개 상한을 우회한다. 배경 사실 하나가 하위 목록을 거느리면 점검 기록이 된다 (#1067)
       const nested = why.lines.filter(l => NESTED_BULLET.test(l));
       if (nested.length > 0) {
         failures.push({ check: 'why-nested', message: `## Why 에 하위 불릿 ${nested.length}개. Why 는 한 단계 불릿만 둔다` });
