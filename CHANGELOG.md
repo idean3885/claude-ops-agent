@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.67.1] - 2026-11-18
+
 ### Fixed
 * What 추상화 가드가 외부 제품이 공개한 리소스 종류(Istio VirtualService)를 클래스명으로 막지 않는다. 가드 자체 점검 selftest-what-guard 를 더한다 (#1122)
 
