@@ -29,7 +29,7 @@
  * 4. 최종 점검 통과 기록 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
  *    통과 기록이 있어야 통과한다. 판정은 로컬만이다. 통과 기록 head 와 origin 추적 브랜치를 비교한다.
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
- * 5. 플로우 진입 (#769 · #773 · #891 · #1114): 커밋 · push · PR 생성 직전에 마지막 압축 뒤 플로우 가이드 읽음 여부를 기록하고,
+ * 5. 플로우 진입 (#769 · #773 · #891 · #1114 · #1116): 커밋 · push · PR 생성 직전에 마지막 압축 뒤 플로우 가이드 읽음 여부를 기록하고,
  *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 서브에이전트는 자기 대화 기록으로 본다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
  * 6. 초안 PR (#876): `gh pr create` 에 초안 플래그가 없으면 차단한다. 가이드를 읽었는지가 아니라 규칙을 본다.
  *    드라이런 OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1.
@@ -175,11 +175,12 @@ const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
 // 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1 (기록과 차단 모두).
 const FLOW_ENTRY_DISABLE = process.env.OPS_AGENT_FLOW_ENTRY_DISABLE === '1';
 // 훅 본문이 모듈 위쪽에서 돌아 판정 상수도 여기 있어야 한다. 아래로 내리면 초기화 전 접근으로 가드 전체가 내부 오류가 된다.
-// 흔적은 도구 입력 필드에 든 가이드 경로(파일 읽기 · 셸 명령)와 flow 스킬 호출이다.
-// 세션 시작에 주입되는 트리거 표에도 가이드 경로가 문자열로 있어서, 경로만 찾으면 전부 읽음이 된다.
-// 값은 JSON 문자열이라 명령 안의 따옴표가 \" 로 들어 있다. 이스케이프를 건너뛰며 같은 값 안에서만 찾는다.
-const FLOW_ENTRY_RE = /"(?:file_path|command)":"(?:[^"\\]|\\.)*skills\/flow\/(?:SKILL\.md|guides\/)|"skill":"(?:ops-agent:)?flow"/;
-const FLOW_ENTRY_RE_G = new RegExp(FLOW_ENTRY_RE.source, 'g');
+// 흔적은 가이드 파일을 대상으로 한 Read 호출과 flow 스킬 호출뿐이다 (#1116). 둘 다 하네스가 내용을 컨텍스트에 넣는다.
+// 셸 명령 인자 · 위임 문구 · 트리거 표 · 테스트 픽스처에 든 경로 문자열은 읽음이 아니다. 문자열로 찾으면 그 모두가
+// 읽음이 되므로, 후보 줄만 문자열로 고르고 그 줄을 JSON 으로 풀어 assistant 의 tool_use 블록인지 확인한다.
+const FLOW_GUIDE_PATH_RE = /skills\/flow\/(?:SKILL\.md|guides\/)/;
+const FLOW_ENTRY_CANDIDATE_RE_G = /skills\/flow\/(?:SKILL\.md|guides\/)|"skill":"(?:ops-agent:)?flow"/g;
+const FLOW_SKILL_RE = /^(?:ops-agent:)?flow$/;
 // 서브에이전트 기록 경로 조각 (#1114). agent_id · session_id 가 이 형식일 때만 경로에 넣는다.
 const SUBAGENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 // 압축 경계 (#891). 이 줄 뒤의 읽음만 인정한다.
@@ -1614,11 +1615,36 @@ function subagentTranscript(hookInput) {
 // 대화 기록은 수십 MB 까지 자란다. 세션마다 읽은 위치를 캐시에 두고 그 뒤만 읽는다.
 // 읽음은 마지막 압축 경계 뒤의 흔적만 인정한다 (#891). 압축은 읽은 가이드를 요약으로 대체해, 경계 앞의 읽음으로
 // 통과시키면 가이드 없이 PR 을 만든다. 예산이 모자라면 판정하지 않고 unknown 을 남긴다.
-// 판정 상수(FLOW_ENTRY_RE_G · COMPACT_BOUNDARY_RE)는 위쪽 FLOW_ENTRY_RE 옆에 있다.
+// 판정 상수(FLOW_ENTRY_CANDIDATE_RE_G · COMPACT_BOUNDARY_RE)는 위쪽 FLOW_GUIDE_PATH_RE 옆에 있다.
 function lastMatchIndex(re, text) {
   let last = -1;
   for (const m of text.matchAll(re)) last = m.index;
   return last;
+}
+
+// 가이드 읽음 줄의 시작 위치 중 마지막. 후보 줄을 JSON 으로 풀어 Read(가이드 경로) · Skill(flow) tool_use 만 센다.
+function lastGuideReadIndex(text) {
+  let last = -1;
+  let checkedLine = -1;
+  for (const m of text.matchAll(FLOW_ENTRY_CANDIDATE_RE_G)) {
+    const start = text.lastIndexOf('\n', m.index) + 1;
+    if (start === checkedLine) continue;
+    checkedLine = start;
+    let end = text.indexOf('\n', m.index);
+    if (end < 0) end = text.length;
+    if (isGuideReadLine(text.slice(start, end))) last = start;
+  }
+  return last;
+}
+
+function isGuideReadLine(line) {
+  let rec;
+  try { rec = JSON.parse(line); } catch { return false; }
+  const msg = rec && rec.message;
+  if (!msg || (rec.type !== 'assistant' && msg.role !== 'assistant') || !Array.isArray(msg.content)) return false;
+  return msg.content.some(b => b && b.type === 'tool_use' && b.input && (
+    (b.name === 'Read' && typeof b.input.file_path === 'string' && FLOW_GUIDE_PATH_RE.test(b.input.file_path))
+    || (b.name === 'Skill' && typeof b.input.skill === 'string' && FLOW_SKILL_RE.test(b.input.skill))));
 }
 
 function flowGuideLoaded(sessionId, transcriptPath) {
@@ -1646,7 +1672,7 @@ function flowGuideLoaded(sessionId, transcriptPath) {
         end = n - 1; // 청크보다 긴 줄
       }
       const text = buf.toString('utf8', 0, end + 1);
-      const hit = lastMatchIndex(FLOW_ENTRY_RE_G, text);
+      const hit = lastGuideReadIndex(text);
       const boundary = lastMatchIndex(COMPACT_BOUNDARY_RE, text);
       if (hit > boundary) state.loaded = true;
       else if (boundary > hit) state.loaded = false;
