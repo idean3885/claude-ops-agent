@@ -27,10 +27,13 @@ PostToolUse 시점에 그 호출 앞의 글이 세션 기록에 있고, PreToolU
      작업 알림처럼 origin 이 human 이 아닌 자동 입력도 건너뛴다. 한국어 대화가 아니면 아무것도 하지 않는다.
   2. 어시스턴트 글을 빈 줄로 나눈 문단 하나하나를 잰다.
      코드 블록 · 인라인 코드 · URL · 경로 · `>` 인용은 원문 언어를 유지하므로 세지 않는다.
-     표 줄 · 상자 그림 줄 · 마크다운 링크 · 들여쓴 코드 · ~~~ 블록도 원문으로 세지 않는다. JSON 문단은 데이터라 세지 않는다.
+     표 줄(줄 머리 `|` 없는 표 포함) · 상자 · 화살표 그림 줄 · 마크다운 링크 · 들여쓴 코드 · ~~~ 블록도 원문으로 세지 않는다.
+     `>` 인용에 이어 붙은 줄(빈 줄 전까지)은 인용의 일부다. JSON 문단과 문단 안의 JSON 줄은 데이터라 세지 않는다 (#1076).
   3. 문단의 한글 비율 = 한글 음절 / (한글 음절 + 로마자). 글자가 MIN_LETTERS 미만이면 세지 않는다.
      비율이 THRESHOLD 미만이고 영어 문장(기능어를 품은 로마자 낱말 셋 이상 연속)이 있는 문단을 영어 문단으로 본다.
-     기능어 조건은 식별자 · 명령 · 이름 나열을 문장과 가르는 장치다.
+     기능어 조건은 식별자 · 명령 · 이름 나열을 문장과 가르는 장치다. 하이픈 · 밑줄 식별자와 `-x` 옵션은 낱말로 세지 않는다.
+     한글이 없는 문단은 낱말 셋 이상에 기능어가 하나만 있어도, 또는 대문자로 시작해 마침표로 끝나는 소문자 낱말 문장이면
+     영어로 본다 (「Next, #811 (...)」 같은 기능어 없는 짧은 진행 서술, #1076).
 
 기준값 근거 (2026-11-17 실측): 한 세션의 글 블록 단위로 한국어 최소 0.57, 영어 최대 0.15 라
 그 사이의 0.3 을 둔다(한국어 쪽 여유를 크게 둠). 비율만으로는 표 · 링크 목록 · JSON · 식별자 같은 원문도 걸려,
@@ -55,24 +58,39 @@ FENCE = re.compile(r"```.*?```", re.S)
 INLINE = re.compile(r"``[^\n]*?``|`[^`\n]*`")
 URL = re.compile(r"https?://\S+")
 PATH = re.compile(r"(?:[A-Za-z0-9_.@~-]+/)+[A-Za-z0-9_.@-]+")
-QUOTE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?>.*$", re.M)
+# why: 인용 줄 바로 뒤에 `>` 없이 이어지는 줄도 마크다운에서는 인용의 일부다 (빈 줄이나 새 블록 전까지)
+QUOTE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?>.*(?:\n(?![ \t]*(?:\n|[#>|`~]|[-*+][ \t]|\d+[.)][ \t]))[^\n]+)*", re.M)
 # why: 표 · 상자 그림 줄 · 링크 · 들여쓴 코드는 원문이라 영어 문장이 아니다. 재생에서 이것만으로 막힌 턴이 많았다
 TABLE_ROW = re.compile(r"^[ \t]*\|.*$", re.M)
 DIAGRAM_ROW = re.compile(r"^.*[─│┌┐└┘├┤┬┴┼▶◀▲▼→←↓↑].*$", re.M)
+TABLE_PIPES = re.compile(r"^[^\n|]*\|[^\n|]*\|.*$", re.M)
+TABLE_SEPARATOR = re.compile(r"^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*\|[ \t:|-]*$", re.M)
+PIPE_LINE = re.compile(r"^.*\|.*$", re.M)
+# why: 한글이 든 줄은 설명 문장일 수 있어 지우지 않는다. 한 줄짜리 한국어 입력이 통째로 사라지면 대화 언어를 못 정한다
+ASCII_ARROW_ROW = re.compile(r"^(?![^\n]*[가-힣])[^\n]*(?:-+>|=+>|<-+)[^\n]*$", re.M)
+ASCII_BOX_ROW = re.compile(r"^[ \t]*\+[-=+]{3,}.*$", re.M)
+JSON_ROW = re.compile(r'^[ \t]*(?:[{}\]]|\[[ \t]*(?:[{"\[\d-]|$)|"[^"\n]*"[ \t]*(?::|,?[ \t]*$)).*$', re.M)
 LINK = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
 INDENTED_CODE = re.compile(r"^(?: {4}|\t).*$", re.M)
 ALT_FENCE = re.compile(r"(~~~|````+).*?(?:\1|\Z)", re.S)
+CLOSED_ALT_FENCE = re.compile(r"(~~~|````+).*?\1", re.S)
+HYPHEN_ID = re.compile(r"[A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)+|[A-Za-z0-9]*_[A-Za-z0-9_]*")
+OPTION = re.compile(r"(?<![\w-])--?[A-Za-z][\w-]*")
+SENTENCE = re.compile(r"[A-Z][^\n]*[.!?:]")
 OPEN_FENCE = re.compile(r"```.*\Z", re.S)
 WORD_RUN = re.compile(r"[A-Za-z']+(?:[ \t]*,?[ \t]+[A-Za-z']+){2,}")
 FUNCTION_WORDS = frozenset(
     "the a an is are was were be been being to of and or but in on at for with this that these those "
     "it its i i'll i've i'm i'd we we'll we're you you'll your will would can could should not no so "
     "as by from if then than there here what which who when where how also now first next let me my "
-    "our they them their has have had do does did".split()
+    "our they them their has have had do does did before after still again instead until while about into only just".split()
 )
 IMAGE_MARK = re.compile(r"\[Image #\d+\]")
 PASTED = re.compile(r"<pasted_content[^>]*>.*?</pasted_content[^>]*>", re.S)
 COMMAND_ARGS = re.compile(r"<command-args>(.*?)</command-args>", re.S)
+SYSTEM_REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
+# why: 슬래시 명령은 `/이름` 뒤가 공백이나 끝이다. `/Users/...` 로 시작하는 경로 입력은 사람이 쓴 말이다
+SLASH_COMMAND = re.compile(r"/[\w:.-]+(?:\s|\Z)")
 SYSTEM_PREFIXES = (
     "[Request interrupted", "<bash-input>", "<bash-stdout>", "<bash-stderr>", "<command-name>",
     "<command-message>", "<command-args>", "<local-command-stdout>", "<local-command-stderr>",
@@ -80,10 +98,14 @@ SYSTEM_PREFIXES = (
 )
 
 
-def strip_verbatim(text: str) -> str:
+def strip_verbatim(text: str, closed_only: bool = False) -> str:
     # why: 백틱 넷 블록 안의 ``` 를 먼저 지우면 바깥 블록이 깨진다. 긴 울타리부터 지운다
-    for pattern in (ALT_FENCE, FENCE, OPEN_FENCE, INDENTED_CODE, INLINE, LINK, URL, PATH, QUOTE,
-                    TABLE_ROW, DIAGRAM_ROW):
+    # 사람 입력은 닫히지 않은 울타리가 입력 끝까지 한국어를 지우지 않게 닫힌 블록만 지운다 (#1076)
+    if TABLE_SEPARATOR.search(text):
+        text = PIPE_LINE.sub(" ", text)
+    patterns = (CLOSED_ALT_FENCE, FENCE) if closed_only else (ALT_FENCE, FENCE, OPEN_FENCE)
+    for pattern in patterns + (INDENTED_CODE, INLINE, LINK, URL, PATH, QUOTE, TABLE_ROW, TABLE_PIPES,
+                               DIAGRAM_ROW, ASCII_ARROW_ROW, ASCII_BOX_ROW, JSON_ROW):
         text = pattern.sub(" ", text)
     return text
 
@@ -114,11 +136,21 @@ def is_json(text: str) -> bool:
 
 def has_english_sentence(text: str) -> bool:
     """기능어를 품은 로마자 낱말 셋 이상의 연속. 식별자 나열 · 명령 · 이름에는 거의 없다."""
-    for run in WORD_RUN.findall(strip_verbatim(text)):
+    body = strip_verbatim(text)
+    # why: 하이픈 · 밑줄 식별자와 `-a` 옵션의 조각(be · to · a · it)은 기능어가 아니다. 낱말 연속도 끊는다
+    body = HYPHEN_ID.sub(" ¦ ", OPTION.sub(" ¦ ", body))
+    for run in WORD_RUN.findall(body):
         words = {w.lower() for w in re.findall(r"[A-Za-z']+", run)}
         if words & FUNCTION_WORDS:
             return True
-    return False
+    if HANGUL.search(body):
+        return False
+    # why: 한글 없는 문단은 낱말이 끊겨도(숫자 · 괄호) 영어 문장이다. 「Next, #811 (...)」
+    words = re.findall(r"[A-Za-z']+", body)
+    if len(words) >= 3 and any(w.lower() in FUNCTION_WORDS for w in words):
+        return True
+    lower = [w for w in words if len(w) >= 2 and w.islower()]
+    return len(words) >= 4 and len(lower) >= 3 and bool(SENTENCE.fullmatch(" ".join(body.split())))
 
 
 def user_text(entry: dict) -> str | None:
@@ -154,10 +186,30 @@ def reversed_lines(path: str):
             yield rest
 
 
+def is_tool_result(entry: dict) -> bool:
+    content = entry.get("message", {}).get("content")
+    return entry.get("type") == "user" and isinstance(content, list) and any(
+        isinstance(c, dict) and c.get("type") == "tool_result" for c in content)
+
+
+def has_tool_use(entry: dict) -> bool:
+    content = entry.get("message", {}).get("content")
+    return entry.get("type") == "assistant" and isinstance(content, list) and any(
+        isinstance(c, dict) and c.get("type") == "tool_use" for c in content)
+
+
+def is_mid_turn(previous: dict | None) -> bool:
+    """입력 직전 항목이 도구 호출이나 도구 결과면 그 입력은 턴 중간에 끼어든 것이다."""
+    # why: 도구가 도는 동안 들어온 알림 · 사람 입력이 턴 경계가 되면 그 앞의 글이 판정에서 빠진다 (#1076).
+    # 어시스턴트가 글로 끝낸 뒤의 입력(end_turn)은 새 턴이다
+    return previous is not None and (is_tool_result(previous) or has_tool_use(previous))
+
+
 def read_entries(path: str) -> list[dict]:
     """세션 기록을 끝에서부터 읽어 대화 언어를 정하는 사람 입력까지를 시간 순으로 돌려준다."""
     # why: PostToolUse 는 도구 호출마다 돈다. 긴 세션의 기록 전체를 매번 읽지 않는다
     entries = []
+    boundary = False
     for raw in reversed_lines(path):
         raw = raw.strip()
         if not raw:
@@ -168,9 +220,14 @@ def read_entries(path: str) -> list[dict]:
             continue
         if not isinstance(entry, dict):
             continue
+        if boundary and entry.get("type") in ("user", "assistant"):
+            # 앞서 읽은 입력의 직전 항목. 턴 중간 입력이면 그 앞까지 더 읽는다
+            if not is_mid_turn(entry):
+                break
+            boundary = False
         entries.append(entry)
         if input_language(entry) is not None:
-            break
+            boundary = True
     entries.reverse()
     return entries
 
@@ -183,11 +240,12 @@ def is_human(entry: dict, text: str) -> bool:
         return False
     if entry.get("isCompactSummary"):
         return False
-    head = text.lstrip()
+    # why: 시스템 알림 블록이 앞에 붙은 사람 입력은 알림 뒤의 말이 사람 말이다
+    head = SYSTEM_REMINDER.sub("", text).lstrip()
     if head.startswith(("<command-message>", "<command-name>")):
         # why: 인자를 붙인 슬래시 명령은 인자가 사람이 쓴 말이다
         return bool(COMMAND_ARGS.search(text))
-    return not head.startswith(("!", "/")) and not head.startswith(SYSTEM_PREFIXES)
+    return not head.startswith("!") and not SLASH_COMMAND.match(head) and not head.startswith(SYSTEM_PREFIXES)
 
 
 def spoken_text(text: str) -> str:
@@ -195,7 +253,8 @@ def spoken_text(text: str) -> str:
     args = COMMAND_ARGS.findall(text)
     if args and text.lstrip().startswith(("<command-message>", "<command-name>")):
         text = " ".join(args)
-    return strip_verbatim(PASTED.sub(" ", IMAGE_MARK.sub(" ", text)))
+    text = SYSTEM_REMINDER.sub(" ", text)
+    return strip_verbatim(PASTED.sub(" ", IMAGE_MARK.sub(" ", text)), closed_only=True)
 
 
 def input_language(entry: dict) -> bool | None:
@@ -228,11 +287,18 @@ def split_paragraphs(text: str) -> list[str]:
 
 def turn_items(entries: list[dict]) -> list[tuple[str, str]]:
     """이번 턴(마지막 입력 뒤)을 순서대로: ("text", 글) · ("tool", 호출 id) · ("result", "")."""
-    last_user = max((i for i, e in enumerate(entries) if user_text(e) is not None), default=-1)
+    last_user, previous = -1, None
+    for i, entry in enumerate(entries):
+        if user_text(entry) is not None and not is_mid_turn(previous):
+            last_user = i
+        if entry.get("type") in ("user", "assistant"):
+            previous = entry
     items = []
     for entry in entries[last_user + 1:]:
         if entry.get("type") == "user":
-            items.append(("result", ""))
+            # 턴 중간에 끼어든 입력은 글을 가르지 않는다
+            if user_text(entry) is None:
+                items.append(("result", ""))
             continue
         if entry.get("type") != "assistant":
             continue
