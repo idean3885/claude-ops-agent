@@ -114,6 +114,27 @@ async function newPage(browser) {
   return page;
 }
 
+// 대상마다 격리된 브라우저 컨텍스트에서 페이지를 연다. 기본 컨텍스트의 페이지들은
+// 쿠키·localStorage·세션을 공유해서, 같은 사이트에서 "마지막에 본 회사" 를 상태로 갖는
+// 대상은 앞선 대상의 목록을 그대로 돌려준다. 컨텍스트를 나누면 대상 사이에 상태가
+// 넘어갈 길이 없다. close() 는 페이지와 컨텍스트를 함께 닫는다.
+async function openIsolatedPage(browser) {
+  const create = browser.createBrowserContext || browser.createIncognitoBrowserContext;
+  if (typeof create !== 'function') {
+    throw new Error('브라우저가 격리 컨텍스트를 지원하지 않습니다 (puppeteer-core 버전 확인).');
+  }
+  const context = await create.call(browser);
+  try {
+    const page = await context.newPage();
+    await page.setUserAgent(USER_AGENT);
+    await page.setViewport({ width: 1280, height: 1600 });
+    return { page, close: () => context.close() };
+  } catch (e) {
+    await context.close();
+    throw e;
+  }
+}
+
 // 진입 대기 조건. 기본은 networkidle2 지만, 애널리틱스·폴링·웹소켓으로 연결을 계속
 // 유지하는 사이트는 렌더가 끝났는데도 idle 에 도달하지 못해 타임아웃한다. 렌더 대기는
 // waitFor 셀렉터가 따로 받으므로 대상별로 진입 조건만 느슨하게 열 수 있게 한다.
@@ -142,6 +163,7 @@ module.exports = {
   findChromium,
   launch,
   newPage,
+  openIsolatedPage,
   resolveGoto,
   gotoWith,
   GOTO_WAIT_UNTIL,

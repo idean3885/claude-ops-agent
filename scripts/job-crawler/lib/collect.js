@@ -4,7 +4,7 @@
 // 떨어진다. heuristic 은 "공고처럼 보이는 링크" 를 거르는 사전 필터라 어떤 직군을 찾는지에
 // 좌우된다 — 그래서 패턴을 프로파일이 덮어쓸 수 있게 둔다.
 
-const { newPage, resolveGoto, gotoWith } = require('./browser');
+const { openIsolatedPage, resolveGoto, gotoWith } = require('./browser');
 const { score, classify } = require('./scorer');
 const { collectFromDeclaration } = require('./listsource');
 
@@ -66,7 +66,7 @@ function dedupe(items) {
 }
 
 async function collectOne(browser, name, cfg, ctx) {
-  const page = await newPage(browser);
+  const { page, close } = await openIsolatedPage(browser);
   const result = { name, url: cfg.url, count: 0, jobs: [], error: null, fallback: false, listUnreached: null, listSource: 'dom' };
 
   try {
@@ -76,7 +76,9 @@ async function collectOne(browser, name, cfg, ctx) {
       try {
         await page.waitForSelector(cfg.waitFor, { timeout: 8000 });
       } catch {
-        // 대기 실패해도 계속 — 아래 추출에서 fallback 이 받는다
+        // 대기 실패해도 계속하되 기록한다. 렌더가 끝나지 않은 DOM 에서 뽑은 결과가
+        // 정상 수집처럼 보이면 안 된다 — 리포트가 경고로 적는다.
+        result.waitForFailed = cfg.waitFor;
       }
     }
 
@@ -140,7 +142,7 @@ async function collectOne(browser, name, cfg, ctx) {
   } catch (e) {
     result.error = e.message;
   } finally {
-    await page.close();
+    await close();
   }
 
   return result;

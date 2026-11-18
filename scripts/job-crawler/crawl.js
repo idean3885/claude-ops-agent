@@ -9,7 +9,7 @@
 //   node crawl.js 대상A 대상B                       # 이름 부분 일치로 좁힘
 //   node crawl.js --profile path/to/profile.json
 //   node crawl.js --threshold 3                    # 임계값 덮어쓰기
-//   node crawl.js --url https://... --name 이름     # 프로파일 없는 대상 즉석 추가
+//   node crawl.js --url https://... --name 이름     # 그 대상 하나만 (프로파일 targets 는 건너뜀)
 //   node crawl.js --no-detail                      # 상세 확인 생략 (목록만)
 //   node crawl.js --detail-cap 20                  # 상세 확인 상한
 //   node crawl.js --out dir                        # 출력 디렉토리 덮어쓰기
@@ -71,6 +71,15 @@ function buildContext(profile, cli) {
 }
 
 function selectTargets(profile, cli) {
+  if (!cli.adhoc.url !== !cli.adhoc.name) {
+    const err = new Error('--url 과 --name 은 함께 지정해야 합니다.');
+    err.exitCode = 1;
+    throw err;
+  }
+  // --url 은 그 대상 하나만 돈다. 프로파일 targets 를 같이 돌리면 대상 하나만 다시
+  // 돌리는 용도가 막히고 실행 시간이 프로파일 전체만큼 든다.
+  if (cli.adhoc.url) return [[cli.adhoc.name, { url: cli.adhoc.url }]];
+
   const entries = Object.entries(profile.targets);
   let targets = entries;
   if (cli.only.length > 0) {
@@ -82,13 +91,6 @@ function selectTargets(profile, cli) {
       err.exitCode = 2;
       throw err;
     }
-  }
-  if (cli.adhoc.url && cli.adhoc.name) {
-    targets = targets.concat([[cli.adhoc.name, { url: cli.adhoc.url }]]);
-  } else if (cli.adhoc.url || cli.adhoc.name) {
-    const err = new Error('--url 과 --name 은 함께 지정해야 합니다.');
-    err.exitCode = 1;
-    throw err;
   }
   return targets;
 }
@@ -176,7 +178,11 @@ async function main() {
 
 // 프로파일 오류·대상 미매칭처럼 사용자가 고칠 오류가 대부분이라 메시지만 낸다.
 // 스택이 필요하면 JOB_CRAWLER_DEBUG=1.
-main().catch((e) => {
-  console.error(process.env.JOB_CRAWLER_DEBUG ? e : `오류: ${e.message}`);
-  process.exit(e.exitCode || 1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(process.env.JOB_CRAWLER_DEBUG ? e : `오류: ${e.message}`);
+    process.exit(e.exitCode || 1);
+  });
+}
+
+module.exports = { selectTargets, parseArgs };

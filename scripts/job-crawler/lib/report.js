@@ -11,6 +11,42 @@ function reasonText(job) {
   return job.reasons.map((x) => `${x.label}(${x.delta > 0 ? '+' : ''}${x.delta})`).join(', ');
 }
 
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function sameSite(a, b) {
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+// 섹션 링크 호스트가 대상 URL 호스트와 하나도 맞지 않으면 그 섹션은 다른 대상의
+// 결과일 수 있다. 맞지 않는 호스트 목록을 돌려주고, 하나라도 맞거나 판정할 링크가
+// 없으면 null.
+function linkHostMismatch(targetUrl, jobs) {
+  const target = hostOf(targetUrl);
+  if (!target) return null;
+  const hosts = [...new Set((jobs || []).map((j) => hostOf(j.url)).filter(Boolean))];
+  if (hosts.length === 0 || hosts.some((h) => sameSite(h, target))) return null;
+  return hosts;
+}
+
+// 배제 규칙 = 음수 delta 규칙. 걸린 공고는 점수가 낮아 생략분으로 밀리기 쉬운데,
+// 크롤러가 배제했다는 사실이 보고서에서 사라지면 다른 경로로 들어온 후보를 대조할 수 없다.
+function exclusionLabels(job) {
+  return (job.reasons || []).filter((x) => x.delta < 0).map((x) => x.label);
+}
+
+// 임계 미만 목록을 표에 낼 상위분과 생략분으로 나누고, 생략분 중 배제 공고를 가려낸다.
+function splitRest(rest, restCap) {
+  const shown = rest.slice(0, restCap);
+  const omitted = rest.slice(restCap);
+  return { shown, omitted, omittedExcluded: omitted.filter((j) => exclusionLabels(j).length > 0) };
+}
+
 function renderReport(results, ctx) {
   const lines = [];
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
@@ -34,6 +70,14 @@ function renderReport(results, ctx) {
     if (r.listUnreached) {
       lines.push(`- **목록 도달 실패**: ${r.listUnreached}`);
       lines.push('  - 위 건수는 공고 수가 아닙니다. 수집 실패이므로 수기 확인이 필요합니다');
+    }
+    const mismatch = r.error ? null : linkHostMismatch(r.url, r.jobs);
+    if (mismatch) {
+      lines.push(`- **경고: 링크 호스트 불일치** — 대상 호스트와 맞는 링크가 하나도 없습니다 (링크 호스트: ${mismatch.slice(0, 3).join(', ')}).`);
+      lines.push('  - 다른 대상의 결과가 섞였을 수 있습니다. 수기 확인이 필요합니다');
+    }
+    if (r.waitForFailed) {
+      lines.push(`- **경고: 렌더 대기 실패** — waitFor \`${r.waitForFailed}\` 가 나타나지 않은 채 추출했습니다. 렌더 전 DOM 일 수 있습니다`);
     }
     if (r.detailFailed) {
       lines.push(`- **상세 확인 실패 ${r.detailFailed}건**: ${(r.detailFailReasons || []).join(' · ')}`);
@@ -133,12 +177,24 @@ function renderReport(results, ctx) {
       lines.push('');
       lines.push('| score | 판정 | 제목 |');
       lines.push('|---|---|---|');
-      for (const j of rest.slice(0, ctx.restCap)) {
+      const { shown, omitted, omittedExcluded } = splitRest(rest, ctx.restCap);
+      for (const j of shown) {
         lines.push(`| ${j.score} | ${j.verdict} | [${esc(j.title)}](${j.url}) |`);
       }
-      if (rest.length > ctx.restCap) {
+      if (omitted.length > 0) {
         lines.push('');
-        lines.push(`> 임계 미만 ${rest.length - ctx.restCap}건은 생략했습니다.`);
+        const excludedNote = omittedExcluded.length > 0 ? `, 이 중 배제 규칙 ${omittedExcluded.length}건` : '';
+        lines.push(`> 임계 미만 ${omitted.length}건${excludedNote}은 생략했습니다.`);
+      }
+      if (omittedExcluded.length > 0) {
+        lines.push('');
+        lines.push('### 배제 규칙에 걸린 생략 공고');
+        lines.push('');
+        lines.push('| score | 제목 | 걸린 규칙 | 근거 |');
+        lines.push('|---|---|---|---|');
+        for (const j of omittedExcluded) {
+          lines.push(`| ${j.score} | [${esc(j.title)}](${j.url}) | ${exclusionLabels(j).join(', ')} | ${reasonText(j)} |`);
+        }
       }
     }
     lines.push('');
@@ -169,4 +225,4 @@ function renderDetailFile(company, job, stamp) {
     .join('\n');
 }
 
-module.exports = { renderReport, renderDetailFile };
+module.exports = { renderReport, renderDetailFile, linkHostMismatch, splitRest };

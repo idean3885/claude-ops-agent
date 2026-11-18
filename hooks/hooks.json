@@ -93,7 +93,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/action-gate-prompt.mjs\"",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       }

@@ -55,7 +55,7 @@ config/job-crawler/<name>.json
 node ~/.claude/ops-agent/current/scripts/job-crawler/crawl.js      # 프로파일 전체 대상
 node .../crawl.js 대상A 대상B                                       # 이름 부분 일치로 좁힘
 node .../crawl.js --threshold 3                                    # 임계값 덮어쓰기
-node .../crawl.js --url https://... --name 이름                     # 프로파일 없는 대상 즉석 추가
+node .../crawl.js --url https://... --name 이름                     # 그 대상 하나만 (프로파일 targets 는 건너뜀)
 node .../crawl.js --no-detail                                      # 상세 확인 생략 (목록만)
 node .../crawl.js --detail-cap 20                                  # 상세 확인 상한
 node .../crawl.js --out dir                                        # 출력 경로 덮어쓰기
