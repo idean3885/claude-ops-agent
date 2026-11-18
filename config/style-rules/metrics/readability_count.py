@@ -15,6 +15,7 @@
 
 사용:
   python3 readability_count.py README.md docs/*.md
+  python3 readability_count.py --only L9,PN8 body.md   # 지정한 규칙만 낸다 (보내기 전 글 판정)
 종료 코드: 검출 0 이면 0, 있으면 1.
 """
 import re
@@ -350,6 +351,11 @@ def check(path):
 
 
 def main(argv):
+    only = None
+    if argv[:1] == ["--only"] and len(argv) > 1:
+        only, argv = set(argv[1].split(",")), argv[2:]
+    elif argv[:1] and argv[0].startswith("--only="):
+        only, argv = set(argv[0].split("=", 1)[1].split(",")), argv[1:]
     if not argv:
         print(__doc__)
         return 0
@@ -357,6 +363,8 @@ def main(argv):
     for p in argv:
         try:
             hits = check(p)
+            if only is not None:
+                hits = [h for h in hits if h[1] in only]
         except OSError as e:
             print(f"{p}: 읽기 실패 ({e})", file=sys.stderr)
             continue

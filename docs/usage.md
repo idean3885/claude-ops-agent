@@ -39,6 +39,7 @@ claude plugin update ops-agent@ops-agent
 | PreToolUse | 대외비 키워드가 공개 표면으로 전송되는 명령 | **실행 전 차단** |
 | PreToolUse | 커밋·PR·이슈 본문의 구현 세부 서술 | **실행 전 차단** |
 | PreToolUse | 커밋 메시지 · PR 제목 · 본문 · 코멘트에서 한글과 붙은 한자 | **실행 전 차단** |
+| PreToolUse | 이슈 · PR 본문 · 코멘트의 불릿 안 머리말 · 물결표 취소선 (글 판정 가드) | **실행 전 차단** |
 | PreToolUse | 어댑터(`scripts/gh-issue.sh`)를 거치지 않은 이슈 생성 (`gh issue create` · `gh api …/issues`) | **실행 전 차단** |
 | PreToolUse | 머지·릴리즈·force push·클러스터 변경·리소스 삭제 | **사용자가 세션 허용을 켤 때까지 차단** |
 | PreToolUse | 기본 브랜치 직접 push, `reset --hard`·`clean -f`·`branch -D`·`restore` | **사용자가 세션 허용을 켤 때까지 차단** |
@@ -149,7 +150,7 @@ flowchart LR
 | `scripts/post-merge-sync.sh` | 머지 후 로컬 캐시 동기 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | `scripts/action-gate-allow.sh` | 되돌리기 어려운 행위의 세션 허용 토글 | [action-gate.md](action-gate.md) |
 | `scripts/pre-merge-check.sh` | 머지 전 버전·CHANGELOG 대조 (검출 시 종료 코드 1) | [action-gate.md](action-gate.md) |
-| `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 한자 섞임 검사 → 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
+| `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 한자 섞임 검사 → 글 판정 → 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/issue-body-rules.mjs` | 이슈 본문 구조 룰 정본 (ISS1 · ISS5 · ISS6 · ISS7 · ISS10). 어댑터가 부른다. | [action-gate.md](action-gate.md) |
 | `scripts/han-intrusion.mjs` | 한글 음절에 붙은 한자(생성 중 바뀐 글자) 검사. 이슈 어댑터와 커밋 · PR 쓰기 훅(한자 섞임 가드)이 부른다. 띄어 쓴 한자 낱말은 통과 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/selftest-han-intrusion.py` | han-intrusion.mjs 자체 점검 | [PROVIDER.md](../providers/PROVIDER.md) |

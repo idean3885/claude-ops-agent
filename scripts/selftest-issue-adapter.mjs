@@ -167,6 +167,13 @@ adapterCase('본문 검사 실패는 생성하지 않는다', ['create', '--titl
   adapterCase('제목의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', '외部 연동', '--body-file', okBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
 }
 {
+  // #1112: 본문이 문서 규칙의 확정 항목(L9 불릿 안 머리말)에 걸리면 생성하지 않는다. 고친 본문은 생성한다
+  const labelBody = join(sandbox, 'label.md');
+  writeFileSync(labelBody, ISS5_OK.replace('- 사실 1\n', '- 원인: 캐시 만료가 짧다\n'));
+  adapterCase('불릿 안 머리말은 생성하지 않는다 (L9)', ['create', '--title', 't', '--body-file', labelBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create'], json: { step: 'body-lint' } });
+  adapterCase('글 판정 비활성은 생성한다', ['create', '--title', 't', '--body-file', labelBody, '--type', 'feat', '--no-start', 'x'], 0, { env: { OPS_AGENT_BODY_LINT_DISABLE: '1' }, logHas: ['gh issue create'] });
+}
+{
   // #1109: 설치본은 링크 경로(~/.claude/ops-agent/current)로 부른다. 링크로 불러도 두 검사가 돈다
   const linked = join(sandbox, 'current');
   symlinkSync(dirname(here), linked);

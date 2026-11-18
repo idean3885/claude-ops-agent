@@ -3,8 +3,8 @@
 
 PN8 은 소스에서는 보이지 않고 렌더해야 드러나는 결함이라, 검출이 무너지면 신호가 없다.
 예문의 기댓값은 GitHub 마크다운 API(gfm 모드)가 <del> 을 내는지로 정했다 (#823).
-L9 는 검출이 무너지면 머리말 불릿이 신호 없이 지나가고, 예외가 무너지면 형식이 정한 정의 목록까지
-위반으로 낸다 (#1111).
+L9 는 트래커 본문을 보내기 전 글 판정이 차단에 쓴다. 검출이 무너지면 머리말 불릿이 신호 없이 전송되고,
+예외가 무너지면 형식이 정한 정의 목록까지 막는다 (#1111 · #1112).
 
     python3 scripts/selftest-readability-count.py
 """
@@ -119,7 +119,7 @@ def main() -> int:
     os.unlink(f.name)
     if lines != [3, 4]:
         fails.append(f"check() 진입점: PN8 줄 {lines} (기대 [3, 4])")
-    # L9: check() 진입점으로 파일을 읽어 검출 줄 수를 본다.
+    # L9: check() 진입점으로 파일을 읽어 검출 줄 수를 본다. --only 로 고른 규칙만 내는지도 본다.
     for k, (doc, want) in L9_DOCS.items():
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
             f.write(doc)
