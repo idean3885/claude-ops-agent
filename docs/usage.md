@@ -148,8 +148,10 @@ flowchart LR
 | `scripts/post-merge-sync.sh` | 머지 후 로컬 캐시 동기 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | `scripts/action-gate-allow.sh` | 되돌리기 어려운 행위의 세션 허용 토글 | [action-gate.md](action-gate.md) |
 | `scripts/pre-merge-check.sh` | 머지 전 버전·CHANGELOG 대조 (검출 시 종료 코드 1) | [action-gate.md](action-gate.md) |
-| `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
+| `scripts/gh-issue.sh` | 이슈 생성 · 시작 어댑터 (github provider). 한자 섞임 검사 → 본문 구조 검사 → 라벨 → 생성 → 시작 결정 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/issue-body-rules.mjs` | 이슈 본문 구조 룰 정본 (ISS1 · ISS5 · ISS6 · ISS7). 어댑터가 부른다. | [action-gate.md](action-gate.md) |
+| `scripts/han-intrusion.mjs` | 한글 음절에 붙은 한자(생성 중 바뀐 글자) 검사. 트래커 본문 쓰기 경로가 부른다. 띄어 쓴 한자 낱말은 통과 | [PROVIDER.md](../providers/PROVIDER.md) |
+| `scripts/selftest-han-intrusion.py` | han-intrusion.mjs 자체 점검 | [PROVIDER.md](../providers/PROVIDER.md) |
 | `scripts/selftest-action-gate.mjs` | 한시 권한 · 통과 기록 · 레포 유형 · 이슈 생성 가드 · 초안 PR 가드 · 주장 검증 자체 점검 (158건) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-issue-adapter.mjs` | 이슈 본문 룰 · 어댑터 계약 자체 점검 (54건, 가짜 gh · git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |

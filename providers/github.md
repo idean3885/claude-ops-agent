@@ -20,7 +20,9 @@ bash ~/.claude/ops-agent/current/scripts/gh-issue.sh create --title "{제목}" -
   (--start [--worktree|--checkout] [--base {브랜치}] [--branch {이름}] | --no-start "{사유}") [-R {owner/repo}] [--structure {iss1|iss5|iss6|iss7}]
 ```
 
-어댑터가 본문 구조 검사(`scripts/issue-body-rules.mjs`) → 라벨 보장 → `gh issue create --label {타입}` → `--start` 면 start 를 이어서 한다. 구조 기본값은 `fix` → ISS1, 그 외 → ISS5. `gh issue create` 직접 호출은 훅이 거부한다. 출력은 JSON 한 줄(`status` · `number` · `url` · `start`).
+어댑터가 한자 섞임 검사(`scripts/han-intrusion.mjs`) → 본문 구조 검사(`scripts/issue-body-rules.mjs`) → 라벨 보장 → `gh issue create --label {타입}` → `--start` 면 start 를 이어서 한다. 구조 기본값은 `fix` → ISS1, 그 외 → ISS5. `gh issue create` 직접 호출은 훅이 거부한다. 출력은 JSON 한 줄(`status` · `number` · `url` · `start`).
+
+`-R` 이 `owner/repo` 뿐이면 어댑터가 현재 레포 원격 중 같은 레포를 가리키는 것의 호스트를 붙여 `host/owner/repo` 로 넘긴다. owner/repo 만 받은 gh 명령은 기본 호스트(github.com)로 가서, 엔터프라이즈 레포의 라벨 조회가 공개 GitHub 로 새기 때문이다. 호스트 환경 변수는 셸 전체에 내보내지 않는다. 그 셸의 호출을 대외비 가드가 공개 표면으로 판정한다. 라벨 조회가 실패하면 「라벨 없음」으로 읽지 않고 종료 2 로 멈춘다.
 
 **라벨 매핑**:
 | 키워드 | 라벨 | 브랜치 접두사 | 색상 |

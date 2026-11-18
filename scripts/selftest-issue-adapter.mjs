@@ -92,7 +92,7 @@ const LOG = join(sandbox, 'calls.log');
 writeFileSync(join(bin, 'gh'), `#!/bin/bash
 echo "gh $*" >> "$FAKE_LOG"
 case "$1 $2" in
-  "label list") printf '%s\\n' $FAKE_LABELS_REPO;;
+  "label list") [ "$FAKE_GH_FAIL" = labels ] && exit 1; printf '%s\\n' $FAKE_LABELS_REPO;;
   "label create") exit 0;;
   "issue create") [ "$FAKE_GH_FAIL" = create ] && exit 1; echo "https://github.com/o/r/issues/42";;
   "issue view") case "$*" in *title,url*) printf '%s\\t%s\\n' "$FAKE_ISSUE_URL" "$FAKE_ISSUE_TITLE";; *) printf '%s\\n' $FAKE_ISSUE_LABELS;; esac;;
@@ -106,6 +106,7 @@ writeFileSync(join(bin, 'git'), `#!/bin/bash
 echo "git $*" >> "$FAKE_LOG"
 case "$1" in
   rev-parse) echo "$FAKE_TOPLEVEL";;
+  remote) [ -n "$FAKE_REMOTES" ] && printf '%b\\n' "$FAKE_REMOTES"; exit 0;;
   fetch) exit 0;;
   ls-remote) case "$FAKE_REMOTE_BRANCH" in 1) exit 0;; 128) exit 128;; *) exit 2;; esac;;
   show-ref) [ "$FAKE_LOCAL_BRANCH" = 0 ] && exit 1; exit 0;;
@@ -128,7 +129,7 @@ function run(args, env = {}) {
     encoding: 'utf8',
     env: {
       ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LOG: LOG, FAKE_TOPLEVEL: join(sandbox, 'proj'),
-      FAKE_LABELS_REPO: 'feat fix', FAKE_ISSUE_LABELS: '', FAKE_GH_FAIL: '', FAKE_GIT_FAIL: '',
+      FAKE_LABELS_REPO: 'feat fix', FAKE_ISSUE_LABELS: '', FAKE_GH_FAIL: '', FAKE_GIT_FAIL: '', FAKE_REMOTES: '',
       // 세션 인덱스를 실제 홈에 쓰지 않는다. 세션 번호는 인덱스 사례만 넣는다
       HOME: sandbox, CLAUDE_CODE_SESSION_ID: '', ...env,
     },
@@ -155,6 +156,13 @@ adapterCase('필수 판단 누락은 거부', CREATE, 1, { logNot: ['gh issue cr
 adapterCase('--start 와 --no-start 동시는 거부', [...CREATE, '--start', '--no-start', 'x'], 1, { logNot: ['gh issue create'] });
 adapterCase('--type 누락은 거부', ['create', '--title', 't', '--body-file', okBody, '--start'], 1, { logNot: ['gh issue create'] });
 adapterCase('본문 검사 실패는 생성하지 않는다', ['create', '--title', 't', '--body-file', badBody, '--type', 'feat', '--start'], 1, { logNot: ['gh issue create'], json: { step: 'body-check' } });
+{
+  // #1090: 한글과 붙은 한자가 든 제목 · 본문은 구조 검사보다 먼저 멈춘다
+  const hanBody = join(sandbox, 'han.md');
+  writeFileSync(hanBody, ISS5_OK.replace('- 사실 1\n', '- 남은 일은 외部 대기\n'));
+  adapterCase('본문의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', 't', '--body-file', hanBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create', 'gh label'], json: { step: 'han-intrusion' } });
+  adapterCase('제목의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', '외部 연동', '--body-file', okBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
+}
 adapterCase('fix 는 ISS1 기본 (ISS5 본문은 거부)', ['create', '--title', 't', '--body-file', okBody, '--type', 'fix', '--start'], 1, { logNot: ['gh issue create'] });
 adapterCase('fix + ISS1 본문 통과', ['create', '--title', 't', '--body-file', fixBody, '--type', 'fix', '--no-start', 'x'], 0, { logHas: ['gh issue create'] });
 adapterCase('--structure 가 기본값을 덮는다', ['create', '--title', 't', '--body-file', okBody, '--type', 'fix', '--structure', 'iss5', '--no-start', 'x'], 0, { logHas: ['gh issue create'] });
@@ -162,6 +170,16 @@ adapterCase('--no-start 는 생성만 하고 사유를 낸다', [...CREATE, '--n
 adapterCase('라벨이 없으면 만든다', [...CREATE, '--no-start', 'x'], 0, { env: { FAKE_LABELS_REPO: 'fix' }, logHas: ['gh label create feat'] });
 adapterCase('라벨이 있으면 만들지 않는다', [...CREATE, '--no-start', 'x'], 0, { logNot: ['gh label create'] });
 adapterCase('-R 이 라벨 · 생성 명령에 전달된다', [...CREATE, '-R', 'o/r', '--no-start', 'x'], 0, { logHas: ['gh label list -R o/r', 'gh issue create -R o/r'] });
+// #1098: -R 이 owner/name 뿐이면 현재 레포 원격의 호스트를 붙인다. 호스트 환경 변수가 아니라 호출 인자로 넘긴다
+const GHE_HTTPS = 'origin\thttps://ghe.example/o/r.git (fetch)\norigin\thttps://ghe.example/o/r.git (push)';
+adapterCase('-R owner/name 은 원격(https)의 엔터프라이즈 호스트를 붙인다', [...CREATE, '-R', 'o/r', '--no-start', 'x'], 0, { env: { FAKE_REMOTES: GHE_HTTPS }, logHas: ['gh label list -R ghe.example/o/r', 'gh issue create -R ghe.example/o/r'] });
+adapterCase('-R owner/name 은 원격(ssh)의 엔터프라이즈 호스트를 붙인다', [...CREATE, '-R', 'o/r', '--no-start', 'x'], 0, { env: { FAKE_REMOTES: 'upstream\tgit@ghe.example:o/r.git (fetch)' }, logHas: ['gh label list -R ghe.example/o/r', 'gh issue create -R ghe.example/o/r'] });
+adapterCase('-R owner/name 은 원격(ssh:// 포트)의 엔터프라이즈 호스트를 붙인다', [...CREATE, '-R', 'o/r', '--no-start', 'x'], 0, { env: { FAKE_REMOTES: 'origin\tssh://git@ghe.example:2222/o/r.git (fetch)' }, logHas: ['gh issue create -R ghe.example/o/r'] });
+adapterCase('github.com 원격이면 -R 을 그대로 둔다', [...CREATE, '-R', 'o/r', '--no-start', 'x'], 0, { env: { FAKE_REMOTES: 'origin\thttps://github.com/o/r.git (fetch)' }, logHas: ['gh issue create -R o/r '], logNot: ['github.com/o/r'] });
+adapterCase('다른 레포를 가리키는 원격은 호스트를 붙이지 않는다', [...CREATE, '-R', 'o/r', '--no-start', 'x'], 0, { env: { FAKE_REMOTES: 'origin\thttps://ghe.example/o/other.git (fetch)' }, logHas: ['gh issue create -R o/r '], logNot: ['ghe.example'] });
+adapterCase('host/owner/name 은 그대로 넘긴다', [...CREATE, '-R', 'h.example/o/r', '--no-start', 'x'], 0, { env: { FAKE_REMOTES: GHE_HTTPS }, logHas: ['gh issue create -R h.example/o/r'], logNot: ['ghe.example'] });
+adapterCase('start: -R owner/name 도 원격 호스트를 붙인다', ['start', '42', '--type', 'docs', '-R', 'o/r'], 0, { env: { FAKE_REMOTES: GHE_HTTPS }, logHas: ['gh issue edit 42 -R ghe.example/o/r', 'gh issue comment 42 -R ghe.example/o/r'] });
+adapterCase('라벨 조회 실패는 「라벨 없음」으로 읽지 않고 종료 2', [...CREATE, '--no-start', 'x'], 2, { env: { FAKE_GH_FAIL: 'labels' }, logNot: ['gh label create', 'gh issue create'], json: { status: 'error' } });
 adapterCase('--start 는 담당자 · 시작 코멘트', [...CREATE, '--start'], 0, { logHas: ['gh issue edit 42 --add-assignee @me', 'gh issue comment 42 --body 작업 시작: '], logNot: ['git '], json: { start: 'started', number: '42', type: 'feat' } });
 adapterCase('생성 실패는 종료 2', [...CREATE, '--start'], 2, { env: { FAKE_GH_FAIL: 'create' }, json: { status: 'error' } });
 adapterCase('생성 뒤 시작 실패는 종료 3 + 번호', [...CREATE, '--start'], 3, { env: { FAKE_GH_FAIL: 'comment' }, json: { status: 'error', number: '42', start: 'failed', step: 'start' } });
