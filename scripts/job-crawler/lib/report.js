@@ -11,6 +11,29 @@ function reasonText(job) {
   return job.reasons.map((x) => `${x.label}(${x.delta > 0 ? '+' : ''}${x.delta})`).join(', ');
 }
 
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function sameSite(a, b) {
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+// 섹션 링크 호스트가 대상 URL 호스트와 하나도 맞지 않으면 그 섹션은 다른 대상의
+// 결과일 수 있다. 맞지 않는 호스트 목록을 돌려주고, 하나라도 맞거나 판정할 링크가
+// 없으면 null.
+function linkHostMismatch(targetUrl, jobs) {
+  const target = hostOf(targetUrl);
+  if (!target) return null;
+  const hosts = [...new Set((jobs || []).map((j) => hostOf(j.url)).filter(Boolean))];
+  if (hosts.length === 0 || hosts.some((h) => sameSite(h, target))) return null;
+  return hosts;
+}
+
 function renderReport(results, ctx) {
   const lines = [];
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
@@ -34,6 +57,14 @@ function renderReport(results, ctx) {
     if (r.listUnreached) {
       lines.push(`- **목록 도달 실패**: ${r.listUnreached}`);
       lines.push('  - 위 건수는 공고 수가 아닙니다. 수집 실패이므로 수기 확인이 필요합니다');
+    }
+    const mismatch = r.error ? null : linkHostMismatch(r.url, r.jobs);
+    if (mismatch) {
+      lines.push(`- **경고: 링크 호스트 불일치** — 대상 호스트와 맞는 링크가 하나도 없습니다 (링크 호스트: ${mismatch.slice(0, 3).join(', ')}).`);
+      lines.push('  - 다른 대상의 결과가 섞였을 수 있습니다. 수기 확인이 필요합니다');
+    }
+    if (r.waitForFailed) {
+      lines.push(`- **경고: 렌더 대기 실패** — waitFor \`${r.waitForFailed}\` 가 나타나지 않은 채 추출했습니다. 렌더 전 DOM 일 수 있습니다`);
     }
     if (r.detailFailed) {
       lines.push(`- **상세 확인 실패 ${r.detailFailed}건**: ${(r.detailFailReasons || []).join(' · ')}`);
@@ -169,4 +200,4 @@ function renderDetailFile(company, job, stamp) {
     .join('\n');
 }
 
-module.exports = { renderReport, renderDetailFile };
+module.exports = { renderReport, renderDetailFile, linkHostMismatch };

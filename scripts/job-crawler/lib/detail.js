@@ -7,7 +7,7 @@
 // 목록 한 건이 실제로는 여러 지원 단위를 묶은 것일 때가 있다. 그때는 상세를 여는
 // 김에 자식 공고로 펼쳐 각자 채점한다 (expand.js).
 
-const { newPage, resolveGoto, gotoWith } = require('./browser');
+const { openIsolatedPage, resolveGoto, gotoWith } = require('./browser');
 const { expandGrouped } = require('./expand');
 
 // 상세 진입 기본값. 목록과 같은 대상 설정(targets[].goto)을 쓰되 기본 타임아웃만 다르다 —
@@ -67,7 +67,7 @@ function compactDetail(text, maxChars) {
 // 원문과 함께 SSR 캐시(__NEXT_DATA__)도 꺼낸다. 묶음 공고는 자식 정보가 화면이 아니라
 // 캐시에 있어 innerText 만으로는 펼칠 수 없다.
 async function fetchPage(browser, url, goto = DETAIL_GOTO) {
-  const page = await newPage(browser);
+  const { page, close } = await openIsolatedPage(browser);
   try {
     await gotoWith(page, url, goto);
     await new Promise((r) => setTimeout(r, 1500));
@@ -76,7 +76,7 @@ async function fetchPage(browser, url, goto = DETAIL_GOTO) {
       return { text: document.body.innerText || '', embedded: el ? el.textContent : null };
     });
   } finally {
-    await page.close();
+    await close();
   }
 }
 
