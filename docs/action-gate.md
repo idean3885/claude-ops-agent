@@ -80,7 +80,7 @@
 
 | 룰 | 탐지 대상 |
 |----|-----------|
-| `hexagonal-classname` | `Port`·`Adapter`·`UseCase`·`Service`·`Repository` 등으로 끝나는 클래스명 |
+| `hexagonal-classname` | `Port`·`Adapter`·`UseCase`·`Service`·`Repository` 등으로 끝나는 클래스명. 외부 제품이 공개한 리소스 종류(Istio `VirtualService` 등)는 제외 |
 | `annotation` | Spring·Lombok·Jakarta 계열 어노테이션 |
 | `tx-phase-const` | 트랜잭션 phase·propagation 상수 |
 

@@ -16,6 +16,11 @@ export const WHAT_RULES = [
     // PascalCase + 헥사고날 접미사 합성어 (단어 경계)
     // 예: WorkloadSnapshotUserService, NodeContainerMetricPortAdapter
     regex: /\b[A-Z][a-zA-Z0-9]+(Port|Adapter|UseCase|Listener|Service|Repository|Validator|Controller|Handler)\b/g,
+    // 외부 제품이 공개한 리소스 종류(kind)는 이 변경의 구현 세부가 아니다. 학습 · 설계 글에서는 그 이름이 주제다 (#1122).
+    // 접미사가 우연히 겹치는 이름만 정확히 일치로 둔다. 추가는 그 제품 문서의 kind 로 확인한 것만.
+    allow: new Set([
+      'VirtualService', // Istio networking.istio.io
+    ]),
     threshold: 1,
   },
   {
@@ -73,6 +78,10 @@ export function scanWhatViolations(texts) {
       let count = 0;
       let m;
       while ((m = re.exec(stripped)) !== null) {
+        if (rule.allow?.has(m[0])) {
+          if (m.index === re.lastIndex) re.lastIndex++;
+          continue;
+        }
         count++;
         if (count <= 3) {
           hits.push({
