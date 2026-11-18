@@ -13,9 +13,9 @@
 #          CodeRabbit 의 마지막 리뷰가 HEAD 가 아닐 때는 ## 자체 검증 도 채운다.
 #          세 절에는 「해당 없음」 같은 한 줄도 본문으로 인정한다. 비워 두는 것만 막는다. ## 주장 검증 은 회차 줄이 있어야 한다.
 #
-# 실패 조건 (하나라도 걸리면 목록을 출력하고 종료 코드 1):
+# 실패 조건 (하나라도 걸리면 목록을 출력하고 종료 코드 1). 미해결 리뷰 스레드(b)는 실패로 세지 않고
+# 목록만 안내한다. 스레드 조회 실패만 실패 b 다. 스레드를 닫는 판단은 병합을 승인하는 사람이 한다 (#1130):
 #   a. 실패 또는 대기 중인 체크
-#   b. 미해결 리뷰 스레드
 #   c. `.coderabbit.yaml` 이 있고 CodeRabbit 마지막 리뷰가 HEAD 가 아닌데 ## 자체 검증 이 비어 있음
 #      (체크 상태 SUCCESS 는 리뷰 여부와 무관하다. 리뷰의 commit_id 로 판정한다)
 #   d. 레포의 `.ops-agent/final-check.sh` 가 있고 종료 코드가 0 이 아님 (레포가 선언한 체크리스트)
@@ -134,6 +134,16 @@ for i, m in enumerate(msgs, 1):
 '
 }
 
+# 미해결 리뷰 스레드 안내 (#1130). $1 조회 종료 코드, $2 스레드 목록(한 줄에 하나).
+# 조회에 실패하면 1 을 돌려준다. 미해결 스레드는 실패로 세지 않고 목록만 출력한다.
+thread_notice() {
+  local rc="$1" threads="$2"
+  [ "$rc" -ne 0 ] && return 1
+  [ -z "$threads" ] && return 0
+  printf '안내 b: 미해결 리뷰 스레드 %s건. 실패로 세지 않는다. 상황 보고에 아래 목록을 싣는다\n' "$(printf '%s\n' "$threads" | wc -l | tr -d ' ')"
+  while IFS= read -r thread; do printf '  - %s\n' "$thread"; done <<<"$threads"
+}
+
 # 테스트가 함수만 불러 쓸 때는 여기서 멈춘다. gh 를 부르지 않는다.
 [ "${FINAL_CHECK_LIB:-}" = "1" ] && return 0
 
@@ -192,15 +202,18 @@ if [ -n "$checks" ]; then
 fi
 
 # b. 미해결 리뷰 스레드
+# why: 스레드 닫기를 기다리면 머지 준비가 사람 한 번을 더 왕복한다. 닫을지는 병합을 승인하는 사람이 판단한다 (#1130)
 owner="${REPO%/*}"; name="${REPO#*/}"
-unresolved=$(gh api graphql -F owner="$owner" -F name="$name" -F pr="$PR" -f query='
+threads=$(gh api graphql -F owner="$owner" -F name="$name" -F pr="$PR" -f query='
   query($owner:String!,$name:String!,$pr:Int!){
     repository(owner:$owner,name:$name){ pullRequest(number:$pr){
-      reviewThreads(first:100){ nodes{ isResolved } }
+      reviewThreads(first:100){ nodes{ isResolved path line comments(first:1){ nodes{ author{ login } } } } }
     } }
-  }' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved|not)] | length' 2>/dev/null || echo "?")
-if [ "$unresolved" != "0" ]; then
-  fail b "미해결 리뷰 스레드: $unresolved. 작성자가 웹에서 답글을 확인하고 스레드를 닫는다 (PR 가이드 「리뷰 대응」)"
+  }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved|not)
+    | "\(.path):\(.line // "-") (\(.comments.nodes[0].author.login // "?"))"' 2>/dev/null)
+rc=$?
+if ! thread_notice "$rc" "$threads"; then
+  fail b "리뷰 스레드를 조회하지 못했다. 조회를 고친 뒤 다시 실행한다"
 fi
 
 # c. CodeRabbit: 마지막 리뷰가 HEAD 에 달렸는가. 아니면 바뀐 부분을 자체 검증했다는 기록이 있어야 한다.
