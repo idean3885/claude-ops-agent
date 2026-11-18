@@ -1,6 +1,6 @@
 # 차단 규칙 레퍼런스
 
-`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 여덟 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
+`scripts/pre-tool-use.mjs` (PreToolUse hook) 가 실행 전에 막는 아홉 가지 규칙의 정본입니다. 표현 규칙처럼 알리기만 하는 hook 은 [hooks-config.md](hooks-config.md) 에 있습니다.
 
 이 hook 은 판정만 합니다. 세션 컨텍스트 주입은 `scripts/session-start.mjs` 가 맡습니다.
 
@@ -8,6 +8,7 @@
 |------|---------|------|
 | 대외비 가드 | 공개 표면에 노출되는 대외비 키워드·패턴 | 본문 수정 (해제 플래그는 오탐 조정용) |
 | 도메인 What 가드 | 커밋·PR·이슈 본문의 구현 세부 | 본문 수정 |
+| 한자 섞임 가드 | 커밋 메시지 · PR 제목 · 본문 · 코멘트에서 한글과 붙은 한자 | 본문 수정 |
 | 이슈 생성 가드 | 어댑터를 거치지 않은 `gh issue create` · `gh api …/issues` 생성 | 어댑터(`scripts/gh-issue.sh create`)로 호출 |
 | 한시 권한 | 되돌리기 어려운 행위 | 사용자가 권한을 연다 |
 | 최종 점검 통과 기록 | 통과 기록 없는 `gh pr merge` | `final-check.sh` 를 통과합니다. |
@@ -83,6 +84,17 @@
 | `tx-phase-const` | 트랜잭션 phase·propagation 상수 |
 
 구현 방법은 본문 최하단 `How` 절에만 씁니다. 형식은 provider 의 풀리퀘스트 템플릿을 따릅니다.
+
+---
+
+## 한자 섞임 가드
+
+생성 중 한 글자가 한자로 바뀐 글(「외부」가 한자 섞인 글자로 바뀐 것)이 공개 표면에 나가는 것을 막습니다 (#1107). 섞인 글자는 다음 수정이 그 줄을 찾지 못하게 만들어 「이미 지워졌다」는 잘못된 보고로 이어지고, 공개 표면은 한 번 나가면 고치기 어렵습니다. 판정은 이슈 어댑터와 같은 모듈 `scripts/han-intrusion.mjs` 가 합니다. 한글 음절 바로 앞뒤의 한자만 보고, 띄어 쓴 한자 낱말은 통과합니다.
+
+| 보는 것 | 보지 않는 것 |
+|---------|--------------|
+| `git commit` 의 메시지(`-m` · `--message` · `-F` · `--file`, `-F -` 면 heredoc 본문) | 커밋 대상 파일 내용. 검사 사례 · 다국어 자원처럼 한자를 정당하게 담는 파일까지 막게 됩니다. |
+| `gh pr create · edit · comment · review` 의 제목 · 본문(`--title` · `--body` · `--body-file`, 단축 옵션 포함) | 이슈. 이슈 어댑터가 같은 모듈로 봅니다. |
 
 ---
 
@@ -484,6 +496,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 |------|------------------|--------|
 | 대외비 가드 | `OPS_AGENT_CONFIDENTIAL_DRYRUN=1` | `OPS_AGENT_CONFIDENTIAL_DISABLE=1` |
 | What 가드 | `OPS_AGENT_WHAT_GUARD_DRYRUN=1` | `OPS_AGENT_WHAT_GUARD_DISABLE=1` |
+| 한자 섞임 가드 | 없음 | `OPS_AGENT_HAN_GUARD_DISABLE=1` (이슈 어댑터의 검사도 함께 끕니다) |
 | 이슈 생성 가드 | `OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1` | `OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1` |
 | 초안 PR 가드 | `OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1` | `OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1` |
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |

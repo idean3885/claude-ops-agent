@@ -48,6 +48,7 @@ import {
 import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
+import { findIntrusions } from './han-intrusion.mjs';
 import { detectGitRiskActions } from './git-guard-rules.mjs';
 import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
@@ -107,6 +108,14 @@ const DRYRUN = process.env.OPS_AGENT_CONFIDENTIAL_DRYRUN === '1';
 
 const WHAT_GUARD_DISABLE = process.env.OPS_AGENT_WHAT_GUARD_DISABLE === '1';
 const WHAT_GUARD_DRYRUN = process.env.OPS_AGENT_WHAT_GUARD_DRYRUN === '1';
+
+// 한자 섞임 가드 (#1107): 커밋 메시지 · PR 제목 · 본문에 한글과 붙은 한자가 있으면 막는다.
+// 판정은 이슈 어댑터와 같은 모듈(han-intrusion.mjs)이 하고, 비활성 변수도 그 모듈의 것을 쓴다.
+const HAN_GUARD_DISABLE = process.env.OPS_AGENT_HAN_GUARD_DISABLE === '1';
+const HAN_PR_WRITE_RE = /\bgh\s+pr\s+(?:create|edit|comment|review)\b/;
+// `-F -` · `--file -` · `--body-file -` 은 표준 입력이 본문이다. 이때는 heredoc 본문을 함께 본다
+const STDIN_BODY_RE = /(?:^|\s)(?:-F|--file|--body-file)(?:=|\s+)-(?=\s|$)/;
+const HEREDOC_RE = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)\n[ \t]*\2(?=\s|\)|$)/g;
 
 // 이슈 생성 가드 (#696): 어시스턴트의 `gh issue create` · `gh api …/issues` 직접 호출을 거부하고
 // 어댑터(scripts/gh-issue.sh)로 보낸다. 생성 경로가 하나여야 본문 규칙 · 시작 결정이 실행된다.
@@ -383,6 +392,23 @@ if (!DISABLE) {
             }));
             process.exit(0);
           }
+        }
+      }
+
+      // 한자 섞임 가드: 공개 표면 글(커밋 메시지 · PR 제목 · 본문)에 생성 중 바뀐 글자가 섞이면 막는다 (#1107)
+      if (!HAN_GUARD_DISABLE && remainingMs() <= 0) noteBudgetExceeded('한자 섞임 가드');
+      if (!HAN_GUARD_DISABLE && remainingMs() > 0) {
+        const hanHits = runHanIntrusionGuard(command);
+        if (hanHits.length) {
+          const msg = `[ops-agent 한자 섞임 가드 · 차단] 보낼 글에 한글과 붙은 한자가 있습니다. 생성 중 바뀐 글자일 수 있습니다:\n`
+            + hanHits.map(h => `  - (${h.source}) ${h.context}`).join('\n') + '\n\n'
+            + `해결: 그 자리를 한글로 고치고 다시 실행합니다. 띄어 쓴 한자 낱말은 막지 않습니다.\n`
+            + `범위: 커밋 메시지와 PR 제목 · 본문 · 코멘트만 봅니다. 커밋 대상 파일 내용은 보지 않습니다.\n`
+            + `비활성: OPS_AGENT_HAN_GUARD_DISABLE=1 (한자가 붙어야 하는 글만. 사람이 세션 환경변수로)`;
+          process.stdout.write(JSON.stringify({
+            hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+          }));
+          process.exit(0);
         }
       }
 
@@ -1229,6 +1255,29 @@ function runWhatAbstractionGuard(command) {
   if (texts.length === 0) return { blocked: false, hits: [] };
 
   return scanWhatViolations(texts);
+}
+
+// ─── 한자 섞임 가드 ───
+// 커밋 메시지와 PR 제목 · 본문 · 코멘트만 본다. 이슈는 어댑터가 같은 모듈로 본다.
+// 커밋 대상 파일은 보지 않는다. 한자를 정당하게 담는 파일(검사 사례 · 다국어 자원)까지 막게 된다.
+function runHanIntrusionGuard(command) {
+  if (!GIT_COMMIT_RE.test(command) && !HAN_PR_WRITE_RE.test(command)) return [];
+  const texts = [];
+  extractOption(command, 'body', texts);
+  extractOption(command, 'title', texts);
+  extractOption(command, 'message', texts);
+  extractShortOption(command, 'm', texts);
+  extractShortOption(command, 'b', texts);
+  extractShortOption(command, 't', texts);
+  extractFileOption(command, 'body-file', texts);
+  extractFileOption(command, 'file', texts);
+  extractShortFileOption(command, 'F', texts);
+  if (STDIN_BODY_RE.test(command)) {
+    for (const m of command.matchAll(HEREDOC_RE)) texts.push({ source: 'heredoc', value: m[3] });
+  }
+  const hits = [];
+  for (const t of texts) for (const context of findIntrusions(t.value)) hits.push({ source: t.source, context });
+  return hits;
 }
 
 // ─── 한시 권한 ───

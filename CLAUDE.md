@@ -218,10 +218,11 @@ main ────────────────●─────
   node scripts/selftest-push-delegation.mjs
   node scripts/selftest-action-gate-prompt.mjs
   ```
-- [ ] **`scripts/han-intrusion.mjs` 를 고쳤으면 자체 점검을 실행한다.** 섞임 판정이 무너지면 한자로 바뀐 글자가 신호 없이 트래커로 나간다.
+- [ ] **`scripts/han-intrusion.mjs` 를 고쳤으면 자체 점검을 실행한다.** 섞임 판정이 무너지면 한자로 바뀐 글자가 신호 없이 트래커 · 커밋 · PR 로 나간다.
   ```bash
   python3 scripts/selftest-han-intrusion.py
   node scripts/selftest-issue-adapter.mjs
+  node scripts/selftest-action-gate.mjs
   ```
 - [ ] **`skills/flow/SKILL.md` 상태 표나 `skills/flow/guides/` 의 절 제목을 고쳤으면 자체 점검을 실행한다.** 상태 표가 없는 절을 가리켜도 단계에 들어가기 전까지 신호가 없다.
   ```bash
