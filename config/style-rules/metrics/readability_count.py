@@ -6,7 +6,7 @@
 
 커버 (자동 판별 `가능`):
   P2 문단 2-4문장 · P4 산문 사이 단문 문단 · P7 산문 5문단 연속
-  V2 시각 요소 없이 15-20문장 · L1 목록 3-7항목 · L4 테이블 열 5 이하
+  V2 시각 요소 없이 15-20문장 · L1 목록 3-7항목 · L4 테이블 열 5 이하 · L9 불릿 안 머리말
   H1 단일 H1 · H2 레벨 건너뛰기 · C1 코드 언어 명시
   PN7 서술 문장 종결 부호 · PN8 물결표 취소선 (정본은 `base/punctuation.md`)
 
@@ -28,6 +28,34 @@ MAX_PROSE_RUN = 5          # P7
 MAX_SENT_NO_VISUAL = 20    # V2
 MAX_LIST_ITEMS = 7         # L1
 MAX_TABLE_COLS = 5         # L4
+MAX_LABEL_LEN = 15         # L9 머리말 글자 수 (굵게 표시한 머리말은 20)
+
+# L9: 불릿이 「머리말 + 콜론 + 내용」으로 시작하는가. 머리말 안에 코드 · 괄호 · 인용 · 링크가 있으면 머리말이 아니다.
+LABEL = re.compile(
+    r"^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?"
+    r"(\*\*[^*\n]{1,20}\*\*|[^\s:：`(（「\[|*][^:：`(（「\[|*]{0,%d})\s*[:：]\s+\S" % (MAX_LABEL_LEN - 1)
+)
+
+
+def _format_keys():
+    """문서 형식이 키를 정한 줄의 키. 정본은 extensions 문서의 코드 블록 안 형식 틀이다.
+
+    why: 키를 상수로 복제하면 형식 틀이 늘 때 카운터가 따라가지 못해 정의 목록을 위반으로 낸다.
+    """
+    keys = set()
+    for p in sorted((pathlib.Path(__file__).resolve().parent.parent / "extensions").glob("*.md")):
+        incode = False
+        for ln in p.read_text(encoding="utf-8").split("\n"):
+            if ln.lstrip().startswith(("```", "~~~")):
+                incode = not incode
+                continue
+            m = incode and LABEL.match(ln.strip())
+            if m:
+                keys.add(m.group(1).strip("*").strip())
+    return keys
+
+
+FORMAT_KEYS = _format_keys()
 
 # 한국어 합쇼체·해요체 종결과 ASCII 문장부호를 문장 경계로 본다.
 SENT = re.compile(r"(?:다|요)\.(?=\s|$)|[.!?](?=\s|$)")
@@ -229,10 +257,36 @@ def blocks(text):
     return out
 
 
+def l9(bs):
+    """불릿 안 머리말(L9). 형식이 키를 정한 정의 목록은 제외한다.
+
+    why: 정의 목록과 머리말 불릿은 모양이 같아 문서 유형을 모르는 카운터는 가르지 못한다.
+    기계로 가를 수 있는 세 갈래만 제외한다. 제목(H1) 바로 아래 목록은 문서 메타 블록이고,
+    같은 키가 파일 안 둘 이상의 목록에서 되풀이되면 기록 형식이며, FORMAT_KEYS 는 형식 문서가 정한 키다.
+    """
+    found, blocks_of = [], {}
+    for idx, (kind, line, body, _) in enumerate(bs):
+        if kind != "list":
+            continue
+        if idx > 0 and bs[idx - 1][0] == "heading" and re.match(r"^#\s", bs[idx - 1][2][0].strip()):
+            continue
+        for off, b in enumerate(body):
+            m = LABEL.match(b.strip())
+            if not m:
+                continue
+            key = m.group(1).strip("*").strip()
+            if key in FORMAT_KEYS:
+                continue
+            found.append((line + off, key))
+            blocks_of.setdefault(key, set()).add(idx)
+    return [(ln, "L9", f"불릿 안 머리말 「{key}:」. 소제목 줄로 올리고 불릿은 내용만 담는다 (정의 목록 형식이면 예외)")
+            for ln, key in found if len(blocks_of[key]) < 2]
+
+
 def check(path):
     text = pathlib.Path(path).read_text()
     bs = blocks(text)
-    hits, prose_run, since_visual, h1, prev_level = pn8(text), 0, 0, 0, 0
+    hits, prose_run, since_visual, h1, prev_level = pn8(text) + l9(bs), 0, 0, 0, 0
 
     for idx, (kind, line, body, lang) in enumerate(bs):
         if kind == "heading":
