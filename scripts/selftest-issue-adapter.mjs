@@ -11,7 +11,7 @@
  * 종료 코드: 실패 1, 전부 통과 0
  */
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -123,9 +123,9 @@ writeFileSync(badBody, '## What\n한 줄\n\n## Why\n- 사실 1\n');
 const fixBody = join(sandbox, 'fix.md');
 writeFileSync(fixBody, '## 재현 절차\n1. x\n\n## 기대 동작\ny\n\n## 실제 동작\nz\n\n## 환경\nw\n\n## 영향 범위\nv\n');
 
-function run(args, env = {}) {
+function run(args, env = {}, via = adapter) {
   if (existsSync(LOG)) rmSync(LOG);
-  const res = spawnSync('bash', [adapter, ...args], {
+  const res = spawnSync('bash', [via, ...args], {
     encoding: 'utf8',
     env: {
       ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LOG: LOG, FAKE_TOPLEVEL: join(sandbox, 'proj'),
@@ -141,8 +141,8 @@ function run(args, env = {}) {
   }
   return { code: res.status, stdout: res.stdout || '', stderr: res.stderr || '', log, json };
 }
-function adapterCase(name, args, want, { env = {}, logHas = [], logNot = [], json = {} } = {}) {
-  const r = run(args, env);
+function adapterCase(name, args, want, { env = {}, logHas = [], logNot = [], json = {}, via } = {}) {
+  const r = run(args, env, via);
   const problems = [];
   if (r.code !== want) problems.push(`종료 ${want} 기대, ${r.code}`);
   for (const s of logHas) if (!r.log.includes(s)) problems.push(`호출 없음: ${s}`);
@@ -162,6 +162,16 @@ adapterCase('본문 검사 실패는 생성하지 않는다', ['create', '--titl
   writeFileSync(hanBody, ISS5_OK.replace('- 사실 1\n', '- 남은 일은 외部 대기\n'));
   adapterCase('본문의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', 't', '--body-file', hanBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create', 'gh label'], json: { step: 'han-intrusion' } });
   adapterCase('제목의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', '외部 연동', '--body-file', okBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
+}
+{
+  // #1109: 설치본은 링크 경로(~/.claude/ops-agent/current)로 부른다. 링크로 불러도 두 검사가 돈다
+  const linked = join(sandbox, 'current');
+  symlinkSync(dirname(here), linked);
+  const via = join(linked, 'scripts', 'gh-issue.sh');
+  const hanBody = join(sandbox, 'han-link.md');
+  writeFileSync(hanBody, ISS5_OK.replace('- 사실 1\n', '- 남은 일은 외部 대기\n'));
+  adapterCase('링크 경로로 불러도 한자 섞임은 생성하지 않는다 (#1109)', ['create', '--title', 't', '--body-file', hanBody, '--type', 'feat', '--no-start', 'x'], 1, { via, logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
+  adapterCase('링크 경로로 불러도 본문 검사 실패는 생성하지 않는다 (#1109)', ['create', '--title', 't', '--body-file', badBody, '--type', 'feat', '--no-start', 'x'], 1, { via, logNot: ['gh issue create'], json: { step: 'body-check' } });
 }
 adapterCase('fix 는 ISS1 기본 (ISS5 본문은 거부)', ['create', '--title', 't', '--body-file', okBody, '--type', 'fix', '--start'], 1, { logNot: ['gh issue create'] });
 adapterCase('fix + ISS1 본문 통과', ['create', '--title', 't', '--body-file', fixBody, '--type', 'fix', '--no-start', 'x'], 0, { logHas: ['gh issue create'] });

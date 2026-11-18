@@ -17,7 +17,7 @@
  *   const { ok, failures } = checkIssueBody(body, 'iss5');
  *   node scripts/issue-body-rules.mjs --structure iss5 < body.md   # JSON 한 줄, 실패면 종료 1
  */
-import { readFileSync } from 'fs';
+import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 // 문장 종결. config/style-rules/metrics/readability_count.py 의 SENT 와 같은 식이다.
@@ -179,7 +179,11 @@ export function checkIssueBody(body, structure) {
 }
 
 // CLI 진입점: stdin 본문 + --structure → JSON 한 줄. bash 어댑터가 부른다.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// 설치본은 링크 경로(~/.claude/ops-agent/current)로 불려 argv 와 import.meta.url 이 다르다. 실제 경로로 비교한다 (#1109)
+const isEntry = (() => {
+  try { return realpathSync(process.argv[1] || '') === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+})();
+if (isEntry) {
   const idx = process.argv.indexOf('--structure');
   const structure = idx >= 0 ? process.argv[idx + 1] : 'iss5';
   const body = readFileSync(0, 'utf8');

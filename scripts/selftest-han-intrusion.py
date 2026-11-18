@@ -8,6 +8,7 @@
   HI-2  .json 은 문자열 값을 풀어서 본다. \\uXXXX 로 이스케이프된 섞임도 잡는다
   HI-3  OPS_AGENT_HAN_GUARD_DISABLE=1 이면 통과한다
   HI-4  이슈 생성 어댑터가 섞인 제목 · 본문을 생성 전에 멈추는 것은 selftest-issue-adapter.mjs 가 본다
+  HI-5  심볼릭 링크 경로(설치본 ~/.claude/ops-agent/current)로 불러도 검사한다 (#1109)
 """
 
 import json
@@ -30,11 +31,11 @@ def check(name, ok, detail=""):
     print(f"{'  OK' if ok else '  XX'}  {name}{'' if ok else f' · {detail}'}")
 
 
-def run(args, env=None):
+def run(args, env=None, lib=LIB):
     e = dict(os.environ)
     e.pop("OPS_AGENT_HAN_GUARD_DISABLE", None)
     e.update(env or {})
-    return subprocess.run(["node", LIB, *args], text=True, capture_output=True, env=e)
+    return subprocess.run(["node", lib, *args], text=True, capture_output=True, env=e)
 
 
 with tempfile.TemporaryDirectory() as d:
@@ -66,6 +67,12 @@ with tempfile.TemporaryDirectory() as d:
     # HI-3
     r = run([write("e.md", MIXED)], {"OPS_AGENT_HAN_GUARD_DISABLE": "1"})
     check("HI-3 비활성 환경변수면 0", r.returncode == 0, (r.returncode, r.stderr))
+
+    # HI-5
+    link = os.path.join(d, "current")
+    os.symlink(HERE, link)
+    r = run(["--text", MIXED], lib=os.path.join(link, "han-intrusion.mjs"))
+    check("HI-5 링크 경로로 불러도 섞임은 6", r.returncode == 6, (r.returncode, r.stderr))
 
 print(f"\n{'PASS' if not fails else 'FAIL'} ({fails} failed)")
 sys.exit(1 if fails else 0)
