@@ -209,12 +209,13 @@ main ────────────────●─────
           if v!=sorted(v): print(p,k,v)
   "
   ```
-- [ ] **`scripts/pre-tool-use.mjs` · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` · `scripts/push-delegation*.mjs` · `scripts/action-gate-prompt.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
+- [ ] **`scripts/pre-tool-use.mjs` · `scripts/session-start.mjs`(시범 지표 집계) · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` · `scripts/push-delegation*.mjs` · `scripts/action-gate-prompt.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
   ```bash
   node scripts/selftest-action-gate.mjs
   node scripts/selftest-issue-adapter.mjs
   node scripts/selftest-build-guard.mjs
   node scripts/selftest-flow-entry.mjs
+  node scripts/selftest-skill-use.mjs
   node scripts/selftest-repo-allowlist.mjs
   node scripts/selftest-push-delegation.mjs
   node scripts/selftest-action-gate-prompt.mjs

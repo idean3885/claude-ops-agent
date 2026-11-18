@@ -11,7 +11,8 @@
       ],
       "review": "판정 시점을 정하는 조건. 예: 산출물 5건 또는 사용자가 정하는 시점",
       "metrics": [
-        { "name": "차단", "source": "~/.claude/ops-agent/metrics/final-check.jsonl", "groupBy": "result" }
+        { "name": "차단", "source": "~/.claude/ops-agent/metrics/final-check.jsonl", "groupBy": "result" },
+        { "name": "스킬 사용", "source": "~/.claude/ops-agent/metrics/skill-use-*.jsonl", "groupBy": "skill" }
       ],
       "criteria": [
         "판정 기준 한 문장 (지표로 대조할 수 있는 것)"

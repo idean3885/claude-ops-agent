@@ -538,6 +538,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 | 플로우 진입 | 없음 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
+| 스킬 사용 기록 | 없음 | `OPS_AGENT_SKILL_USE_DISABLE=1` |
 | 레포 허용 목록 | 없음 | 플래그 없음. 목록 파일이 없으면 판정하지 않습니다 |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.

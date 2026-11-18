@@ -48,7 +48,7 @@
 
 | 필드 | 형식 | 역할 |
 |------|------|------|
-| `metrics` | `[{ name, source, groupBy, since? }]` | `source`(jsonl)의 `groupBy` 필드 값별 줄 수를 집계합니다. `since` 가 없으면 `started` 이후 `ts`(ISO 문자열)만 집계합니다. 파일이 없으면 「기록 없음」으로 냅니다. |
+| `metrics` | `[{ name, source, groupBy, since? }]` | `source`(jsonl)의 `groupBy` 필드 값별 줄 수를 집계합니다. `since` 가 없으면 `started` 이후 `ts`(ISO 문자열)만 집계합니다. 파일이 없으면 「기록 없음」으로 냅니다. 파일 이름에 `*` 가 있으면 그 디렉토리에서 글롭으로 맞는 파일을 모두 합쳐 집계합니다(디렉토리 부분의 `*` 는 지원하지 않습니다). 파일이 5MB 를 넘으면 「기록 없음」으로 두지 않고 파일 끝 5MB 만 읽어 집계하며(잘린 첫 줄은 버림) 지표 끝에 `(파일 끝 5MB 만 집계)` 를 붙입니다. |
 | `criteria` | 문자열 배열 | 판정 기준입니다. ` / ` 로 이어 한 줄로 냅니다. |
 | `cause` | `content`(내용) \| `level`(수준) | 이 시범이 줄이려는 교정의 원인입니다. 있으면 손으로 쓰는 `log` 안내 대신 `scripts/lessons-judge.py report` 의 원인별 정답률을 시작일 전 기준선과 비교하라는 줄을 냅니다. 없으면 기존 `log` 안내를 냅니다. |
 | `reviewAt` | `YYYY-MM-DD` | 판정일입니다. 오늘이 이 날 이후면 기준과 지표를 대조해 정식 도입 · 폐기 · 재검토를 사용자에게 묻는 안내가 추가됩니다. |
@@ -67,6 +67,28 @@
 지표: 차단 blocked 3 · pass 5 · fail 2
 기준: blocked 가 fail 보다 많다 / 오탐 신고 0건
 판정일: 2026-10-01
+```
+
+**자동 지표 없음 알림**: `metrics` 도 `cause` 도 없는 시범은 손으로 쓰는 `log` 만 남아 판정 근거가 쌓이지 않습니다. 그런 시범 블록에는 지표 줄 자리에 `자동 지표 없음: metrics 또는 cause 를 붙인다` 한 줄이 붙습니다. 지표 줄이 없는 시범에만 붙으므로 시범당 지표 · 기준 · 판정일 · 도래 안내 4줄 상한은 그대로입니다. `metrics` 나 `cause` 를 붙이면 사라집니다.
+
+**스킬 사용 기록**: `pre-tool-use.mjs` 가 Skill 도구 호출과 플러그인 설치본(`~/.claude/plugins/` · `~/.claude/ops-agent/current/`)의 `skills/<이름>/SKILL.md` Read 를 스킬 사용으로 세어 `~/.claude/ops-agent/metrics/skill-use-YYYY-MM.jsonl` 에 한 줄 남깁니다 (#1135). 새 스킬은 등록 없이 쌓입니다.
+
+| 항목 | 값 |
+|------|-----|
+| 필드 | `ts` · `session` · `skill` · `repo`(작업 디렉토리 basename) 넷뿐. Skill 도구의 args · 전체 경로는 남기지 않는다. 스킬 이름 앞 네임스페이스(`ops-agent:`)는 뗀다. |
+| 세지 않는 것 | 레포 워킹 카피의 SKILL.md Read(스킬을 쓴 것이 아니라 고치는 것), SKILL.md 가 아닌 파일 Read, 다른 도구 |
+| 중복 | 같은 세션 · 같은 스킬은 첫 1회만 센다. 세션별 캐시 `.cache/skill-use/<세션>.txt` 로 판정하고, 14일 지난 캐시는 새 세션 첫 기록 때 지운다. |
+| 비용 | Skill · Read 가 아닌 도구 호출은 도구 이름 비교만 하고 파일 접근이 없다. Read 는 경로 정규식만 보고 설치본 SKILL.md 일 때만 캐시를 연다. |
+| 파일 | 달마다 나눠 한 파일이 5MB 에 닿는 시점을 늦춘다. 기록 실패는 판정을 바꾸지 않는다. |
+| 자체 점검 | `node scripts/selftest-skill-use.mjs` (집계 · 알림 포함) |
+| 비활성 | `OPS_AGENT_SKILL_USE_DISABLE=1` |
+
+```json
+{
+  "name": "skill-trial",
+  "started": "2026-11-01",
+  "metrics": [{ "name": "스킬 사용", "source": "~/.claude/ops-agent/metrics/skill-use-*.jsonl", "groupBy": "skill" }]
+}
 ```
 
 - 지표: 훅이 자동으로 남기는 jsonl 만, 체감 점수 제외
