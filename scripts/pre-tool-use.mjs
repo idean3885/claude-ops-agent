@@ -29,8 +29,8 @@
  * 4. 최종 점검 통과 기록 (#612): `gh pr merge` 는 게이트 개방과 별개로 scripts/final-check.sh 가 남긴
  *    통과 기록이 있어야 통과한다. 판정은 로컬만이다. 통과 기록 head 와 origin 추적 브랜치를 비교한다.
  *    비활성 OPS_AGENT_FINAL_CHECK_DISABLE=1.
- * 5. 플로우 진입 (#769 · #773 · #891): 커밋 · push · PR 생성 직전에 마지막 압축 뒤 플로우 가이드 읽음 여부를 기록하고,
- *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
+ * 5. 플로우 진입 (#769 · #773 · #891 · #1114): 커밋 · push · PR 생성 직전에 마지막 압축 뒤 플로우 가이드 읽음 여부를 기록하고,
+ *    읽지 않은(missed) 세션의 PR 생성은 차단한다. 서브에이전트는 자기 대화 기록으로 본다. 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1.
  * 6. 초안 PR (#876): `gh pr create` 에 초안 플래그가 없으면 차단한다. 가이드를 읽었는지가 아니라 규칙을 본다.
  *    드라이런 OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1.
  * 7. 레포 허용 목록 (#969): 도구 호출이 닿는 레포를 원격 주소로 식별해 ~/.claude/ops-agent/repo-allowlist.local.json
@@ -180,6 +180,8 @@ const FLOW_ENTRY_DISABLE = process.env.OPS_AGENT_FLOW_ENTRY_DISABLE === '1';
 // 값은 JSON 문자열이라 명령 안의 따옴표가 \" 로 들어 있다. 이스케이프를 건너뛰며 같은 값 안에서만 찾는다.
 const FLOW_ENTRY_RE = /"(?:file_path|command)":"(?:[^"\\]|\\.)*skills\/flow\/(?:SKILL\.md|guides\/)|"skill":"(?:ops-agent:)?flow"/;
 const FLOW_ENTRY_RE_G = new RegExp(FLOW_ENTRY_RE.source, 'g');
+// 서브에이전트 기록 경로 조각 (#1114). agent_id · session_id 가 이 형식일 때만 경로에 넣는다.
+const SUBAGENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 // 압축 경계 (#891). 이 줄 뒤의 읽음만 인정한다.
 const COMPACT_BOUNDARY_RE = /"subtype":"compact_boundary"/g;
 const FLOW_ACTION_RES = [
@@ -1565,18 +1567,48 @@ function recordFlowEntry(command, hookInput, cwd) {
   if (!actions.length) return null;
   let flow = 'unknown';
   try {
-    flow = flowGuideLoaded(hookInput.session_id, hookInput.transcript_path);
+    // 서브에이전트의 호출이면 그 에이전트 자신의 대화 기록으로 판정한다 (#1114). 하네스는 서브에이전트에도
+    // 상위 세션의 기록 경로를 넘겨, 위임받은 에이전트가 읽은 가이드가 보이지 않았다. 상위가 읽은 가이드는
+    // 서브에이전트의 컨텍스트에 없으므로 인정하지 않는다. 기록을 찾지 못하면 지금처럼 상위 기록으로 본다.
+    const agentTranscript = subagentTranscript(hookInput);
+    flow = agentTranscript
+      ? flowGuideLoaded(`${hookInput.session_id}--${hookInput.agent_id}`, agentTranscript)
+      : flowGuideLoaded(hookInput.session_id, hookInput.transcript_path);
     const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'flow-entry.jsonl');
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(file, JSON.stringify({
       ts: new Date().toISOString(),
       session: hookInput.session_id || '',
+      ...(hookInput.agent_id ? { agent: hookInput.agent_id } : {}),
       actions,
       flow,
       repo: basename(extractCwdFromCommand(command, cwd)),
     }) + '\n');
   } catch { /* 기록 실패가 가드 판정을 바꾸지 않는다 */ }
   return { actions, flow };
+}
+
+// 서브에이전트 기록은 <상위 기록 디렉토리>/<세션>/subagents/ 아래 agent-<id>.jsonl 이다. 워크플로가 띄운 에이전트는
+// subagents/workflows/<실행>/ 처럼 한두 단 아래에 있다. 식별자는 경로 조각이 되므로 형식(위쪽 SUBAGENT_ID_RE)이 맞을 때만 쓴다.
+function subagentTranscript(hookInput) {
+  const { agent_id: agentId, session_id: sessionId, transcript_path: parent } = hookInput;
+  if (!agentId || !sessionId || !parent) return null;
+  if (!SUBAGENT_ID_RE.test(agentId) || !SUBAGENT_ID_RE.test(sessionId)) return null;
+  const name = `agent-${agentId}.jsonl`;
+  const find = (dir, depth) => {
+    const direct = join(dir, name);
+    if (existsSync(direct)) return direct;
+    if (depth <= 0) return null;
+    let entries = [];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const hit = find(join(dir, e.name), depth - 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return find(join(dirname(parent), sessionId, 'subagents'), 3);
 }
 
 // 대화 기록은 수십 MB 까지 자란다. 세션마다 읽은 위치를 캐시에 두고 그 뒤만 읽는다.

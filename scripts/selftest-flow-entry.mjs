@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * selftest-flow-entry.mjs — 플로우 진입 지표 자체 점검 (#769).
+ * selftest-flow-entry.mjs — 플로우 진입 지표 자체 점검 (#769 · #1114).
  *
  * `pre-tool-use.mjs` 를 고쳤으면 이것을 돌린다. 커밋 · push 는 한 줄만 남기므로 판정이 무너져도
  * 아무 신호가 없다. PR 생성 차단(#773)도 같은 판정에 기대므로 함께 본다. 특히 트리거 표의 가이드 경로를 읽음으로 오판하면
@@ -12,7 +12,7 @@
  * 종료 코드: 실패 1, 전부 통과 0
  */
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -42,9 +42,10 @@ const OTHER = JSON.stringify({ type: 'user', message: { content: '이 이슈는 
 let failed = 0;
 let seq = 0;
 
-function runHook(home, transcript, command, sessionId) {
+function runHook(home, transcript, command, sessionId, agentId) {
   const input = { tool_name: 'Bash', tool_input: { command }, session_id: sessionId, cwd: home };
   if (transcript) input.transcript_path = transcript;
+  if (agentId) { input.agent_id = agentId; input.agent_type = 'general-purpose'; }
   return spawnSync('node', [hook], {
     input: JSON.stringify(input),
     encoding: 'utf8',
@@ -151,6 +152,50 @@ denyCase('압축 뒤 처음 읽어도 통과', [OTHER, COMPACT, READ_GUIDE], PR,
     rmSync(home, { recursive: true, force: true });
   }
 }
+
+// 서브에이전트 (#1114). 하네스는 서브에이전트의 호출에도 상위 세션의 기록 경로를 넘기고 agent_id 를 더한다.
+// 서브에이전트 자신의 기록은 <상위 기록 디렉토리>/<세션>/subagents/[하위/]agent-<id>.jsonl 이다.
+// 상위가 읽은 가이드는 서브에이전트 컨텍스트에 없으므로 인정하지 않는다.
+const PROMPT_WITH_PATH = JSON.stringify({
+  type: 'user', isSidechain: true,
+  message: { content: '마지막에 ~/.claude/ops-agent/current/skills/flow/guides/pr.md 대로 PR 을 만듭니다' },
+});
+function subagentCase(name, { parent, agent, agentDir = '', agentId = 'a1b2c3', sessionId = 'sub-sess', runParentFirst = false }, wantDeny) {
+  const home = mkdtempSync(join(tmpdir(), 'flow-entry-'));
+  try {
+    const projDir = join(home, 'projects', 'p');
+    mkdirSync(projDir, { recursive: true });
+    const parentFile = join(projDir, `${sessionId}.jsonl`);
+    writeFileSync(parentFile, parent.map(l => l + '\n').join(''));
+    if (agent) {
+      const dir = join(projDir, sessionId, 'subagents', agentDir);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, `agent-${agentId}.jsonl`), agent.map(l => l + '\n').join(''));
+    }
+    if (runParentFirst) {
+      const p = runHook(home, parentFile, PR, sessionId);
+      check(`${name}: 상위 세션은 통과`, !/플로우 진입 · 차단/.test(p.stdout || ''), (p.stdout || '').slice(0, 160));
+    }
+    const res = runHook(home, parentFile, PR, sessionId, agentId);
+    const denied = /"permissionDecision":"deny"/.test(res.stdout || '') && /플로우 진입 · 차단/.test(res.stdout || '');
+    check(name, denied === wantDeny, (res.stdout || '').slice(0, 160));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+subagentCase('서브에이전트가 가이드를 읽으면 PR 생성 통과', { parent: [OTHER], agent: [PROMPT_WITH_PATH, BASH_GUIDE] }, false);
+subagentCase('워크플로 하위 디렉토리의 서브에이전트도 자기 기록으로 통과',
+  { parent: [OTHER], agent: [READ_GUIDE], agentDir: join('workflows', 'wf_1') }, false);
+subagentCase('가이드를 읽지 않은 서브에이전트의 PR 생성은 막는다', { parent: [OTHER], agent: [OTHER] }, true);
+subagentCase('위임 문구에 가이드 경로만 있는 서브에이전트는 막는다', { parent: [OTHER], agent: [PROMPT_WITH_PATH, OTHER] }, true);
+// 서브에이전트 기록이 상위보다 길면, 캐시를 같이 쓸 때 상위의 읽은 위치 · 판정이 서브에이전트 판정으로 넘어간다.
+subagentCase('상위만 읽은 서브에이전트는 막는다 (같은 세션 캐시와 섞이지 않는다)',
+  { parent: [READ_GUIDE], agent: [OTHER, OTHER, OTHER, OTHER, OTHER], runParentFirst: true }, true);
+subagentCase('압축 전에만 읽은 서브에이전트는 막는다', { parent: [OTHER], agent: [READ_GUIDE, COMPACT, OTHER] }, true);
+subagentCase('서브에이전트 기록을 찾지 못하면 상위 기록으로 본다: 상위 미독은 차단', { parent: [OTHER] }, true);
+subagentCase('서브에이전트 기록을 찾지 못하면 상위 기록으로 본다: 상위 읽음은 통과', { parent: [READ_GUIDE] }, false);
+subagentCase('경로 조각이 든 식별자는 쓰지 않고 상위 기록으로 본다',
+  { parent: [OTHER], agent: [READ_GUIDE], agentId: '..' }, true);
 
 // 대화 기록이 없는 호출은 세지 않는다. 다른 자체 점검이 사용자 지표에 기록을 남기지 않게 하는 조건이다.
 {
