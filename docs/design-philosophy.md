@@ -62,7 +62,7 @@ AI 에게 코드를 맡기면서 제 역할이 "코드 작성"에서 "의사결�
 |------|------|------|
 | `forbidden-words-prompt.sh` | UserPromptSubmit | 직전 응답 위반 턴에만 교정 요청 |
 | `forbidden-words-stop.sh` | Stop | 직전 응답 위반을 검출해 기록 |
-| `language-stop.py` | Stop | 대화 언어와 다른 언어로 나간 응답 차단 · 다시 쓰기 요청 |
+| `response-language.py` | PostToolUse · Stop | 대화 언어와 다른 언어로 넘어간 글을 답변 중에 알림 · 턴 끝은 새 세션 안내만 |
 | `lint-posttool.sh` | PostToolUse (Edit/Write) | 문서 편집 후 자가 점검 유도 (마커 opt-in, `_posts/` 는 무조건) |
 | `pre-tool-use.mjs` | PreToolUse | 퍼블릭 표면으로 가는 대외비 키워드 하드 차단 |
 

@@ -46,6 +46,16 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/response-language.py\"",
+            "timeout": 3
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
@@ -99,7 +109,7 @@
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/language-stop.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/response-language.py\"",
             "timeout": 3
           }
         ]
