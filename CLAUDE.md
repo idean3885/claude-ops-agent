@@ -159,7 +159,7 @@ main ────────────────●─────
 
 머지 직전에는 `scripts/final-check.sh <PR번호> --notes <파일>` 의 통과 기록이 있어야 한다. 없으면 훅이 `gh pr merge` 를 막는다 (#612, [docs/action-gate.md](docs/action-gate.md) 「최종 점검 통과 기록」). 이 레포는 사상 유형이라 병합은 사람이 웹에서 하고, 어시스턴트는 상황 보고에 통과 기록 경로를 첨부한다 (ADR-0028 · ADR-0029).
 
-머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (릴리즈 잡 대기 + 마켓플레이스 update + 활성 세션 경로 복원).
+머지 후 `./scripts/post-merge-sync.sh` 로 로컬 캐시를 맞춘다 (릴리즈 잡 대기 + 마켓플레이스 update + 활성 세션 경로 복원). 실행 자리는 flow 머지 후 정리 단계다 (`skills/flow/SKILL.md` 「머지 안전장치」).
 
 한 세션에서 잡은 이슈는 몇 개든 PR 하나로 묶는다. 이슈마다 커밋 하나를 두고 커밋 제목에 이슈 번호를 적는다. 막힌 이슈는 묶음에서 제외하고 열어 둔다. 실패는 롤포워드로 고친다 ([ADR-0039](docs/adr/0039-session-bundle-one-commit-per-issue.md) · [ADR-0038](docs/adr/0038-one-purpose-one-pr-roll-forward.md)).
 
