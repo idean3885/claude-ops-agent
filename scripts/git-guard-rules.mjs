@@ -53,6 +53,27 @@ const DESTRUCTIVE = [
   },
 ];
 
+// 값을 다음 낱말로 받는 git 전역 옵션. `--opt=값` 형태는 한 낱말이라 따로 셀 필요가 없다.
+const GIT_GLOBAL_VALUE_OPTS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--exec-path', '--super-prefix', '--attr-source', '--list-cmds']);
+
+/**
+ * `git <전역 옵션> <하위 명령> …` 에서 전역 옵션을 걷어 `git <하위 명령> …` 으로 돌려준다.
+ * git 세그먼트가 아니면 그대로 돌려준다.
+ * why: 하위 명령 판정이 `git push` 처럼 바로 붙은 형태만 보면 `git -C <경로> push --force` 가 감지에서 빠진다 (#1083).
+ *      `-C <경로>` 처럼 값이 따로 오는 옵션은 낱말 정규식으로 걷을 수 없어 옵션 목록으로 센다.
+ */
+export function stripGitGlobalOptions(seg) {
+  const m = seg.match(/^((?:\S*\/)?git)\s+(.*)$/s);
+  if (!m) return seg;
+  const tokens = m[2].split(/\s+/);
+  let i = 0;
+  while (i < tokens.length && tokens[i].startsWith('-')) {
+    i += GIT_GLOBAL_VALUE_OPTS.has(tokens[i]) ? 2 : 1;
+  }
+  if (i === 0 || i >= tokens.length) return seg;
+  return `${m[1]} ${tokens.slice(i).join(' ')}`;
+}
+
 /**
  * 원격 기본 브랜치를 구한다. 네트워크를 타지 않는 로컬 조회만 쓴다
  * (`git remote show origin` 은 원격을 조회해 훅 타임아웃을 넘긴다).
@@ -101,7 +122,8 @@ export function detectGitRiskActions(segments, ctx) {
   const ops = [];
   let defaultBranch;
 
-  for (const seg of segments) {
+  for (const raw of segments) {
+    const seg = stripGitGlobalOptions(raw);
     if (/^(?:\S*\/)?git\s+(?:-\S+\s+|--\S+(?:=\S+|\s+\S+)\s+)*push\b/.test(seg)) {
       // force·delete push 는 기존 repo 룰이 이미 잡으므로 여기서는 일반 push 만 본다
       if (/(?:^|\s)(?:--force|--force-with-lease|-f|--delete|-d)\b/.test(seg)) continue;
