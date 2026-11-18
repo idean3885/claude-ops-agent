@@ -9,6 +9,7 @@
 #   gh-issue.sh create --title "<제목>" --body-file <본문.md> --type <feat|fix|docs|refactor|chore>
 #                      (--start | --no-start "<사유>")
 #                      [-R <owner/repo | host/owner/repo>] [--structure <iss1|iss5|iss6|iss7>]
+#                      (-R 이 owner/repo 뿐이면 현재 레포 원격 중 같은 레포의 호스트를 붙인다)
 #                      [--worktree | --checkout] [--base <브랜치>] [--branch <이름>]
 #   gh-issue.sh start <번호> [--type <타입>] [-R <레포>] [--worktree | --checkout] [--base <브랜치>] [--branch <이름>]
 #
@@ -84,6 +85,36 @@ print(json.dumps({"ts": datetime.datetime.now(datetime.timezone.utc).strftime("%
 ' "$1" "$2" "$3" "$4" >>"$dir/$sid.jsonl" 2>/dev/null || true
 }
 
+# -R 이 owner/name 뿐이면 현재 레포의 원격 중 같은 owner/name 을 가리키는 것의 호스트를 붙인다 (#1098).
+# why: owner/name 만 받은 gh 명령은 현재 레포의 원격이 아니라 기본 호스트(github.com)로 간다. 엔터프라이즈 레포면
+#      라벨 조회가 공개 GitHub 로 새 404 로 멈춘다. 호스트 환경 변수를 셸 전체에 내보내면 대외비 가드가 그 셸의
+#      호출을 공개 표면으로 판정하므로, 호출 인자(host/owner/name)로만 넘긴다.
+# 맞는 원격이 없거나 github.com 이면 받은 값 그대로 둔다
+resolve_repo() { # <repo>
+  local repo="$1"
+  if [[ ! "$repo" =~ ^[^/]+/[^/]+$ ]]; then printf '%s' "$repo"; return 0; fi
+  local remotes
+  remotes=$(git remote -v 2>/dev/null) || remotes=""
+  python3 -c '
+import re, sys
+want = sys.argv[1].lower().removesuffix(".git")
+for line in sys.stdin:
+    parts = line.split()
+    if len(parts) < 2:
+        continue
+    url = parts[1]
+    m = (re.match(r"^[a-z+]+://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+)$", url, re.I)
+         or re.match(r"^(?:[^@/]+@)?([^/:]+):(?!//)(.+)$", url))
+    if not m:
+        continue
+    host, path = m.group(1).lower(), m.group(2).strip("/").lower().removesuffix(".git")
+    if path == want and host != "github.com":
+        print(host + "/" + sys.argv[1], end="")
+        sys.exit(0)
+print(sys.argv[1], end="")
+' "$repo" <<<"$remotes"
+}
+
 # ─── start ───
 cmd_start() {
   local NUMBER="" TYPE="" REPO="" BASE="main" BRANCH="" MODE=""
@@ -101,7 +132,7 @@ cmd_start() {
   done
   [[ "$NUMBER" =~ ^[0-9]+$ ]] || err_json 1 "이슈 번호 필수 (숫자)"
   local R=()
-  [ -n "$REPO" ] && R=(-R "$REPO")
+  [ -n "$REPO" ] && R=(-R "$(resolve_repo "$REPO")")
 
   if [ -z "$TYPE" ]; then
     # 타입은 라벨에서 읽는다. 타입 라벨 5종 중 하나여야 한다. priority/* 같은 다른 라벨은 세지 않는다.
@@ -225,10 +256,14 @@ print(json.dumps(d, ensure_ascii=False))' "$CHECK" >&2
   fi
 
   local R=()
-  [ -n "$REPO" ] && R=(-R "$REPO")
+  [ -n "$REPO" ] && R=(-R "$(resolve_repo "$REPO")")
 
   # 라벨 보장 (providers/github.md 라벨 자동 생성). -R 이 있으면 라벨 명령에도 같은 레포.
-  if ! gh label list ${R[@]+"${R[@]}"} --json name --jq '.[].name' 2>/dev/null | grep -qx "$TYPE"; then
+  # why: 조회 실패(없는 레포 · 다른 호스트로 샌 호출)를 「라벨 없음」으로 읽으면 생성 단계에서야 엉뚱한 사유로 멈춘다
+  local LABELS
+  LABELS=$(gh label list ${R[@]+"${R[@]}"} --json name --jq '.[].name' 2>/dev/null) \
+    || err_json 2 "라벨 조회 실패. 레포 · 호스트를 확인한다 (엔터프라이즈 레포는 -R host/owner/repo)" repo="${R[1]:-현재 레포}"
+  if ! grep -qx "$TYPE" <<<"$LABELS"; then
     gh label create "$TYPE" ${R[@]+"${R[@]}"} --color "$(label_color "$TYPE")" >/dev/null \
       || err_json 2 "라벨 생성 실패: $TYPE"
   fi
