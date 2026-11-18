@@ -38,6 +38,9 @@ const checks = [
   ['트리거 표가 있다', rows.length > 0],
   ['flow 행에 「리뷰 준비」가 있다', !!flowRow && flowRow.includes('"리뷰 준비"')],
   ['flow 행에 「머지 준비」가 있다', !!flowRow && flowRow.includes('"머지 준비"')],
+  // 「이슈 정리」는 flow 의 「이슈」와 겹친다. 전용 행이 표에 있고 flow 행은 그 말을 갖지 않는다 (#1134)
+  ['이슈 정리 행이 표에 있다', rows.some((r) => r.includes('/skills/backlog-refinement/SKILL.md') && r.includes('"이슈 정리"'))],
+  ['flow 행에 「이슈 정리」가 없다', !!flowRow && !flowRow.includes('"이슈 정리"')],
   ['어느 행에도 「리뷰 요청」 · 「review request」가 없다', rows.every((r) => !r.includes('"리뷰 요청"') && !r.includes('"review request"'))],
 ];
 

@@ -214,8 +214,18 @@ DB 쓰기를 한 줄 명령으로 건네는 절차는 [db-query](../skills/db-qu
 |------|-----------|
 | `repo-merge` | `Bash(gh pr merge *)` · `Bash(./scripts/pre-merge-check.sh *)` |
 | `repo-release` | `Bash(gh release *)` |
-| `git-force` | `Bash(git push origin --delete *)` · `Bash(git push --force-with-lease *)` |
+| `git-force` | `Bash(git push origin --delete *)` · `Bash(git push --force-with-lease *)` · `Bash(git push --force-with-lease=*)` |
 | `worktree-destructive` | `Bash(git branch -D *)` · `Bash(git reset --hard *)` · `Bash(git clean *)` · `Bash(git restore *)` |
+
+`--force-with-lease=*` 는 PR 가이드 「커밋 합치기」와 최종 점검 안내가 시키는 기대값 고정 형태(`--force-with-lease=<브랜치>:<sha>`)다. 기대값은 `=` 없이 줄 수 없어 공백 규칙만으로는 그 형태가 영영 맞지 않는다 (#875). 게이트가 git-force 갈래로 잡으므로 갈래가 닫혀 있으면 여전히 막힌다.
+
+게이트 밖에 상시로 두는 규칙은 하나다.
+
+| 규칙 | 이유 |
+|------|------|
+| `Bash(git reset --soft *)` | 커밋 합치기의 첫 단계다. 작업 트리를 건드리지 않고 로컬 HEAD 만 옮기며 reflog 로 되돌린다. 밖으로 나가는 것이 없고 실행 인자를 받지 않는다. |
+
+`git rebase` 는 규칙에 두지 않는다. `--exec <명령>` 을 붙이면 임의 명령이 분류기 없이 돌아, 규칙 하나가 사실상 임의 실행 허용이 된다. 여러 이슈 묶음의 합치기(autosquash)는 분류기 판정이나 사용자의 `!` 실행에 맡긴다.
 
 `cluster-write` · `repo-delete` · `git-default-push` 는 규칙에 두지 않는다. 운영에 닿는 민감 작업은 사용자가 `!` 로 직접 실행하고, 기본 브랜치 직접 push 는 금지다.
 
@@ -528,6 +538,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 한시 권한 | `OPS_AGENT_ACTION_GATE_DRYRUN=1` | `OPS_AGENT_ACTION_GATE_DISABLE=1` |
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 | 플로우 진입 | 없음 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
+| 스킬 사용 기록 | 없음 | `OPS_AGENT_SKILL_USE_DISABLE=1` |
 | 레포 허용 목록 | 없음 | 플래그 없음. 목록 파일이 없으면 판정하지 않습니다 |
 
 새 키워드를 등록할 때는 드라이런으로 먼저 돌려 오탐을 확인합니다.

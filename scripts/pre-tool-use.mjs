@@ -174,6 +174,15 @@ const FINAL_CHECK_DISABLE = process.env.OPS_AGENT_FINAL_CHECK_DISABLE === '1';
 // 플로우 진입 지표 (#769). 커밋 · push 는 세기만 하고, 가이드를 읽지 않은 세션의 PR 생성은 막는다 (#773).
 // 비활성 OPS_AGENT_FLOW_ENTRY_DISABLE=1 (기록과 차단 모두).
 const FLOW_ENTRY_DISABLE = process.env.OPS_AGENT_FLOW_ENTRY_DISABLE === '1';
+// 스킬 사용 지표 (#1135). Skill 도구 호출과 설치본 SKILL.md Read 를 세션 · 스킬당 첫 1회 센다. 비활성 OPS_AGENT_SKILL_USE_DISABLE=1.
+const SKILL_USE_DISABLE = process.env.OPS_AGENT_SKILL_USE_DISABLE === '1';
+// 판정 상수는 훅 본문보다 위에 둔다 (아래로 내리면 초기화 전 접근).
+// 설치본 경로: plugins/cache/<마켓>/<플러그인>/<버전>/skills/<이름>/SKILL.md 또는 ops-agent/current/skills/<이름>/SKILL.md
+const SKILL_INSTALL_PATH_RE = /\/\.claude\/(?:plugins\/cache\/[^/]+\/([^/]+)\/[^/]+|ops-agent\/current)\/skills\/([A-Za-z0-9][A-Za-z0-9_.-]*)\/SKILL\.md$/;
+const SKILL_NAME_RE = /^(?:[A-Za-z0-9][A-Za-z0-9_.-]*:)?[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+// ops-agent 스킬은 이름만, 다른 플러그인 스킬은 「플러그인:이름」으로 센다. 플러그인마다 같은 이름의 스킬이 있다
+const skillUseName = (plugin, name) => (!plugin || plugin === 'ops-agent' ? name : `${plugin}:${name}`);
+const SKILL_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 // 훅 본문이 모듈 위쪽에서 돌아 판정 상수도 여기 있어야 한다. 아래로 내리면 초기화 전 접근으로 가드 전체가 내부 오류가 된다.
 // 흔적은 가이드 파일을 대상으로 한 Read 호출과 flow 스킬 호출뿐이다 (#1116). 둘 다 하네스가 내용을 컨텍스트에 넣는다.
 // 셸 명령 인자 · 위임 문구 · 트리거 표 · 테스트 픽스처에 든 경로 문자열은 읽음이 아니다. 문자열로 찾으면 그 모두가
@@ -272,6 +281,8 @@ const ISSUE_ADAPTER_CREATE_RE = /\bgh-issue\.sh\s+create\b/;
 if (!DISABLE) {
   try {
     const hookInput = JSON.parse(input);
+    // 스킬 사용 기록은 Skill · Read 가 아니면 아무 IO 도 하지 않는다. 판정은 기록만 하고 바꾸지 않는다.
+    if (!SKILL_USE_DISABLE) recordSkillUse(hookInput);
     // 레포 유형 선언 편집 차단 (ADR-0028). 유형은 사람이 선언한다.
     if (writesRepoTypeFile(hookInput.tool_name || '', hookInput.tool_input)) {
       process.stdout.write(JSON.stringify({
@@ -1542,7 +1553,9 @@ function detectRepoActions(command) {
     } else if ((m = seg.match(/^(?:\S*\/)?gh\s+repo\s+(delete|archive)\b/))) {
       ops.push({ category: 'repo', scope: 'repo-delete', tool: 'gh repo', verb: m[1] });
     } else if (/^(?:\S*\/)?git\s+push\b/.test(seg)) {
-      if (/(?:^|\s)(?:--force|--force-with-lease|-f)\b/.test(seg)) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'force' });
+      // `+<refspec>` 도 강제 push 다. 옵션이 아닌 낱말이 `+` 로 시작하는지 본다 (#1133).
+      const plusRefspec = seg.split(/\s+/).slice(2).some(t => /^["']?\+[^\s"']/.test(t));
+      if (/(?:^|\s)(?:--force|--force-with-lease|-f)\b/.test(seg) || plusRefspec) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'force' });
       else if (/(?:^|\s)(?:--delete|-d)\b/.test(seg)) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'delete' });
       else if (/\s:[^\s]+/.test(seg)) ops.push({ category: 'repo', scope: 'git-force', tool: 'git push', verb: 'delete-refspec' });
     }
@@ -1589,6 +1602,50 @@ function recordFlowEntry(command, hookInput, cwd) {
     }) + '\n');
   } catch { /* 기록 실패가 가드 판정을 바꾸지 않는다 */ }
   return { actions, flow };
+}
+
+// 스킬 사용 지표 (#1135). 스킬 이름은 Skill 도구의 input.skill, 또는 플러그인 설치본 skills/<이름>/SKILL.md 의 Read 에서 얻는다.
+// 레포 워킹 카피를 읽는 것은 스킬을 쓴 것이 아니라 고치는 것이라 세지 않는다. args · 전체 경로는 남기지 않는다.
+// 같은 세션 · 같은 스킬은 첫 1회만 센다. 세션별 캐시 파일(.cache/skill-use/<세션>.txt)에 센 이름을 줄로 둔다.
+function recordSkillUse(hookInput) {
+  const tool = hookInput.tool_name;
+  if (tool !== 'Skill' && tool !== 'Read') return;
+  try {
+    const sessionId = hookInput.session_id;
+    if (!sessionId || !SUBAGENT_ID_RE.test(sessionId)) return;
+    const toolInput = hookInput.tool_input || {};
+    let skill = null;
+    if (tool === 'Skill') {
+      // `ops-agent:flow` 와 `flow` 는 같은 스킬이다. 다른 플러그인의 네임스페이스는 남긴다.
+      const parts = String(toolInput.skill || '').split(':');
+      skill = parts.length === 2 ? skillUseName(parts[0], parts[1]) : parts.length === 1 ? parts[0] : null;
+    } else {
+      const m = String(toolInput.file_path || '').match(SKILL_INSTALL_PATH_RE);
+      if (m) skill = skillUseName(m[1], m[2]);
+    }
+    if (!skill || !SKILL_NAME_RE.test(skill)) return;
+    const home = join(homedir(), '.claude', 'ops-agent');
+    const cacheDir = join(home, '.cache', 'skill-use');
+    const cacheFile = join(cacheDir, `${sessionId}.txt`);
+    if (existsSync(cacheFile)) {
+      if (readFileSync(cacheFile, 'utf8').split('\n').includes(skill)) return;
+    } else {
+      mkdirSync(cacheDir, { recursive: true });
+      for (const f of readdirSync(cacheDir)) {
+        try { if (Date.now() - statSync(join(cacheDir, f)).mtimeMs > SKILL_CACHE_TTL_MS) rmSync(join(cacheDir, f), { force: true }); } catch { /* 다음 파일 */ }
+      }
+    }
+    appendFileSync(cacheFile, skill + '\n');
+    const now = new Date();
+    const dir = join(home, 'metrics');
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, `skill-use-${now.toISOString().slice(0, 7)}.jsonl`), JSON.stringify({
+      ts: now.toISOString(),
+      session: sessionId,
+      skill,
+      repo: basename(hookInput.cwd || process.cwd()),
+    }) + '\n');
+  } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
 }
 
 // 서브에이전트 기록은 <상위 기록 디렉토리>/<세션>/subagents/ 아래 agent-<id>.jsonl 이다. 워크플로가 띄운 에이전트는

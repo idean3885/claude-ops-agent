@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync, openSync, readSync, closeSync } from 'fs';
 import { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
@@ -146,6 +146,8 @@ function buildSkillContext(provider) {
   const TABLE_SKILLS = [
     { name: 'flow', extra: 'natural language change request' },
     { name: 'setup' },
+    // 「이슈 정리」는 flow 의 「이슈」와 겹친다. 같은 표에 두어 더 구체적인 행이 보이게 한다 (#1134)
+    { name: 'backlog-refinement' },
   ];
 
   const rows = TABLE_SKILLS.map(({ name, extra }) => {
@@ -435,28 +437,62 @@ function assembleGlobalClaudeMd() {
 // 지표: jsonl 의 groupBy 필드 값별 줄 수. since 가 없으면 trial 의 started 이후 ts 만 집계한다.
 // 파일 없음 · 형식 오류는 조용히 건너뛴다 (세션 시작을 막지 않는다).
 const METRIC_MAX_BYTES = 5 * 1024 * 1024;
+
+// source 를 파일 목록으로 푼다. 파일 이름에 `*` 가 있으면 그 디렉토리에서 글롭으로 모은다 (달별 파일 합산).
+// 디렉토리 부분의 `*` 는 지원하지 않는다. 지표 파일은 한 디렉토리에 달별로 쌓인다.
+function metricSources(source) {
+  const src = String(source).replace(/^~(?=\/|$)/, homedir());
+  const slash = src.lastIndexOf('/');
+  const dir = slash >= 0 ? src.slice(0, slash) : '.';
+  const base = src.slice(slash + 1);
+  if (!base.includes('*')) return existsSync(src) ? [src] : [];
+  if (dir.includes('*') || !existsSync(dir)) return [];
+  const re = new RegExp(`^${base.split('*').map(p => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')}$`);
+  return readdirSync(dir).filter(f => re.test(f)).sort().map(f => join(dir, f));
+}
+
+// 크기 상한을 넘는 파일은 건너뛰지 않고 끝의 상한만큼만 읽는다. 잘린 첫 줄은 버린다.
+function readMetricLines(file) {
+  const size = lstatSync(file).size;
+  if (size <= METRIC_MAX_BYTES) return { lines: readFileSync(file, 'utf8').split('\n'), truncated: false };
+  const fd = openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(METRIC_MAX_BYTES);
+    readSync(fd, buf, 0, METRIC_MAX_BYTES, size - METRIC_MAX_BYTES);
+    return { lines: buf.toString('utf8').split('\n').slice(1), truncated: true };
+  } finally {
+    closeSync(fd);
+  }
+}
+
 function buildMetricText(m, started) {
   try {
     if (!m || !m.source || !m.groupBy) return '';
     const label = m.name || m.groupBy;
-    const src = String(m.source).replace(/^~(?=\/|$)/, homedir());
-    if (!existsSync(src) || lstatSync(src).size > METRIC_MAX_BYTES) return `${label} 기록 없음`;
+    const files = metricSources(m.source);
+    if (files.length === 0) return `${label} 기록 없음`;
     const from = Date.parse(m.since || started || '');
     const counts = new Map();
-    for (const line of readFileSync(src, 'utf8').split('\n')) {
-      if (!line.trim()) continue;
-      let row;
-      try { row = JSON.parse(line); } catch { continue; }
-      if (!row || typeof row !== 'object') continue;
-      if (!Number.isNaN(from)) {
-        const ts = Date.parse(row.ts);
-        if (Number.isNaN(ts) || ts < from) continue;
+    let truncated = false;
+    for (const file of files) {
+      const read = readMetricLines(file);
+      truncated = truncated || read.truncated;
+      for (const line of read.lines) {
+        if (!line.trim()) continue;
+        let row;
+        try { row = JSON.parse(line); } catch { continue; }
+        if (!row || typeof row !== 'object') continue;
+        if (!Number.isNaN(from)) {
+          const ts = Date.parse(row.ts);
+          if (Number.isNaN(ts) || ts < from) continue;
+        }
+        const key = String(row[m.groupBy] ?? '(없음)');
+        counts.set(key, (counts.get(key) || 0) + 1);
       }
-      const key = String(row[m.groupBy] ?? '(없음)');
-      counts.set(key, (counts.get(key) || 0) + 1);
     }
-    if (counts.size === 0) return `${label} 기록 없음`;
-    return `${label} ${[...counts].map(([k, n]) => `${k} ${n}`).join(' · ')}`;
+    const note = truncated ? ` (파일 끝 ${METRIC_MAX_BYTES / 1024 / 1024}MB 만 집계)` : '';
+    if (counts.size === 0) return `${label} 기록 없음${note}`;
+    return `${label} ${[...counts].map(([k, n]) => `${k} ${n}`).join(' · ')}${note}`;
   } catch {
     return '';
   }
@@ -504,7 +540,10 @@ function buildTrialsContext() {
       if (t.review) lines.push(`  검토 조건: ${t.review}`);
       // 지표 · 기준 · 판정일: trial 당 최대 4줄
       const metricTexts = (Array.isArray(t.metrics) ? t.metrics : []).map(m => buildMetricText(m, t.started)).filter(Boolean);
+      const hasCause = t.cause === 'content' || t.cause === 'level';
       if (metricTexts.length) lines.push(`  지표: ${metricTexts.join(' / ')}`);
+      // 지표 줄이 없는 자리에 알림을 둔다. 줄 수가 지표 · 기준 · 판정일 · 도래 안내의 4줄을 넘지 않는다.
+      else if (!hasCause && !(Array.isArray(t.metrics) && t.metrics.length)) lines.push('  자동 지표 없음: metrics 또는 cause 를 붙인다');
       const criteria = (Array.isArray(t.criteria) ? t.criteria : []).filter(c => typeof c === 'string' && c);
       if (criteria.length) lines.push(`  기준: ${criteria.join(' / ')}`);
       if (typeof t.reviewAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.reviewAt)) {
@@ -514,7 +553,7 @@ function buildTrialsContext() {
           lines.push('  판정일 도래: 기준과 지표를 대조해 정식 도입 · 폐기 · 재검토를 사용자에게 묻는다');
         }
       }
-      if (t.cause === 'content' || t.cause === 'level') {
+      if (hasCause) {
         const causeName = t.cause === 'content' ? '내용' : '수준';
         lines.push(`  효과: 원인 「${causeName}」 정답률을 시작일 전 기준선과 비교 (scripts/lessons-judge.py report --split ${t.started || '<시작일>'})`);
       } else {

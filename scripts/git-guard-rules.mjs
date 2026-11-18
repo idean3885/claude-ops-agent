@@ -103,7 +103,8 @@ export function pushTargetBranch(seg, runGit) {
   const refspec = rest[1];
   if (refspec) {
     // src:dst 형태면 dst 가 원격 브랜치다
-    const dst = refspec.includes(':') ? refspec.split(':').pop() : refspec;
+    // 앞의 `+` 는 강제 표시이고 브랜치 이름이 아니다
+    const dst = (refspec.includes(':') ? refspec.split(':').pop() : refspec).replace(/^\+/, '');
     return dst.replace(/^refs\/heads\//, '') || null;
   }
   // 인자 없는 push 는 현재 브랜치를 upstream 으로 민다
@@ -125,8 +126,9 @@ export function detectGitRiskActions(segments, ctx) {
   for (const raw of segments) {
     const seg = stripGitGlobalOptions(raw);
     if (/^(?:\S*\/)?git\s+(?:-\S+\s+|--\S+(?:=\S+|\s+\S+)\s+)*push\b/.test(seg)) {
-      // force·delete push 는 기존 repo 룰이 이미 잡으므로 여기서는 일반 push 만 본다
-      if (/(?:^|\s)(?:--force|--force-with-lease|-f|--delete|-d)\b/.test(seg)) continue;
+      // 삭제 push 는 기존 repo 룰이 잡는다. 강제 push 는 기본 브랜치로 가면 여기서도 잡는다.
+      // 두 갈래가 모두 감지되면 둘 다 열려야 통과한다 (git-force 만 열어 기본 브랜치 이력을 덮어쓰는 구멍, #1133).
+      if (/(?:^|\s)(?:--delete|-d)\b/.test(seg)) continue;
       if (defaultBranch === undefined) defaultBranch = resolveDefaultBranch(runGit);
       if (!defaultBranch) continue;
       const target = pushTargetBranch(seg, runGit);

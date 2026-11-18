@@ -91,6 +91,7 @@ PlantUML 사용 시: `example.puml` → `example.svg` 필수 생성
 - 이슈 작업 → 워크트리가 기본. 단일 PR · 단일 레포여도 같다. 직접 체크아웃은 사용자가 지시할 때만 한다.
 - 같은 레포의 여러 PR 병렬 검토 → `scripts/worktree-create.sh`
 - 단발 isolation (실험·임시 빌드) → `Agent` 도구 isolation
+- 판정을 남기는 읽기 전용 분석 → fetch 뒤 원격 기준 브랜치의 detached 워크트리 ([docs/worktree.md](docs/worktree.md) 「적용 범위」)
 
 스크립트 사용법, state 파일 포맷, 경로 컨벤션은 [docs/worktree.md](docs/worktree.md) 참조.
 
@@ -208,12 +209,13 @@ main ────────────────●─────
           if v!=sorted(v): print(p,k,v)
   "
   ```
-- [ ] **`scripts/pre-tool-use.mjs` · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` · `scripts/push-delegation*.mjs` · `scripts/action-gate-prompt.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
+- [ ] **`scripts/pre-tool-use.mjs` · `scripts/session-start.mjs`(시범 지표 집계) · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` · `scripts/push-delegation*.mjs` · `scripts/action-gate-prompt.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
   ```bash
   node scripts/selftest-action-gate.mjs
   node scripts/selftest-issue-adapter.mjs
   node scripts/selftest-build-guard.mjs
   node scripts/selftest-flow-entry.mjs
+  node scripts/selftest-skill-use.mjs
   node scripts/selftest-repo-allowlist.mjs
   node scripts/selftest-push-delegation.mjs
   node scripts/selftest-action-gate-prompt.mjs
@@ -228,7 +230,7 @@ main ────────────────●─────
   ```bash
   node scripts/selftest-flow-routes.mjs
   ```
-- [ ] **세션 시작 트리거 표에 실리는 스킬(flow · setup)의 트리거(description)를 고쳤으면 PR 단계 트리거 점검을 실행한다.** 「리뷰 요청」이 트리거로 돌아오면 사람이 할 행위를 어시스턴트가 받는다.
+- [ ] **세션 시작 트리거 표에 실리는 스킬(flow · setup · backlog-refinement)의 트리거(description)를 고쳤으면 PR 단계 트리거 점검을 실행한다.** 「리뷰 요청」이 트리거로 돌아오면 사람이 할 행위를 어시스턴트가 받는다.
   ```bash
   node scripts/selftest-pr-stage-triggers.mjs
   ```
@@ -273,6 +275,10 @@ main ────────────────●─────
 - [ ] **`skills/transcribe/cleanup.py` 를 고쳤으면 자체 점검을 실행한다.** 교정은 한 번에 끝내므로 치환이 무너지면 틀린 정리본이 그대로 굳는다.
   ```bash
   python3 scripts/selftest-transcribe-cleanup.py
+  ```
+- [ ] **`scripts/backlog-log.py` 를 고쳤으면 자체 점검을 실행한다.** 값 검사가 무너지면 처리 수가 정리 전 수를 넘는 줄이 쌓여 줄어든 비율이 틀린다.
+  ```bash
+  python3 scripts/selftest-backlog-log.py
   ```
 - [ ] **`scripts/lessons-judge.py` 를 고쳤으면 자체 점검을 실행한다.** 판정은 작업 시간 밖에서 조용히 돌아 재귀 가드 · 대상 선정 · 고지 조건이 무너져도 신호가 없다.
   ```bash
