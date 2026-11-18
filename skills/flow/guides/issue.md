@@ -153,7 +153,7 @@ provider 파일에 인증 방식, API endpoint, request body 형식, 필드 보�
 7. **시작 결정**: 지금 손대는 이슈면 `--start`, 백로그 · 후속이면 `--no-start "<사유>"`. 어댑터가 둘 중 하나 없이는 생성하지 않는다.
 8. 이슈 본문 작성. 구조는 `config/style-rules/extensions/issue.md` 「필수 구조」 절에서 고른다 (버그 ISS1 · 기능 ISS5 · 보고 ISS6 · 판정 ISS7). 본문은 파일로 쓴다 (Write).
 9. **대외비 가드 (GATE 0)**: 제목·본문 전체에 대해 `references/confidential-guard.md` 검증. 어댑터 호출의 `--title` · `--body-file` 에도 훅이 같이 적용된다. 히트 시 사용자 정정 후 재검증.
-10. **어댑터로 생성**: provider 의 생성 어댑터 한 호출 (github: `scripts/gh-issue.sh create`). 어댑터가 본문 구조 검사 → 라벨 보장 → 생성 → (`--start` 면) 시작을 이어서 한다. `gh issue create` 직접 호출은 훅이 거부한다 (`docs/action-gate.md` 「이슈 생성 가드」).
+10. **어댑터로 생성**: provider 의 생성 어댑터 한 호출 (github: `scripts/gh-issue.sh create`). 어댑터가 한자 섞임 검사 → 본문 구조 검사 → 라벨 보장 → 생성 → (`--start` 면) 시작을 이어서 한다. `gh issue create` 직접 호출은 훅이 거부한다 (`docs/action-gate.md` 「이슈 생성 가드」).
 11. **Extensions 실행**: provider에 post-create Extensions이 정의되어 있으면 실행
 12. **착수 시험**: 이 세션이 끝까지 하지 않는 이슈(`--no-start`, 다른 세션 · 사람에게 넘기는 이슈)에만 돌린다. `--start` 로 이 세션이 바로 잡는 이슈는 다음 착수의 「착수 읽기」가 받는다. 쓴 사람의 대조는 자기 맥락으로 빈칸을 채워 읽어 증거가 아니다.
    - 에이전트: 맥락 없는 새 에이전트. 설정은 [PR 가이드](pr.md#주장-검증) 주장 검증의 에이전트 설정을 따르고, 회차마다 새로 띄운다.

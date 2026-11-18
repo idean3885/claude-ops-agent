@@ -155,6 +155,13 @@ adapterCase('필수 판단 누락은 거부', CREATE, 1, { logNot: ['gh issue cr
 adapterCase('--start 와 --no-start 동시는 거부', [...CREATE, '--start', '--no-start', 'x'], 1, { logNot: ['gh issue create'] });
 adapterCase('--type 누락은 거부', ['create', '--title', 't', '--body-file', okBody, '--start'], 1, { logNot: ['gh issue create'] });
 adapterCase('본문 검사 실패는 생성하지 않는다', ['create', '--title', 't', '--body-file', badBody, '--type', 'feat', '--start'], 1, { logNot: ['gh issue create'], json: { step: 'body-check' } });
+{
+  // #1090: 한글과 붙은 한자가 든 제목 · 본문은 구조 검사보다 먼저 멈춘다
+  const hanBody = join(sandbox, 'han.md');
+  writeFileSync(hanBody, ISS5_OK.replace('- 사실 1\n', '- 남은 일은 외部 대기\n'));
+  adapterCase('본문의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', 't', '--body-file', hanBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create', 'gh label'], json: { step: 'han-intrusion' } });
+  adapterCase('제목의 한자 섞임은 생성하지 않는다 (HI-4)', ['create', '--title', '외部 연동', '--body-file', okBody, '--type', 'feat', '--no-start', 'x'], 1, { logNot: ['gh issue create'], json: { step: 'han-intrusion' } });
+}
 adapterCase('fix 는 ISS1 기본 (ISS5 본문은 거부)', ['create', '--title', 't', '--body-file', okBody, '--type', 'fix', '--start'], 1, { logNot: ['gh issue create'] });
 adapterCase('fix + ISS1 본문 통과', ['create', '--title', 't', '--body-file', fixBody, '--type', 'fix', '--no-start', 'x'], 0, { logHas: ['gh issue create'] });
 adapterCase('--structure 가 기본값을 덮는다', ['create', '--title', 't', '--body-file', okBody, '--type', 'fix', '--structure', 'iss5', '--no-start', 'x'], 0, { logHas: ['gh issue create'] });

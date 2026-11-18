@@ -20,7 +20,7 @@ bash ~/.claude/ops-agent/current/scripts/gh-issue.sh create --title "{제목}" -
   (--start [--worktree|--checkout] [--base {브랜치}] [--branch {이름}] | --no-start "{사유}") [-R {owner/repo}] [--structure {iss1|iss5|iss6|iss7}]
 ```
 
-어댑터가 본문 구조 검사(`scripts/issue-body-rules.mjs`) → 라벨 보장 → `gh issue create --label {타입}` → `--start` 면 start 를 이어서 한다. 구조 기본값은 `fix` → ISS1, 그 외 → ISS5. `gh issue create` 직접 호출은 훅이 거부한다. 출력은 JSON 한 줄(`status` · `number` · `url` · `start`).
+어댑터가 한자 섞임 검사(`scripts/han-intrusion.mjs`) → 본문 구조 검사(`scripts/issue-body-rules.mjs`) → 라벨 보장 → `gh issue create --label {타입}` → `--start` 면 start 를 이어서 한다. 구조 기본값은 `fix` → ISS1, 그 외 → ISS5. `gh issue create` 직접 호출은 훅이 거부한다. 출력은 JSON 한 줄(`status` · `number` · `url` · `start`).
 
 **라벨 매핑**:
 | 키워드 | 라벨 | 브랜치 접두사 | 색상 |
