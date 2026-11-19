@@ -499,7 +499,7 @@ function buildMetricText(m, started) {
 }
 
 // 표준 용어 목록은 미러만으로는 세션이 내용을 모른다. 섞어 쓴 말을 알아보려면 목록이 컨텍스트에 있어야 한다.
-// 교정은 섞어 쓴 말을 알아보는 데서 시작하므로 항목당 한 줄(제목 · 섞어 쓴 말)만 넣고, 구분 · 예문은 걸렸을 때 원천에서 읽는다.
+// 교정은 섞어 쓴 말을 알아보는 데서 시작하므로 항목당 한 줄(제목 · 섞어 쓴 말 · 다른 세트 이름)만 넣고, 구분 · 예문 · 갈리는 지점은 걸렸을 때 원천에서 읽는다.
 // 상주분이 인덱스라 항목 수를 묶을 필요가 없다. 익힌 항목은 주입하지 않는다.
 function buildTermsContext() {
   try {
@@ -507,17 +507,18 @@ function buildTermsContext() {
     if (!existsSync(path)) return '';
     const body = readFileSync(path, 'utf8').split('\n## 항목\n')[1]?.split('\n## ')[0];
     if (!body) return '';
-    const lines = [];
-    let title = null;
+    // 항목마다 섞어 쓴 말과 다른 세트를 모은 뒤 한 줄로 낸다. 다른 세트는 이름과 쓰는 곳까지만 싣고 갈리는 지점은 원천에서 읽는다
+    const entries = [];
     for (const line of body.split('\n')) {
-      if (line.startsWith('### ')) title = line.slice(4).trim();
-      else if (title && line.startsWith('- 섞어 쓴 말: ')) {
-        lines.push(`- ${title}: ${line.slice('- 섞어 쓴 말: '.length).trim()}`);
-        title = null;
+      if (line.startsWith('### ')) entries.push({ title: line.slice(4).trim(), mixed: '', others: [] });
+      else if (entries.length && line.startsWith('- 섞어 쓴 말: ')) entries.at(-1).mixed = line.slice('- 섞어 쓴 말: '.length).trim();
+      else if (entries.length && line.startsWith('- 다른 세트: ')) {
+        entries.at(-1).others = [...line.matchAll(/「([^」]+)」\(([^)]+)\)/g)].map(m => `「${m[1]}」(${m[2]})`);
       }
     }
+    const lines = entries.filter(e => e.mixed).map(e => `- ${e.title}: ${e.mixed}${e.others.length ? ` / 다른 세트: ${e.others.join(' ')}` : ''}`);
     if (lines.length === 0) return '';
-    return ['', `[표준 용어 — 목록에 있는 개념은 이 말을 쓴다. 「표준 용어: 섞어 쓴 말」 인덱스다. 섞어 쓴 말이 보이면 원천의 그 항목(구분 · 예문)을 읽고 교정한다: ${join(opsAgentGlobal, 'style-rules', 'base', 'terms.md')}]`, ...lines].join('\n');
+    return ['', `[표준 용어 — 목록에 있는 개념은 이 말을 쓴다. 「표준 용어: 섞어 쓴 말 / 다른 세트」 인덱스다. 섞어 쓴 말이 보이면 원천의 그 항목(구분 · 예문)을 읽고 교정한다: ${join(opsAgentGlobal, 'style-rules', 'base', 'terms.md')}]`, ...lines].join('\n');
   } catch {
     return '';
   }
