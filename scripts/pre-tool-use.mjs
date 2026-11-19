@@ -38,6 +38,8 @@
  *    다른 가드의 비활성 플래그와 무관하게 돈다. 목록 파일이 없으면 판정하지 않는다. 규칙은 repo-allowlist-rules.mjs.
  * 8. 글 판정 가드 (#1112): 이슈 · PR 본문 · 코멘트를 보내기 전에 문서 규칙 카운터로 확정 항목(L9 · PN8)을 판정해
  *    걸리면 차단한다. 비활성 OPS_AGENT_BODY_LINT_DISABLE=1.
+ * 9. 가드 해제 대입 차단 (#1142): Bash 명령 글자에서 이름이 `_DISABLE` 로 끝나는 변수를 대입하면(명령 머리 · env · export
+ *    · declare -x) 차단한다. 비활성 변수는 모두 사람이 세션 환경에서 켠다. 비활성 OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE=1.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
@@ -203,7 +205,7 @@ const FLOW_SCAN_CHUNK = 4 << 20;
 const FLOW_PR_DENY = '[ops-agent 플로우 진입 · 차단] 이 세션은 플로우 가이드를 읽지 않고(또는 압축 뒤 다시 읽지 않고) PR 을 만듭니다 (#773 · #891).\n'
   + 'PR 생성의 초안 · 본문 · 리뷰 요청 순서는 가이드에 있습니다. 먼저 읽고 가이드 절차(초안 생성)대로 다시 만듭니다:\n'
   + '  ~/.claude/ops-agent/current/skills/flow/guides/pr.md\n'
-  + '읽으면 다음 컨텍스트 압축 전까지 통과합니다. 비활성: OPS_AGENT_FLOW_ENTRY_DISABLE=1';
+  + '읽으면 다음 컨텍스트 압축 전까지 통과합니다. 비활성: 사람이 세션 환경에서 OPS_AGENT_FLOW_ENTRY_DISABLE=1 (명령 앞 대입은 차단)';
 const finalCheckDir = () => join(homedir(), '.claude', 'ops-agent', '.cache', 'final-check');
 // `gh pr merge` 가 값을 취하는 플래그. 값이 PR 번호 자리로 읽히지 않게 먼저 걷어낸다.
 const MERGE_VALUE_FLAG = /(?:^|\s)(?:-[btFAR]|--(?:body|body-file|subject|match-head-commit|author-email|repo))(?:\s+|=)(?:"[^"]*"|'[^']*'|\S+)/g;
@@ -251,6 +253,34 @@ let truncationNotice = '';
 let passNotice = '';
 const ROADMAP_NOTICE = '[ops-agent 이슈 생성 · 알림] 진행 중인 로드맵 이슈에 담을 일이면 새 이슈가 아니라 그 이슈의 항목(체크박스)으로 더한다. 원칙: docs/working-principles.md 「이슈는 그 이슈만으로 착수된다」';
 const ISSUE_ADAPTER_CREATE_RE = /\bgh-issue\.sh\s+create\b/;
+
+// ─── 가드 해제 대입 차단 (#1142) ───
+// 이 훅은 하네스가 띄운 별도 프로세스라 명령 앞 대입이 닿지 않지만, 명령이 부르는 스크립트(이슈 생성 어댑터 등)가
+// 스스로 읽는 해제 변수는 `X_DISABLE=1 bash …` 로 꺼진다. 해제는 사람이 세션 환경에서 한다.
+// 다른 가드의 비활성 플래그 · 시간 예산과 무관하게 맨 앞에서 돈다. 판정 범위는 docs/action-gate.md 「가드 해제 대입 차단」.
+const DISABLE_ASSIGN_GUARD_DISABLE = process.env.OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE === '1';
+const ASSIGN_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
+const DISABLE_ASSIGN_WORD_RE = /^([A-Za-z_][A-Za-z0-9_]*_DISABLE)\+?=/;
+// 뒤에 오는 낱말이 다시 명령 머리가 되는 예약어
+const COMMAND_HEAD_KEYWORDS = new Set(['!', '{', 'if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time']);
+// env 의 값을 받는 옵션. 값 자리의 낱말을 대입으로 읽지 않게 건너뛴다
+const ENV_VALUE_OPTS = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']);
+{
+  let name = null;
+  if (!DISABLE_ASSIGN_GUARD_DISABLE) {
+    try {
+      const hookInput = JSON.parse(input);
+      if ((hookInput.tool_name || '') === 'Bash') name = findDisableAssignment(String((hookInput.tool_input || {}).command || ''));
+    } catch { /* 입력을 읽지 못하면 판정할 명령이 없다. 아래 가드도 같은 입력을 다룬다 */ }
+  }
+  if (name) {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+        permissionDecisionReason: `[ops-agent 가드 해제 대입 · 차단] 가드 해제는 사람만 한다. 필요하면 사람이 세션 환경에서 켠다 (대입: ${name}). 해제를 한시 권한으로 넘기는 일은 #1144.` },
+    }));
+    process.exit(0);
+  }
+}
 
 // ─── 레포 허용 목록 (#969) ───
 // 다른 가드의 비활성 플래그와 무관하게 돈다. 판정하지 못하면(목록 파일 깨짐 등) 통과시키되 사실을 알린다.
@@ -405,7 +435,7 @@ if (!DISABLE) {
             `해결: 도메인 행위·사용자 가치만 기술하세요. 클래스명·메서드명·어노테이션·헥사고날 어휘·yaml 키·산출물 카운트 모두 제거.\n` +
             `흐름은 mermaid flowchart/sequenceDiagram 사용.\n` +
             `가이드: ~/.claude/ops-agent/current/skills/flow/guides/commit.md 의 "도메인 What 추상화" 섹션\n` +
-            `비활성: OPS_AGENT_WHAT_GUARD_DISABLE=1 (예외 상황만)`;
+            `비활성: 사람이 세션 환경에서 OPS_AGENT_WHAT_GUARD_DISABLE=1 (예외 상황만. 명령 앞 대입은 차단)`;
           if (WHAT_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
@@ -430,7 +460,7 @@ if (!DISABLE) {
             + hanHits.map(h => `  - (${h.source}) ${h.context}`).join('\n') + '\n\n'
             + `해결: 그 자리를 한글로 고치고 다시 실행합니다. 띄어 쓴 한자 낱말은 막지 않습니다.\n`
             + `범위: 커밋 메시지와 PR 제목 · 본문 · 코멘트만 봅니다. 커밋 대상 파일 내용은 보지 않습니다.\n`
-            + `비활성: OPS_AGENT_HAN_GUARD_DISABLE=1 (한자가 붙어야 하는 글만. 사람이 세션 환경변수로)`;
+            + `비활성: 사람이 세션 환경에서 OPS_AGENT_HAN_GUARD_DISABLE=1 (한자가 붙어야 하는 글만. 명령 앞 대입은 차단)`;
           process.stdout.write(JSON.stringify({
             hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
           }));
@@ -448,7 +478,7 @@ if (!DISABLE) {
             + `해결: 머리말이 필요하면 소제목 줄로 올리고 그 아래 불릿은 내용만 씁니다 (readability L9). 물결표는 역슬래시로 이스케이프합니다 (punctuation PN8).\n`
             + `고치는 김에 받는 사람의 판단 재료를 봅니다 (tech-comm TC5 · TC6): 무엇이 대상인지 이 글만으로 알 수 있는가, 「영향 없음」 · 「문제없음」에 근거를 함께 적었는가.\n`
             + `범위: gh issue create · edit · comment 와 gh pr create · edit · comment · review 의 본문만 봅니다. 이슈 생성 어댑터는 스스로 같은 판정을 합니다.\n`
-            + `비활성: OPS_AGENT_BODY_LINT_DISABLE=1 (형식이 키를 정한 정의 목록이 걸릴 때만. 사람이 세션 환경변수로)`;
+            + `비활성: 사람이 세션 환경에서 OPS_AGENT_BODY_LINT_DISABLE=1 (형식이 키를 정한 정의 목록이 걸릴 때만. 명령 앞 대입은 차단)`;
           process.stdout.write(JSON.stringify({
             hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
           }));
@@ -473,7 +503,7 @@ if (!DISABLE) {
             `  - 기존 기록: ISS5 본문 ## Why 에 「- 기존 기록: {이전 · 지금 · 바뀐 점 | 없음 · 찾은 자리}」 한 줄 (ADR-0027)\n` +
             `본문 규칙: config/style-rules/extensions/issue.md · 가이드: skills/flow/guides/issue.md\n` +
             `${ROADMAP_NOTICE}\n` +
-            `드라이런: OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1`;
+            `드라이런: OPS_AGENT_ISSUE_CREATE_GUARD_DRYRUN=1 · 비활성: 사람이 세션 환경에서 OPS_AGENT_ISSUE_CREATE_GUARD_DISABLE=1 (명령 앞 대입은 차단)`;
           if (ISSUE_CREATE_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
@@ -499,7 +529,7 @@ if (!DISABLE) {
           const msg = `${header} 준비 완료 전환은 작성자가 웹에서 합니다:\n${readyHits.map(h => `  - ${h}`).join('\n')}\n\n` +
             `리뷰 준비와 머지 준비(머지 전 최종 점검)는 초안 상태 그대로 진행합니다. 초안이라서 못 하는 단계는 없습니다.\n` +
             `가이드: ~/.claude/ops-agent/current/skills/flow/guides/pr.md 「초안으로 생성하고 작성자가 먼저 본다」\n` +
-            `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1`;
+            `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: 사람이 세션 환경에서 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1 (명령 앞 대입은 차단)`;
           if (PR_DRAFT_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
@@ -517,7 +547,7 @@ if (!DISABLE) {
             `  gh pr create --draft --base <타겟> --title "<제목>" --body-file <본문파일>\n` +
             `준비 완료 전환(gh pr ready)과 리뷰 요청은 작성자가 웹에서 변경분을 본 뒤 합니다.\n` +
             `가이드: ~/.claude/ops-agent/current/skills/flow/guides/pr.md 「초안으로 생성하고 작성자가 먼저 본다」\n` +
-            `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1`;
+            `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: 사람이 세션 환경에서 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1 (명령 앞 대입은 차단)`;
           if (PR_DRAFT_GUARD_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
@@ -592,7 +622,7 @@ if (!DISABLE) {
             `어시스턴트가 이 스크립트를 실행하면 자기 수정으로 차단됩니다. 정상 동작이며 우회하지 않습니다.\n` +
             `자연어 승인("승인합니다"·"머지 승인" 등)은 권한을 열지 않습니다. 마커 파일 생성만이 개방 신호입니다.\n` +
             `read-only·가역 명령(git commit, 브랜치 push, gh pr create 등)은 통과합니다.\n` +
-            `전체 절차: docs/action-gate.md · 해제: action-gate-allow.sh off · 파이프라인 비활성: OPS_AGENT_ACTION_GATE_DISABLE=1`;
+            `전체 절차: docs/action-gate.md · 해제: action-gate-allow.sh off · 파이프라인 비활성: 사람이 세션 환경에서 OPS_AGENT_ACTION_GATE_DISABLE=1 (명령 앞 대입은 차단)`;
           if (GATE_DRYRUN) {
             process.stderr.write(msg + '\n');
           } else {
@@ -696,7 +726,7 @@ if (!DISABLE) {
             `그리고 ## 주장 검증 절에 리뷰 준비 주장 검증의 회차를 한 줄씩 적고, 마지막 회차의 차단 지적이 0건이어야 합니다:\n` +
             `  - 1회: 차단 2건 · 권장 3건 · 사소 1건 (HEAD 1a2b3c4)\n  - 2회: 차단 0건 · 권장 1건 · 사소 1건 (HEAD 5d6e7f8)\n` +
             `푸시로 HEAD 가 바뀌면 통과 기록은 무효가 되므로 다시 실행합니다.\n` +
-            `전체 절차: docs/action-gate.md 「최종 점검 통과 기록」 · 해제: OPS_AGENT_FINAL_CHECK_DISABLE=1`;
+            `전체 절차: docs/action-gate.md 「최종 점검 통과 기록」 · 해제: 사람이 세션 환경에서 OPS_AGENT_FINAL_CHECK_DISABLE=1 (명령 앞 대입은 차단)`;
           process.stdout.write(JSON.stringify({
             hookSpecificOutput: {
               hookEventName: 'PreToolUse',
@@ -1006,6 +1036,71 @@ function opensGateByAssistant(command) {
   // 2>&1 · >&2 · &> 의 & 는 명령 구분자가 아니라 리다이렉션이다. 판정 전에 지운다.
   const plain = command.replace(/\d*[<>]&\d*-?|&>>?/g, ' ');
   return allowOn.test(plain) || hook.test(plain);
+}
+
+// 명령 글자에서 이름이 `_DISABLE` 로 끝나는 변수를 대입하는 자리를 찾아 그 이름을 돌려준다 (#1142).
+// 따옴표 안 · heredoc 본문 · 주석은 지운 뒤 본다. 명령 머리 대입, env 대입, export · declare -x · typeset -x 대입을 본다.
+function findDisableAssignment(command) {
+  const plain = maskShellLiterals(command).replace(/\d*[<>]&\d*-?|&>>?/g, ' ');
+  for (const seg of plain.split(/[;&|()\n`]/)) {
+    const words = seg.trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < words.length && COMMAND_HEAD_KEYWORDS.has(words[i])) i++;
+    for (; i < words.length && ASSIGN_WORD_RE.test(words[i]); i++) {
+      const m = words[i].match(DISABLE_ASSIGN_WORD_RE);
+      if (m) return m[1];
+    }
+    const cmd = (words[i] || '').replace(/^.*\//, '');
+    const rest = words.slice(i + 1);
+    if (cmd === 'env') {
+      for (let j = 0; j < rest.length; j++) {
+        const w = rest[j];
+        if (ENV_VALUE_OPTS.has(w)) { j++; continue; }
+        if (w.startsWith('-')) continue;
+        const m = w.match(DISABLE_ASSIGN_WORD_RE);
+        if (m) return m[1];
+        if (!ASSIGN_WORD_RE.test(w)) break;
+      }
+    }
+    const exportsVars = cmd === 'export'
+      || ((cmd === 'declare' || cmd === 'typeset') && rest.some(w => /^-[A-Za-z]*x/.test(w)));
+    if (exportsVars) {
+      const hit = rest.map(w => w.match(DISABLE_ASSIGN_WORD_RE)).find(Boolean);
+      if (hit) return hit[1];
+    }
+  }
+  return null;
+}
+
+// heredoc 본문 · 따옴표 안 글자 · 주석을 지운다. 따옴표 자체는 남겨 `NAME="1"` 이 대입 모양을 유지하게 한다.
+// 닫히지 않은 따옴표는 끝까지 따옴표 안으로 본다. 셸도 그 명령을 실행하지 못한다.
+function maskShellLiterals(command) {
+  const s = command.replace(HEREDOC_RE, m => m.slice(0, m.indexOf('\n') + 1));
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '\\') { out += s.slice(i, i + 2); i++; continue; }
+    if (c === "'") {
+      const end = s.indexOf("'", i + 1);
+      out += "''";
+      i = end < 0 ? s.length : end;
+      continue;
+    }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < s.length && s[j] !== '"') j += s[j] === '\\' ? 2 : 1;
+      out += '""';
+      i = j;
+      continue;
+    }
+    if (c === '#' && (i === 0 || /[\s;&|()]/.test(s[i - 1]))) {
+      const nl = s.indexOf('\n', i);
+      i = nl < 0 ? s.length : nl - 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
 }
 
 function writesGuardedFile(toolName, toolInput, fileRe, stem) {

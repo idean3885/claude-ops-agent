@@ -14,7 +14,7 @@
  *   import { findIntrusions } from './han-intrusion.mjs';
  *   node scripts/han-intrusion.mjs [--text <값>]... [<파일>]...   (.json 은 문자열 값만 본다)
  * 종료 코드: 0 섞임 없음, 1 파일을 읽지 못함, 6 섞임 있음. 사유는 stderr JSON 한 줄
- * 비활성: OPS_AGENT_HAN_GUARD_DISABLE=1 (한자가 붙어야 하는 글만. 사람이 세션 환경변수로)
+ * 비활성: OPS_AGENT_HAN_GUARD_DISABLE=1 (한자가 붙어야 하는 글만). 사람이 세션 환경에서만 켠다. 명령 앞 대입은 PreToolUse 훅이 막는다 (#1142)
  */
 import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
