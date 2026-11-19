@@ -681,5 +681,66 @@ for (const [name, want, command, settings, scope = 'git-force'] of SHAPE_CASES) 
   console.log(`${ok ? '  OK' : '  XX'}  허용 규칙 형태: ${name} — want ${want}, got ${got}${got === 'deny' && !reason.includes(SHAPE_DENY) ? ` (${reason.split('\n')[0]})` : ''}`);
 }
 
-console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + HAN_CASES.length + LINT_CASES.length + SHAPE_CASES.length}건 전부 통과`);
+// 가드 해제 대입 차단 (#1142). 명령이 부르는 스크립트가 스스로 읽는 해제 변수는 명령 앞 대입으로 꺼진다.
+// 막는 형태와 막지 않는 형태(따옴표 안 · heredoc 본문 · 주석 · 이름 언급 · 인자 자리)를 실제 훅에 넣어 본다.
+// 판정 범위의 원천은 docs/action-gate.md 「가드 해제 대입 차단」.
+const ASSIGN_DENY = '[ops-agent 가드 해제 대입 · 차단]';
+const ASSIGN_CASES = [
+  ['명령 머리 대입', 'deny', 'OPS_AGENT_BODY_LINT_DISABLE=1 bash scripts/gh-issue.sh create --title t'],
+  ['접두가 다른 해제 변수', 'deny', 'TOOLKIT_SAMPLE_WRITE_GATE_DISABLE=1 node adapter.mjs'],
+  ['다른 대입 뒤의 해제 대입', 'deny', 'FOO=1 OPS_AGENT_HAN_GUARD_DISABLE=1 node x.mjs'],
+  ['값을 따옴표로 감싼 대입', 'deny', 'OPS_AGENT_HAN_GUARD_DISABLE="1" node x.mjs'],
+  ['; 뒤', 'deny', 'cd /tmp; X_DISABLE=1 bash a.sh'],
+  ['&& 뒤', 'deny', 'true && X_DISABLE=1 bash a.sh'],
+  ['|| 뒤', 'deny', 'false || X_DISABLE=1 bash a.sh'],
+  ['| 뒤', 'deny', 'echo y | X_DISABLE=1 bash a.sh'],
+  ['서브셸 ( 뒤', 'deny', '(X_DISABLE=1 bash a.sh)'],
+  ['명령 치환 $( 뒤', 'deny', 'out=$(X_DISABLE=1 bash a.sh)'],
+  ['줄바꿈 뒤', 'deny', 'git status\nX_DISABLE=1 bash a.sh'],
+  ['명령 없는 대입 (set -a 뒤)', 'deny', 'set -a; X_DISABLE=1; bash a.sh'],
+  ['예약어 then 뒤', 'deny', 'if true; then X_DISABLE=1 bash a.sh; fi'],
+  ['env 대입', 'deny', 'env X_DISABLE=1 bash a.sh'],
+  ['env 옵션 · 다른 대입 뒤', 'deny', 'env -u FOO A=1 X_DISABLE=1 bash a.sh'],
+  ['경로를 붙인 env', 'deny', '/usr/bin/env X_DISABLE=1 bash a.sh'],
+  ['export 대입', 'deny', 'export X_DISABLE=1 && bash a.sh'],
+  ['export 여러 대입 중 하나', 'deny', 'export FOO=1 X_DISABLE=1'],
+  ['declare -x 대입', 'deny', 'declare -x X_DISABLE=1; bash a.sh'],
+  ['typeset -x 대입', 'deny', 'typeset -x X_DISABLE=1; bash a.sh'],
+  ['닫힌 따옴표 뒤 실제 대입', 'deny', "echo 'x'; X_DISABLE=1 bash a.sh"],
+  ['heredoc 뒤 실제 대입', 'deny', "cat <<'EOF' > /dev/null\nnote\nEOF\nX_DISABLE=1 bash a.sh"],
+  ['이 판정의 해제 변수도 대입은 차단', 'deny', 'OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE=1 bash a.sh'],
+  ['큰따옴표 안 문자열 grep', 'pass', 'grep -n "_DISABLE=1" scripts/pre-tool-use.mjs'],
+  ['작은따옴표 안 문자열 echo', 'pass', "echo 'X_DISABLE=1'"],
+  ['작은따옴표 안 대입 모양', 'pass', "echo 'a; X_DISABLE=1 bash a.sh'"],
+  ['큰따옴표 안 대입 모양', 'pass', 'echo "a; X_DISABLE=1 bash a.sh"'],
+  ['변수 이름만 언급한 조회', 'pass', 'grep -rn OPS_AGENT_HAN_GUARD_DISABLE docs'],
+  ['명령 인자 자리의 NAME=값', 'pass', 'echo X_DISABLE=1'],
+  ['heredoc 본문', 'pass', "cat <<'EOF' > /dev/null\nX_DISABLE=1 bash a.sh\nEOF"],
+  ['주석', 'pass', 'git status # ; X_DISABLE=1 bash a.sh'],
+  ['_DISABLE 로 끝나지 않는 이름', 'pass', 'X_DISABLED=1 X_DISABLE_LOG=1 bash a.sh'],
+  ['드라이런 대입은 범위 밖', 'pass', 'OPS_AGENT_ACTION_GATE_DRYRUN=1 bash a.sh'],
+  ['env 의 다른 대입', 'pass', 'env FOO=1 bash a.sh'],
+  ['export 조회', 'pass', 'export -p | grep _DISABLE'],
+  ['세션 환경에서 끄면 통과', 'pass', 'X_DISABLE=1 bash a.sh', { OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE: '1' }],
+];
+const assignHome = mkdtempSync(join(tmpdir(), 'assign-selftest-'));
+for (const [name, want, command, env = {}] of ASSIGN_CASES) {
+  const res = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', cwd: assignHome, session_id: 'selftest', tool_input: { command } }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: assignHome, OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE: '', ...env },
+  });
+  let got = 'pass';
+  let reason = '';
+  try {
+    const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput;
+    if (hs && hs.permissionDecision === 'deny') { got = 'deny'; reason = hs.permissionDecisionReason; }
+  } catch { /* 출력 없음 = 통과 */ }
+  const ok = got === want && (want === 'pass' || reason.startsWith(ASSIGN_DENY));
+  if (!ok) failed++;
+  console.log(`${ok ? '  OK' : '  XX'}  가드 해제 대입: ${name} — want ${want}, got ${got}${reason ? ` · ${reason.split('\n')[0]}` : ''}`);
+}
+rmSync(assignHome, { recursive: true, force: true });
+
+console.log(failed ? `\n실패 ${failed}건` : `\n${CASES.length + SCOPE_CASES.length + TTL_CASES.length + SCOPE_GATE_CASES.length + RECEIPT_CASES.length + typeCaseCount + ISSUE_CASES.length + PR_DRAFT_CASES.length + HAN_CASES.length + LINT_CASES.length + SHAPE_CASES.length + ASSIGN_CASES.length}건 전부 통과`);
 process.exit(failed ? 1 : 0);
