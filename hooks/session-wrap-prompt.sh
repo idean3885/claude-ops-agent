@@ -31,7 +31,7 @@ except Exception:
 # 마지막 비어 있지 않은 줄에서 공백과 끝의 마침표 · 느낌표를 빼고 아래 목록과 완전히 같을 때만 발동한다.
 # 목록 밖의 문장은 판정하지 않는다. 놓친 말투는 지표를 보고 목록에 더한다.
 LAST=$(printf '%s\n' "$PROMPT" | awk 'NF{l=$0} END{print l}' | tr -d '[:space:]' | sed -E 's/[.!]+$//')
-ENDINGS='(합니다|하겠습니다|할게요|합시다|하자|하죠|해요|해주세요|해줘|부탁합니다|부탁드립니다|하고끝냅니다)'
+ENDINGS='(합니다|하겠습니다|할게요|합시다|하자|하죠|해요|해주세요|해줘|부탁합니다|부탁드립니다|하고끝냅니다|갑니다|가겠습니다)'
 MATCHED=""
 if printf '%s' "$LAST" | grep -qE "^세션(을|를)?(마무리|종료|정리)${ENDINGS}?$"; then
   MATCHED="session"
@@ -43,12 +43,20 @@ fi
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 METRICS_FILE="$HOME/.claude/ops-agent/metrics/session-wrap-prompt.jsonl"
 mkdir -p "$(dirname "$METRICS_FILE")"
-printf '{"ts":"%s","matched":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MATCHED" >>"$METRICS_FILE" 2>/dev/null || true
+# 컴팩트 재료: 압축 직전 훅(hooks/precompact-state.py)이 구간마다 이어 쓰는 사용자 발화 · 명령 기록이다.
+# 압축 요약의 「마무리 때 할 것」과 함께 대상 출처로 가리킨다. 이슈 목록만 보이면 그 목록이 대상이 된다 (#1148)
+COMPACT=""
+[[ -n "$SESSION_ID" && -s "$HOME/.claude/state/compact/$SESSION_ID.md" ]] && COMPACT="$HOME/.claude/state/compact/$SESSION_ID.md"
+printf '{"ts":"%s","matched":"%s","compact":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MATCHED" "$([[ -n "$COMPACT" ]] && echo true || echo false)" >>"$METRICS_FILE" 2>/dev/null || true
 
 cat <<EOF
 [세션 마무리 감지] 종결로 끝낸다. 절차는 $PLUGIN_ROOT/docs/working-principles.md 「세션 마무리는 종결로 끝낸다」를 읽고 따른다.
 단계: 1 대상 수집 → 2 잔여 처리 · 묶음 → 3 막힌 것의 자리 결정 → 4 판결(첫 줄 「종결」 · 「미종결」)
+1 대상 수집의 출처는 넷이고 모두 본다: 세션 인덱스(아래 이슈 목록) · 압축 요약에 적힌 「마무리 때 할 것」 · 컴팩트 재료 · 지금 대화. 이슈 목록은 최소 목록이지 대상 전체가 아니다.
 EOF
+if [[ -n "$COMPACT" ]]; then
+  echo "컴팩트 재료: $COMPACT (세션 중 「마무리 때」로 미룬 지시 · 합의를 여기와 압축 요약에서 찾는다)"
+fi
 
 # 세션 인덱스: 이슈별로 묶어 한 줄씩 낸다. 주입한 뒤 지운다(대상 확정).
 INDEX=""

@@ -130,6 +130,8 @@ const allowAccepts = [
   [`  ${ALLOW} 'https://*.example.com/*' 'http://a.example.com:8080/*'  `, ['https://*.example.com/*', 'http://a.example.com:8080/*']],
   [`! ${ALLOW} --server devtools-b --dry-run 'http://n/*'`, ['--server', 'devtools-b', '--dry-run', 'http://n/*']],
   [`! ${ALLOW} --project '/tmp/my proj' --user 'http://n/*'`, ['--project', '/tmp/my proj', '--user', 'http://n/*']],
+  // #1147: 패턴을 더한 출력의 복구 명령을 대화창에서도 받는다
+  [`${ALLOW} --project '/tmp/x' --server chrome-devtools --remove 'http://h/*'`, ['--project', '/tmp/x', '--server', 'chrome-devtools', '--remove', 'http://h/*']],
 ];
 for (const [text, args] of allowAccepts) {
   const g = parseGatePrompt(text);

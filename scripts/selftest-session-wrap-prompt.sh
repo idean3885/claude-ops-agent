@@ -38,6 +38,8 @@ expect fire  "세션 마무리합시다."
 expect fire  "이제 마무리합니다"
 expect fire  "마무리합니다"
 expect fire  "세션 마무리!"
+expect fire  "세션 마무리 갑니다."
+expect fire  "세션 정리 가겠습니다"
 expect quiet "세션 마무리…"
 expect fire  "오늘은 여기까지 마무리하겠습니다."
 expect fire  "정리 끝났으면
@@ -96,6 +98,16 @@ check "마무리 신호가 아닌 턴은 아무것도 내지 않는다" test -z 
 echo '{"repo":"o/r","number":"1","title":"밖","action":"생성"}' > "$IDX_DIR/../outside.jsonl"
 OUT=$(run_hook "세션 마무리" "../outside")
 check "세션 번호의 경로 문자는 걷는다 (인덱스 밖 파일을 지우지 않는다)" test -e "$IDX_DIR/../outside.jsonl"
+
+# 대상 출처 (#1148): 이슈 목록만이 아니라 압축 요약 · 컴팩트 재료 · 대화를 함께 가리킨다
+OUT=$(run_hook "세션 마무리" "sid-none")
+check "출처 넷을 모두 본다고 알린다" grep -q '출처는 넷이고 모두 본다' <<<"$OUT"
+check "재료 파일이 없으면 재료 경로 줄을 내지 않는다" test -z "$(grep '컴팩트 재료:' <<<"$OUT")"
+mkdir -p "$HOME/.claude/state/compact"
+echo "## 구간 1" > "$HOME/.claude/state/compact/sid-c.md"
+OUT=$(run_hook "세션 마무리" "sid-c")
+check "재료 파일이 있으면 그 경로를 낸다" grep -qF "컴팩트 재료: $HOME/.claude/state/compact/sid-c.md" <<<"$OUT"
+check "지표에 재료 유무를 남긴다" grep -q '"compact":true' "$HOME/.claude/ops-agent/metrics/session-wrap-prompt.jsonl"
 
 echo "$PASS/$((PASS+FAIL)) 통과"
 [ "$FAIL" -eq 0 ]

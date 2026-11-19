@@ -362,6 +362,60 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, out, calls = run(tmp, half, [], sub)
     check("https 전환 기능이 하나만 꺼진 등록은 빠진 이름을 더한다",
           rc == 0 and out["status"] == "ok" and OFF in out["args"] and out["args"].count(OFF) == 1, (rc, out["args"]))
+    # #1147: --check 가 한쪽만 꺼진 옛 등록을 잡고 다시 등록하는 명령을 낸다
+    rc, out, calls = run(tmp, half, ["--check"], sub)
+    item = (out.get("missing") or [{}])[0]
+    check("--check 는 https 전환 기능이 하나만 꺼진 등록을 https-upgrade 로 낸다",
+          rc == 1 and out["status"] == "missing" and item.get("problem") == "https-upgrade"
+          and item.get("fix", "").endswith("--server chrome-devtools") and not calls, (rc, out))
+    full = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowedUrlPattern", "http://h/*", OFF]}}}}}
+    rc, out, calls = run(tmp, full, ["--check"], sub)
+    check("--check 는 두 기능을 모두 끈 http 등록을 통과시킨다", rc == 0 and out["status"] == "ok", (rc, out))
+    # #1147: 더한 패턴만 걷는 복구 명령과 --remove
+    rc, out, calls = run(tmp, conf, ["http://h/*"], sub)
+    check("패턴을 더하면 그 패턴만 걷는 복구 명령을 낸다",
+          rc == 0 and out.get("restore", "").endswith("--remove 'http://h/*'") and "--server chrome-devtools" in out["restore"], out)
+    both = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowedUrlPattern", "http://h/*", "--allowedUrlPattern", "http://g/*", OFF]}}}}}
+    rc, out, calls = run(tmp, both, ["--remove", "http://h/*"], sub)
+    check("--remove 는 지목한 패턴만 걷고 http 패턴이 남으면 https 전환 끄기를 둔다",
+          rc == 0 and out["status"] == "ok" and out["removed"] == ["http://h/*"] and "http://g/*" in out["args"]
+          and "http://h/*" not in out["args"] and OFF in out["args"] and len(calls) == 2, (rc, out, calls))
+    rc, out, calls = run(tmp, full, ["--remove", "http://h/*"], sub)
+    check("마지막 http 패턴을 걷으면 https 전환 끄기도 걷고 기존 인자는 보존한다",
+          rc == 0 and out["args"] == BASE, (rc, out["args"]))
+    merged_off = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowedUrlPattern", "http://h/*", "--chromeArg=--disable-features=Foo,HttpsUpgrades,HttpsFirstBalancedModeAutoEnable"]}}}}}
+    rc, out, calls = run(tmp, merged_off, ["--remove", "http://h/*"], sub)
+    check("https 전환 끄기를 걷을 때 다른 기능 이름은 남긴다",
+          out["args"] == BASE + ["--chromeArg=--disable-features=Foo"], out["args"])
+    rc, out, calls = run(tmp, both, ["--remove", "http://h/*"], sub, {"FAKE_ADD_FAIL": "1"})
+    check("--remove 의 다시 등록이 실패하면 원래 등록으로 되돌리고 종료 2",
+          rc == 2 and out.get("step") == "add" and out.get("restored") is True and len(calls) == 3, (rc, out, calls))
+    rc, out, calls = run(tmp, both, ["--remove", "http://h/*", "--dry-run"], sub)
+    check("--remove --dry-run 은 CLI 를 부르지 않는다", rc == 0 and out["status"] == "dry-run" and not calls, (rc, out, calls))
+    eq = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + ["--allowed-url-pattern=http://h/*", OFF]}}}}}
+    rc, out, calls = run(tmp, eq, ["--remove", "http://h/*"], sub)
+    check("= 형태로 등록된 패턴도 걷는다", rc == 0 and out["removed"] == ["http://h/*"] and out["args"] == BASE, (rc, out))
+    user_only = {"mcpServers": {"chrome-devtools": {**entry, "args": BASE}}}
+    rc, out, calls = run(tmp, user_only, ["http://u/*"], tmp)
+    check("사용자 범위 등록의 복구 명령은 --user 를 담는다",
+          rc == 0 and out.get("scope") == "user" and " --user " in out.get("restore", ""), out)
+    none = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": ["-y", "chrome-devtools-mcp@1.9.0", "--isolated"]}}}}}
+    rc, out, calls = run(tmp, none, ["http://h/*"], sub)
+    check("더하기 전 허용 패턴이 없으면 복구 명령 대신 사유를 낸다",
+          rc == 0 and "restore" not in out and "restore_note" in out, out)
+    only = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": ["-y", "chrome-devtools-mcp@1.9.0", "--isolated", "--allowedUrlPattern", "http://h/*", OFF]}}}}}
+    rc, out, calls = run(tmp, only, ["--remove", "http://h/*"], sub)
+    check("마지막 허용 패턴은 걷지 않고 종료 1 (이동 제한이 사라지지 않게)",
+          rc == 1 and out.get("step") == "last-pattern" and not calls, (rc, out, calls))
+    off_only = {"projects": {org: {"mcpServers": {"chrome-devtools": {**entry, "args": BASE + [OFF]}}}}}
+    rc, out, calls = run(tmp, off_only, ["--remove", "http://none/*"], sub)
+    check("걷은 패턴이 없으면 https 전환 끄기도 그대로 두고 CLI 를 부르지 않는다",
+          rc == 0 and out["status"] == "noop" and OFF in out["args"] and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, both, ["http://new/*", "--remove", "http://h/*"], sub)
+    check("--remove 와 추가 패턴을 함께 쓰면 종료 1", rc == 1 and not calls, (rc, out, calls))
+    rc, out, calls = run(tmp, full, ["--remove", "http://none/*"], sub)
+    check("없는 패턴을 걷으면 noop 이고 CLI 를 부르지 않는다",
+          rc == 0 and out["status"] == "noop" and out["missing"] == ["http://none/*"] and not calls, (rc, out, calls))
     # #1123: 셸 글로빙이 끝 `*` 를 지운 패턴
     for bad in ["http://127.0.0.1:8080/", "http://127.0.0.1:*/", "https://*.example.com/"]:
         rc, out, calls = run(tmp, conf, [bad], sub)
