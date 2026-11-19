@@ -11,6 +11,7 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
 
 사용법:
   devtools-allow.py [--project <dir>] [--server <name>] [--dry-run] [<pattern>...]
+  devtools-allow.py [--project <dir>] [--server <name>] [--dry-run] --remove <pattern>...
   devtools-allow.py --check [--server <name>]
   devtools-allow.py --lang <code> [--project <dir>] [--server <name>] [--dry-run]
   사용자에게 건네는 경로: ~/.claude/ops-agent/current/scripts/devtools-allow.py
@@ -20,7 +21,9 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
                http 패턴이 목록에 있으면 `--chromeArg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable` 도 함께 둔다
                (Chrome 이 http 주소를 https 로 먼저 시도해 허용 목록에서 막히는 것을 막는다)
                생략하면 격리 인자만 맞춘다
-    --check    로컬 · 사용자 범위 등록을 모두 훑어 격리가 아닌 등록(격리 인자 없음 ·
+    --remove   작업 동안 더한 패턴을 걷는다. http 패턴이 하나도 남지 않으면 https 자동 전환 끄기도 걷는다.
+               패턴을 더한 성공 출력의 restore 가 이 명령이다. 작업이 끝나면 사용자가 실행하고 다시 연결한다
+    --check    로컬 · 사용자 범위 등록을 모두 훑어 https 자동 전환을 다 끄지 않은 http 등록과 격리가 아닌 등록(격리 인자 없음 ·
                고정 프로필 지정 · 떠 있는 브라우저에 붙음)과 고칠 명령을 낸다.
                지워진 디렉토리의 등록은 stale 로만 알린다.
                등록을 바꾸지 않는다 (의존 확인 bootstrap 의 check)
@@ -43,9 +46,12 @@ DevTools MCP(chrome-devtools-mcp) 등록의 `--allowedUrlPattern` 에 패턴을 
   profile_removed: 격리를 맞추며 걷은 인자(고정 프로필 지정 · 격리 끄기)
   --check: JSON {status: ok | missing | none, checked, missing[{scope, project, problem, fix, message?}], stale[]}
     problem: missing(격리 인자 없음) · disabled(격리 끔) · fixed-profile · connect(떠 있는 브라우저에 붙음,
-             fix 는 제거 명령)
+             fix 는 제거 명령) · https-upgrade(http 패턴이 있는데 https 자동 전환을 다 끄지 않음)
     지워진 디렉토리의 등록만 있으면 none 이다
-종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 받는 형식 밖의 패턴 · URLPattern 이 못 만들거나 다르게 해석하는 패턴 · check 에서 격리 빠짐,
+  패턴을 더한 ok 출력에는 restore(이번에 더한 패턴만 걷는 명령)가 있다
+  --remove: JSON {status: ok | noop | dry-run | error, removed[], missing[], args}
+    지목한 패턴을 하나도 걷지 못하면 noop 이고 등록을 바꾸지 않는다. 허용 패턴이 0개가 되면 종료 1 로 거부한다
+종료 코드: 0 성공 · noop · dry-run · check 통과, 1 scheme 없는 패턴 · 받는 형식 밖의 패턴 · URLPattern 이 못 만들거나 다르게 해석하는 패턴 · check 에서 격리 빠짐 · https 전환 끄기 빠짐 · --remove 로 마지막 패턴을 걷음 · --remove 와 추가 패턴을 함께 씀,
           2 argparse 인자 오류 · node(URLPattern) 없음 · 설정 파일 없음 · 등록 없음 · 등록 디렉토리 없음 · CLI 실패 ·
             떠 있는 브라우저에 붙는 등록 · 차단 패턴이 있는 등록에 허용 패턴 추가
 
@@ -255,6 +261,54 @@ def ensure_https_upgrades_off(args):
     return args + [DISABLE_FEATURES + ",".join(HTTPS_UPGRADES)], True
 
 
+def https_upgrade_problem(args):
+    """http 패턴이 있는데 https 자동 전환 기능을 다 끄지 않은 등록이면 "https-upgrade", 아니면 None.
+    한 기능만 끈 옛 등록은 최신 Chrome 이 다른 기능으로 http 를 https 로 바꿔 막힌다 (#1123 후속, #1147)"""
+    _, changed = ensure_https_upgrades_off(args)
+    return "https-upgrade" if changed else None
+
+
+def strip_https_upgrades_off(args):
+    """https 자동 전환을 끄는 기능 이름을 걷는다. 다른 기능 이름이 남으면 인자를 남긴다."""
+    out = []
+    for a in args:
+        if a.startswith(DISABLE_FEATURES):
+            names = [n for n in a[len(DISABLE_FEATURES):].split(",") if n and n not in HTTPS_UPGRADES]
+            if names:
+                out.append(DISABLE_FEATURES + ",".join(names))
+            continue
+        out.append(a)
+    return out
+
+
+def remove_patterns(args, patterns):
+    """허용 패턴을 걷는다. http 패턴이 하나도 남지 않으면 https 자동 전환 끄기도 걷는다. (새 인자, 걷은 패턴)"""
+    out, removed, i = [], [], 0
+    while i < len(args):
+        a = args[i]
+        if a in FLAGS and i + 1 < len(args) and args[i + 1] in patterns:
+            removed.append(args[i + 1])
+            i += 2
+            continue
+        flag = next((f for f in FLAGS if a.startswith(f + "=")), None)
+        if flag and a[len(flag) + 1:] in patterns:
+            removed.append(a[len(flag) + 1:])
+            i += 1
+            continue
+        out.append(a)
+        i += 1
+    if not has_http_pattern(out):
+        out = strip_https_upgrades_off(out)
+    return out, removed
+
+
+def restore_command(scope, project, server, patterns):
+    """이번에 더한 패턴만 걷는 명령. 작업이 끝나면 사용자가 실행한다 (#1147)"""
+    target = f"--project '{project}'" if scope == "local" else "--user"
+    quoted = " ".join(f"'{p}'" for p in patterns)
+    return f"python3 {SELF} {target} --server {server} --remove {quoted}"
+
+
 def glob_stripped(pattern):
     """끝이 `/` 인 패턴: 셸이 끝의 `*` 를 파일 이름 확장으로 지운 채 저장된 것일 수 있다"""
     return pattern.endswith("/")
@@ -283,7 +337,7 @@ def check(conf, server):
         return 2
     missing, stale = [], []
     for scope, project, entry in entries:
-        problem = isolation_problem(entry.get("args", []))
+        problem = isolation_problem(entry.get("args", [])) or https_upgrade_problem(entry.get("args", []))
         if not problem:
             continue
         if project and not os.path.isdir(project):
@@ -298,6 +352,8 @@ def check(conf, server):
         else:
             target = f"--project '{project}'" if project else "--user"
             item["fix"] = f"python3 {SELF} {target} --server {server}"
+            if problem == "https-upgrade":
+                item["message"] = "http 패턴이 있는데 https 자동 전환을 다 끄지 않아 http 주소가 https 로 바뀌어 막힌다. 다시 등록하면 두 기능을 모두 끈다"
         missing.append(item)
     out = {"checked": len(entries)}
     if len(stale) == len(entries):
@@ -399,6 +455,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--lang")
+    ap.add_argument("--remove", nargs="+", metavar="PATTERN")
     a = ap.parse_args()
 
     if a.lang:
@@ -408,6 +465,13 @@ def main():
     if a.check:
         conf = load_config()
         return 2 if conf is None else check(conf, a.server)
+
+    if a.remove:
+        if a.patterns:
+            print(json.dumps({"status": "error", "message": f"--remove 와 추가 패턴을 함께 쓸 수 없다: {a.patterns}"}, ensure_ascii=False))
+            return 1
+        conf = load_config()
+        return 2 if conf is None else remove(a, conf)
 
     bad = [p for p in a.patterns if "://" not in p]
     if bad:
@@ -486,6 +550,63 @@ def main():
             out["original"] = entry
         print(json.dumps(out, ensure_ascii=False))
         return 2
+    if added and existing_patterns(args):
+        out["restore"] = restore_command(scope, project, a.server, added)
+    elif added:
+        # 더하기 전 허용 패턴이 없었으면 복구가 마지막 패턴 걷기라 거부된다. 그때는 복구 명령을 내지 않는다
+        out["restore_note"] = "더하기 전 허용 패턴이 없어 복구 명령을 내지 않는다. 허용 패턴이 0개면 이동 제한이 없다"
+    print(json.dumps({"status": "ok", **out, "next": "/mcp → " + a.server + " → Reconnect"}, ensure_ascii=False))
+    return 0
+
+
+def reregister(server, scope, project, entry, new_args):
+    """같은 범위에 새 인자로 다시 등록한다. 실패하면 원래 등록으로 되돌린다. (종료 코드, 오류 출력 또는 None)"""
+    cwd = project or os.path.expanduser("~")
+    if not os.path.isdir(cwd):
+        return 2, {"status": "error", "step": "cwd", "message": f"등록 디렉토리가 없다: {cwd}"}
+    rc, msg = run_cli(["claude", "mcp", "remove", server, "-s", scope], cwd)
+    if rc != 0:
+        return 2, {"status": "error", "step": "remove", "message": msg}
+    rc, msg = run_cli(["claude", "mcp", "add-json", server, json.dumps({**entry, "args": new_args}), "-s", scope], cwd)
+    if rc != 0:
+        rrc, _ = run_cli(["claude", "mcp", "add-json", server, json.dumps(entry), "-s", scope], cwd)
+        out = {"status": "error", "step": "add", "message": msg, "restored": rrc == 0}
+        if rrc != 0:
+            out["original"] = entry
+        return 2, out
+    return 0, None
+
+
+def remove(a, conf):
+    """--remove: 작업 동안 더한 허용 패턴을 걷어 등록을 되돌린다 (#1147)"""
+    scope, project, entry = find_entry(conf, a.project, a.server, a.user)
+    if not entry:
+        print(json.dumps({"status": "error", "message": f"{a.server} 등록을 찾지 못했다 (로컬 · 사용자 범위)"}, ensure_ascii=False))
+        return 2
+    args = entry.get("args", [])
+    new_args, removed = remove_patterns(args, a.remove)
+    out = {"scope": scope, "project": project, "removed": removed,
+           "missing": [p for p in a.remove if p not in removed], "args": new_args}
+    if not removed:
+        # 걷은 패턴이 없으면 등록을 건드리지 않는다. https 전환 끄기를 다른 이유로 둔 등록도 그대로 둔다
+        print(json.dumps({"status": "noop", **{**out, "args": args}}, ensure_ascii=False))
+        return 0
+    if not existing_patterns(new_args):
+        # 허용 패턴이 하나도 없으면 DevTools MCP 는 이동을 제한하지 않는다. 복구가 접근을 넓히면 안 된다
+        print(json.dumps({"status": "error", "step": "last-pattern",
+                          "message": "허용 패턴을 모두 걷으면 이동 제한이 사라진다. 마지막 패턴은 걷지 않는다"},
+                         ensure_ascii=False))
+        return 1
+    if new_args == args:
+        print(json.dumps({"status": "noop", **out}, ensure_ascii=False))
+        return 0
+    if a.dry_run:
+        print(json.dumps({"status": "dry-run", **out}, ensure_ascii=False))
+        return 0
+    rc, err = reregister(a.server, scope, project, entry, new_args)
+    if err:
+        print(json.dumps(err, ensure_ascii=False))
+        return rc
     print(json.dumps({"status": "ok", **out, "next": "/mcp → " + a.server + " → Reconnect"}, ensure_ascii=False))
     return 0
 

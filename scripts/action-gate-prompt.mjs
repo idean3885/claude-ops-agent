@@ -10,7 +10,7 @@
  * 갈래 검증 · 마커 형식은 action-gate-allow.sh 가 그대로 맡는다. 결과는 사람이 터미널에서 친 것과 같다.
  * 브라우저 허용 목록 추가 줄(devtools-allow.py)도 같은 판정으로 받는다 (#1123). 대화창은 셸을 거치지 않아
  * 따옴표 · 글로빙이 일어나지 않으므로 인자를 셸 없이 그대로 넘긴다. 받는 인자는 패턴 · --server · --project ·
- * --user · --dry-run 뿐이다.
+ * --user · --dry-run · --remove 뿐이다. --remove 는 작업 뒤 복구 명령이다 (#1147).
  * 입력: stdin 의 hook JSON (`prompt`). 출력: 컨텍스트에 더할 결과 줄.
  */
 import { spawnSync } from 'node:child_process';
@@ -34,7 +34,7 @@ function parseAllowArgs(rest) {
   const args = [];
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
-    if (w === '--user' || w === '--dry-run') args.push(w);
+    if (w === '--user' || w === '--dry-run' || w === '--remove') args.push(w);
     else if (w === '--server' || w === '--project') {
       const v = words[++i];
       if (!v || v.startsWith('-') || (w === '--server' && !/^[A-Za-z0-9._-]+$/.test(v))) return null;

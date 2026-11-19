@@ -160,7 +160,7 @@ flowchart LR
 | `scripts/selftest-build-guard.mjs` | 빌드 스크립트 가드 자체 점검 | [hooks-config.md](hooks-config.md) |
 | `scripts/selftest-repo-allowlist.mjs` | 레포 허용 목록 가드 자체 점검 (실제 훅 · 실제 git) | [action-gate.md](action-gate.md) |
 | `scripts/selftest-worktree-cleanup.sh` | 워크트리 정리의 안전장치(dirty 거부 · 정규 clone 보존 · bare clone 삭제) 자체 점검, 실제 git | [worktree.md](worktree.md) |
-| `scripts/devtools-allow.py` | DevTools MCP 허용 URL 추가(`scheme://호스트[:포트][/경로]` 형식 밖이거나 호스트가 고정되지 않은 패턴, node 의 URLPattern 이 못 만들거나 다르게 해석하는 패턴은 거부) · 격리 맞춤(고정 프로필 · 격리 끄기 인자를 걷음) · http 패턴이면 https 자동 전환을 끄는 인자 추가 · 끝이 `/` 인 패턴(셸이 `*` 를 지운 것) 거부 · 대화창에 친 한 줄은 사용자 입력 훅이 실행 · `--check` 로 격리가 아닌 등록 점검 (공식 CLI 로 같은 범위에 다시 등록, 실행 · 다시 연결은 사용자) | [working-principles.md](working-principles.md) |
+| `scripts/devtools-allow.py` | DevTools MCP 허용 URL 추가(`scheme://호스트[:포트][/경로]` 형식 밖이거나 호스트가 고정되지 않은 패턴, node 의 URLPattern 이 못 만들거나 다르게 해석하는 패턴은 거부) · 격리 맞춤(고정 프로필 · 격리 끄기 인자를 걷음) · http 패턴이면 https 자동 전환을 끄는 인자 추가 · 끝이 `/` 인 패턴(셸이 `*` 를 지운 것) 거부 · 대화창에 친 한 줄은 사용자 입력 훅이 실행 · `--check` 로 격리가 아닌 등록 · https 자동 전환을 다 끄지 않은 http 등록 점검 · 패턴을 더하면 그 패턴만 걷는 복구 명령 출력 · `--remove` 로 작업 뒤 복구(마지막 패턴은 걷지 않음) (공식 CLI 로 같은 범위에 다시 등록, 실행 · 다시 연결은 사용자) | [working-principles.md](working-principles.md) |
 | `scripts/selftest-devtools-allow.py` | devtools-allow.py 자체 점검 (가짜 설정 · 가짜 CLI). node 의 URLPattern 필요(스크립트 판정과 대조 · node 없음 경로 점검) | [working-principles.md](working-principles.md) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |
