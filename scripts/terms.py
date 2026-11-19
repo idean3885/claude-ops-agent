@@ -28,6 +28,8 @@ DEFAULT_TRANSCRIPTS = os.path.expanduser("~/.claude/projects")
 MIN_USE_SESSIONS = 3
 SYSTEM_BLOCK = re.compile(r"<(system-reminder|local-command-[a-z]+|command-[a-z]+)>.*?</\1>", re.S)
 CORRECTION_TARGET = re.compile(r"→\s*「([^」]+)」")
+# 다른 세트 칸: 「세트 이름」(쓰는 곳) 갈리는 지점. 세트 이름 안에 「 · 」가 들어 있어 「」로 감싼다
+OTHER_SET = re.compile(r"「([^」]+)」\(([^)]+)\)")
 
 
 def parse_entries(text: str, section: str = "항목") -> list[tuple[str, dict[str, str]]]:
@@ -105,6 +107,29 @@ def check(text: str) -> list[str]:
             problems.append(f"{title}: 「익힘」 이 있으면 「## 익힌 항목」으로 옮긴다")
         if learned and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", learned):
             problems.append(f"{title}: 익힘 날짜 형식은 YYYY-MM-DD")
+    return problems + check_other_sets(learning + learned_entries)
+
+
+def other_set_names(value: str) -> list[str]:
+    return [name.strip() for name, _ in OTHER_SET.findall(value)]
+
+
+def check_other_sets(entries: list[tuple[str, dict[str, str]]]) -> list[str]:
+    """다른 세트 칸의 형식과, 목록 안 항목끼리 서로 가리키는지 본다. 한쪽에서만 가리키면 다른 쪽에서 교정할 때 대조군이 보이지 않는다."""
+    problems = []
+    names_by_title = {title: other_set_names(fields.get("다른 세트", "")) for title, fields in entries}
+    for title, fields in entries:
+        value = fields.get("다른 세트")
+        if value is None:
+            continue
+        if not OTHER_SET.match(value):
+            problems.append(f"{title}: 「다른 세트」는 「세트 이름」(쓰는 곳) 으로 시작한다")
+            continue
+        for name in names_by_title[title]:
+            if name == title:
+                problems.append(f"{title}: 「다른 세트」에 자기 제목을 적었다")
+            elif name in names_by_title and title not in names_by_title[name]:
+                problems.append(f"{title}: 다른 세트 「{name}」 항목의 「다른 세트」에 「{title}」 이 없다 (양방향)")
     return problems
 
 

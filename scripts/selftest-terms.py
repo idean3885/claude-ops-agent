@@ -55,6 +55,46 @@ FENCED = "# 표준 용어\n\n## 항목 형식\n\n```markdown\n### 표준 용어\
 expect("코드 펜스 안의 예시 제목은 통과", terms.check(FENCED) == [])
 INLINE_CODE = "# 표준 용어\n\n## 등재 조건\n\n- 항목 제목은 `### 표준 용어` 로 쓴다\n\n" + VALID
 expect("줄 안 코드 표기 속 제목 예시는 통과", terms.check(INLINE_CODE) == [])
+OTHER = VALID + """
+### 리더 · 팔로워
+- 섞어 쓴 말: 마스터
+- 구분: 합의 그룹의 쓰기 노드와 따르는 노드
+- 글: 「리더가 내려가면 팔로워 중 하나가 리더가 된다.」
+- 말: 「리더 죽으면 팔로워가 넘겨받아요.」
+- 다른 세트: 「프라이머리 · 레플리카」(RDB) 쓰기 노드를 프라이머리라 부른다.
+- 등재: 2026-11-19
+
+### 프라이머리 · 레플리카
+- 섞어 쓴 말: 리더
+- 구분: 쓰기 노드와 읽기 전용 노드
+- 글: 「조회는 레플리카로, 쓰기는 프라이머리로 보낸다.」
+- 말: 「쓰기는 프라이머리, 조회는 레플리카예요.」
+- 다른 세트: 「리더 · 팔로워」(Raft) 합의로 리더를 고른다. 「소스 · 레플리카」(MySQL 엔진) 엔진 안의 이름이다.
+- 등재: 2026-11-19
+"""
+expect("서로 가리키는 다른 세트는 통과", terms.check(OTHER) == [])
+ONE_WAY = OTHER.replace("- 다른 세트: 「프라이머리 · 레플리카」(RDB) 쓰기 노드를 프라이머리라 부른다.\n", "")
+expect("한쪽에서만 가리키는 다른 세트는 실패", any("(양방향)" in p for p in terms.check(ONE_WAY)))
+expect("목록 밖 다른 세트는 한쪽이어도 통과", not any("소스 · 레플리카" in p for p in terms.check(ONE_WAY)))
+expect("다른 세트 형식 오류는 실패", any("으로 시작한다" in p for p in terms.check(OTHER.replace("「리더 · 팔로워」(Raft)", "리더 · 팔로워(Raft)"))))
+LEARNED_ONE_WAY = HEAD + OTHER.split("### 프라이머리 · 레플리카", 1)[1].join(["### 프라이머리 · 레플리카", ""]) + """
+## 익힌 항목
+
+### 리더 · 팔로워
+- 섞어 쓴 말: 마스터
+- 구분: 합의 그룹의 쓰기 노드와 따르는 노드
+- 글: 「리더가 내려가면 팔로워 중 하나가 리더가 된다.」
+- 말: 「리더 죽으면 팔로워가 넘겨받아요.」
+- 등재: 2026-11-19
+- 익힘: 2026-11-19
+"""
+expect("익힌 항목과도 양방향을 검사한다", any("(양방향)" in p for p in terms.check(LEARNED_ONE_WAY)))
+# 반대 방향: 익힌 항목만 학습 중 항목을 가리킨다
+LEARNED_POINTS = (HEAD + OTHER.split("### 프라이머리 · 레플리카", 1)[1].join(["### 프라이머리 · 레플리카", ""])
+                  .replace("- 다른 세트: 「리더 · 팔로워」(Raft) 합의로 리더를 고른다. 「소스 · 레플리카」(MySQL 엔진) 엔진 안의 이름이다.\n", "")
+                  + "\n## 익힌 항목\n\n" + OTHER.split("### 리더 · 팔로워", 1)[1].split("### 프라이머리", 1)[0].join(["### 리더 · 팔로워", ""]).rstrip("\n") + "\n- 익힘: 2026-11-19\n")
+expect("익힌 항목에서 한쪽만 가리켜도 실패", any(p.startswith("리더 · 팔로워:") and "(양방향)" in p for p in terms.check(LEARNED_POINTS)))
+expect("자기 제목을 다른 세트로 적으면 실패", any("자기 제목" in p for p in terms.check(OTHER.replace("「리더 · 팔로워」(Raft)", "「프라이머리 · 레플리카」(RDB)"))))
 
 real = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "style-rules", "base", "terms.md")
 with open(real, encoding="utf-8") as handle:
@@ -163,6 +203,18 @@ expect("주입은 항목마다 「표준 용어: 섞어 쓴 말」 한 줄",
        bool(learning) and all(f"- {t}: {f['섞어 쓴 말']}" in section for t, f in learning))
 expect("주입에 구분은 넣지 않는다 (교정할 때 원천에서 연다)",
        bool(section) and not any(f["구분"] in section for _, f in learning))
+# 줄 전체를 맞춘다. 포함 비교면 갈리는 지점이 뒤에 붙거나 빈 「다른 세트」가 붙어도 통과한다
+section_lines = section.splitlines()
+def expected_line(t: str, f: dict) -> str:
+    names = " ".join(f"「{n}」({w})" for n, w in terms.OTHER_SET.findall(f.get("다른 세트", "")))
+    return f"- {t}: {f['섞어 쓴 말']}" + (f" / 다른 세트: {names}" if names else "")
+expect("다른 세트가 있는 항목은 같은 줄에 이름과 쓰는 곳만 붙는다",
+       any(f.get("다른 세트") for _, f in learning) and all(expected_line(t, f) in section_lines for t, f in learning if f.get("다른 세트")))
+expect("다른 세트가 없는 항목의 줄은 섞어 쓴 말로 끝난다",
+       bool(section_lines) and all(expected_line(t, f) in section_lines for t, f in learning if not f.get("다른 세트")))
+expect("인덱스는 머리줄 아래 항목 줄만 싣는다 (갈리는 지점 · 다른 줄 없음)",
+       section_lines[1:] == [expected_line(t, f) for t, f in learning])
+expect("머리줄은 인덱스가 다른 세트를 싣는다고 알린다", "「표준 용어: 섞어 쓴 말 / 다른 세트」 인덱스다" in section)
 expect("익힌 항목은 주입하지 않는다",
        bool(section) and not any(f"- {t}: " in section for t, _ in terms.parse_entries(source_text, "익힌 항목")))
 
