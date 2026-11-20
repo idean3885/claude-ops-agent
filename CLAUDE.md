@@ -209,12 +209,14 @@ main ────────────────●─────
           if v!=sorted(v): print(p,k,v)
   "
   ```
-- [ ] **`scripts/pre-tool-use.mjs` · `scripts/session-start.mjs`(시범 지표 집계) · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` · `scripts/push-delegation*.mjs` · `scripts/action-gate-prompt.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
+- [ ] **`scripts/pre-tool-use.mjs` · `scripts/commit-scope.mjs`(경유 지표의 커밋 대상 해석) · `scripts/expert-route-probe.mjs`(경유 지표 판별 도구) · `scripts/session-start.mjs`(시범 지표 집계) · `scripts/gh-issue.sh` · `scripts/issue-body-rules.mjs` · `scripts/repo-allowlist-rules.mjs` · `scripts/push-delegation*.mjs` · `scripts/action-gate-prompt.mjs` 를 고쳤으면 자체 점검을 실행한다.** 차단은 발동할 때만 존재가 드러나므로 무력화되면 신호가 없다.
   ```bash
   node scripts/selftest-action-gate.mjs
   node scripts/selftest-issue-adapter.mjs
   node scripts/selftest-build-guard.mjs
   node scripts/selftest-flow-entry.mjs
+  node scripts/selftest-expert-route.mjs
+  node scripts/selftest-confidential-commit.mjs
   node scripts/selftest-skill-use.mjs
   node scripts/selftest-repo-allowlist.mjs
   node scripts/selftest-push-delegation.mjs
@@ -255,6 +257,10 @@ main ────────────────●─────
 - [ ] **`hooks/session-wrap-prompt.sh` 를 고쳤으면 자체 점검을 실행한다.** 발동 조건이 넓어지면 마무리 신호가 아닌 턴에 종결 절차가 끼어들고, 좁아지면 마무리 신호를 놓쳐도 신호가 없다.
   ```bash
   bash scripts/selftest-session-wrap-prompt.sh
+  ```
+- [ ] **`hooks/autonomy-prompt.sh` 를 고쳤으면 자체 점검을 실행한다.** 발동 조건이 넓어지면 위임이 아닌 턴에 절차가 끼어들고, 지표의 세션 식별자가 빠지면 발동한 세션의 결과(정답률)와 이을 수 없는데도 알려 주는 신호가 없다.
+  ```bash
+  bash scripts/selftest-autonomy-prompt.sh
   ```
 - [ ] **`scripts/worktree-cleanup.sh` 를 고쳤으면 자체 점검을 실행한다.** 정리는 백업 없이 지우므로 지우지 말아야 할 것을 지우는 결함은 실행 뒤에야 드러난다.
   ```bash

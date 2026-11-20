@@ -1,0 +1,15 @@
+{
+  "surfaces": [
+    {
+      "name": "doc-page",
+      "tool": "^mcp__docs__(?:create|update)_page$",
+      "pattern": "\"body\"",
+      "body": "body"
+    },
+    {
+      "name": "doc-cli",
+      "tool": "^Bash$",
+      "pattern": "^doc-cli\\s+publish\\b"
+    }
+  ]
+}

@@ -35,7 +35,8 @@ claude plugin update ops-agent@ops-agent
 | SessionStart | provider 감지 (git remote host → 트래커 정의) | 자동 적용 |
 | SessionStart | git identity 를 provider 기준으로 설정 | 자동 적용 |
 | SessionStart | 작성 규칙을 `~/.claude/ops-agent/style-rules/` 로 미러 | 자동 적용 |
-| SessionStart | 시범 적용 규칙 주입 (`~/.claude/ops-agent/trials.local.json`, 세션 1회, 디렉토리 무관) | 자동 적용 |
+| SessionStart | 시범 적용 규칙 주입 (`~/.claude/ops-agent/trials.local.json`, 세션 1회, 디렉토리 무관). 지표도 원인도 없는 시범은 주입하지 않고 「시범 미등록」 한 줄로 알림 | 자동 적용 |
+| SessionStart | 경로 요약 한 줄: 최근 7일 공유 표면 쓰기 경유 · 누락 · 판정 불가, 레슨 원인 「경로」, 플로우 진입 누락 ([hooks-config](hooks-config.md#세션-시작-경로-요약)) | 알림 |
 | PreToolUse | 대외비 키워드가 공개 표면으로 전송되는 명령 | **실행 전 차단** |
 | PreToolUse | 커밋·PR·이슈 본문의 구현 세부 서술 | **실행 전 차단** |
 | PreToolUse | 커밋 메시지 · PR 제목 · 본문 · 코멘트에서 한글과 붙은 한자 | **실행 전 차단** |
@@ -44,10 +45,11 @@ claude plugin update ops-agent@ops-agent
 | PreToolUse | 머지·릴리즈·force push·클러스터 변경·리소스 삭제 | **사용자가 세션 허용을 켤 때까지 차단** |
 | PreToolUse | 기본 브랜치 직접 push, `reset --hard`·`clean -f`·`branch -D`·`restore` | **사용자가 세션 허용을 켤 때까지 차단** |
 | PreToolUse | 커밋·push·PR 생성 직전, 그 세션이 플로우 가이드를 읽었는지 | 기록 (`metrics/flow-entry.jsonl`). 읽지 않은 세션의 PR 생성은 **차단** |
+| PreToolUse | 공유 표면 쓰기(이슈 · PR 생성 · 본문 편집 · 댓글, PR 리뷰, `gh api` 댓글 · 리뷰, 범위 안 md 를 담은 커밋, 오버레이 문서 도구) 직전, 그 세션이 기술 커뮤니케이션 전문가 판정을 거쳤는지 ([hooks-config](hooks-config.md#전문가-경유-지표)) | 기록 (`metrics/expert-route-YYYY-MM.jsonl`). 막지 않음 |
 | PostToolUse | 문서 편집 후 표현·구조 위반 위치와 수치 | 알림 (마커 파일 있을 때만) |
 | PostToolUse | 스킬·지침·provider 문서 편집 시 `authoring`(AU1~AU8) 자가 점검 지시 | 알림 (경로로 읽는 쪽 판정) |
-| UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`) |
-| UserPromptSubmit | 세션 마무리 신호(세션 마무리 · 마무리합니다)를 받은 턴에 종결 절차(대상 수집 · 잔여 처리 · 판결) 주입 | 알림 (발동은 `metrics/session-wrap-prompt.jsonl`) |
+| UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`, 세션 식별자 포함) |
+| UserPromptSubmit | 세션 마무리 신호(세션 마무리 · 마무리합니다)를 받은 턴에 종결 절차(대상 수집 · 잔여 처리 · 판결) 주입 | 알림 (발동은 `metrics/session-wrap-prompt.jsonl`, 세션 식별자 포함) |
 | UserPromptSubmit | 메시지 전체가 게이트 개방 명령 한 줄이면 `!` 를 실행하지 않는 대화창에서도 그 명령을 실행한다 ([대화창 개방](action-gate.md#대화창-개방)). | 개방 마커 (`.cache/action-gate-allow.json`) |
 | UserPromptSubmit | 메시지 전체가 「푸시 권한 위임」이면 선언한 레포의 기본 브랜치 push 를 그 세션 동안 연다 ([대화창 위임](action-gate.md#대화창-위임)) | 개방 기록 (`.cache/<세션>.push-delegation.json`) |
 | Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 교정 요청 |

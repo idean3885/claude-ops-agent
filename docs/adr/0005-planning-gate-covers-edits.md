@@ -1,6 +1,6 @@
 # ADR 0005. 계획 게이트를 수정 경로까지 넓히고 단계 어휘를 사람이 쓰는 말로 고정한다
 
-- 상태: 채택
+- 상태: 채택 (결정 2 의 규모 면제는 [ADR-0043](0043-doc-structure-change-routes-through-expert.md) 이 대체)
 - 날짜: 2026-08-26
 - 관련: #360, #361, [../../config/style-rules/base/purpose.md](../../config/style-rules/base/purpose.md)
 

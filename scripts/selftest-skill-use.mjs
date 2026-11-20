@@ -184,28 +184,137 @@ withHome(home => {
   check('글롭에 맞는 파일이 없으면 「기록 없음」', /지표: 스킬 기록 없음/.test(out), out);
 });
 
-const ALERT = /자동 지표 없음: metrics 또는 cause 를 붙인다/;
+// ─── 시범 등록 조건 (#1154, ADR-0043 결정 4) ───
+// 지표도 원인도 없는 시범은 주입하지 않고 블록 끝 한 줄로 알린다. 자기 기록에만 기대는 시범이 남지 않게 한다.
+const UNREGISTERED = /\[시범 미등록\] ([^:]+): metrics 또는 cause 가 없어 적용하지 않는다 \(docs\/hooks-config\.md 「시범 적용」\)/;
+const fullStart = (home, trials, files) => {
+  const base = join(home, '.claude', 'ops-agent');
+  mkdirSync(join(base, 'metrics'), { recursive: true });
+  for (const [name, body] of Object.entries(files || {})) writeFileSync(join(base, 'metrics', name), body);
+  writeFileSync(join(base, 'trials.local.json'), JSON.stringify({ trials }));
+  const res = spawnSync('node', [startHook], { input: JSON.stringify({ cwd: home }), encoding: 'utf8', env: { ...process.env, HOME: home } });
+  try { return JSON.parse(res.stdout).hookSpecificOutput.additionalContext; } catch { return `(주입 없음) ${(res.stdout || '') + (res.stderr || '')}`.slice(0, 300); }
+};
 withHome(home => {
-  const out = sessionStart(home, [{ name: 'bare', started: '2026-01-01' }], {});
-  check('metrics 도 cause 도 없는 시범에 알림을 붙인다', ALERT.test(out), out);
-  check('알림은 그 시범 블록 안에 있다', /- bare[^\n]*\n  자동 지표 없음/.test(out), out);
+  const out = fullStart(home, [
+    { name: 'bare', started: '2026-01-01', rules: ['규칙 A'] },
+    { name: 'm', started: '2026-01-01', metrics: [metricOf('~/.claude/ops-agent/metrics/x.jsonl')] },
+    { name: 'bare2', started: '2026-01-01', metrics: [{ name: '빈 지표' }] },
+  ], {});
+  const m = out.match(UNREGISTERED);
+  check('지표도 원인도 없는 시범은 「시범 미등록」 한 줄로 이름을 모은다', m && m[1] === 'bare · bare2', out.slice(-300));
+  check('미등록 시범은 블록 · 규칙을 주입하지 않는다', !/- bare\b/.test(out) && !/규칙 A/.test(out), out.slice(-400));
+  check('유효 지표가 있는 시범은 주입한다', /- m \(2026-01-01~\)/.test(out), out.slice(-400));
+  check('미등록 줄은 시범 블록 끝에 있다', out.indexOf('[시범 미등록]') > out.indexOf('- m ('), out.slice(-400));
+  check('예전 「자동 지표 없음」 알림 줄은 없다', !/자동 지표 없음/.test(out), out.slice(-400));
 });
 withHome(home => {
-  const out = sessionStart(home, [{ name: 'm', started: '2026-01-01', metrics: [metricOf('~/.claude/ops-agent/metrics/x.jsonl')] }], {});
-  check('metrics 가 있으면 알림이 없다', !ALERT.test(out), out);
+  const out = fullStart(home, [{ name: 'only', started: '2026-01-01' }], {});
+  check('미등록 시범만 있으면 시범 머리 줄 없이 미등록 줄만 낸다', !/\[시범 적용 중/.test(out) && UNREGISTERED.test(out), out.slice(-300));
 });
 withHome(home => {
   const out = sessionStart(home, [{ name: 'c', started: '2026-01-01', cause: 'level' }], {});
-  check('cause 가 있으면 알림이 없다', !ALERT.test(out), out);
+  check('cause 가 있으면 주입한다', /- c \(2026-01-01~\)/.test(out) && !UNREGISTERED.test(out), out);
 });
 withHome(home => {
-  const out = sessionStart(home, [{ name: 'e', started: '2026-01-01', ended: '2026-02-01' }], {});
-  check('ended 시범은 주입 자체가 없다', !ALERT.test(out), out);
+  const out = sessionStart(home, [{ name: 'p', started: '2026-01-01', cause: 'path' }], {});
+  check('cause path 는 원인 「경로」 효과 줄을 낸다', /효과: 원인 「경로」 정답률을 시작일 전 기준선과 비교 \(scripts\/lessons-judge\.py report --split 2026-01-01\)/.test(out), out);
+  check('cause path 시범은 미등록이 아니다', !UNREGISTERED.test(out), out);
 });
 withHome(home => {
-  const out = sessionStart(home, [{ name: 'bare', started: '2026-01-01', criteria: ['a'], reviewAt: '2020-01-01' }], {});
-  const block = out.split('\n').filter(l => l.startsWith('  ') && !l.startsWith('  규칙') && !l.startsWith('  검토') && !l.startsWith('  산출물'));
-  check('지표 · 기준 · 판정일 · 도래 안내 줄이 4줄을 넘지 않는다', block.length <= 4 && ALERT.test(out), block.join(' | '));
+  const out = fullStart(home, [{ name: 'x', started: '2026-01-01', cause: 'route' }], {});
+  check('정해진 값 밖의 cause 는 원인이 아니다', UNREGISTERED.test(out), out.slice(-300));
+});
+withHome(home => {
+  const out = fullStart(home, [{ name: 'e', started: '2026-01-01', ended: '2026-02-01' }], {});
+  check('ended 시범은 주입도 미등록 줄도 없다', !/- e \(/.test(out) && !UNREGISTERED.test(out), out.slice(-300));
+});
+withHome(home => {
+  const out = sessionStart(home, [{ name: 'c', started: '2026-01-01', cause: 'content', criteria: ['a'], reviewAt: '2020-01-01',
+    metrics: [metricOf('~/.claude/ops-agent/metrics/x.jsonl')] }], {});
+  const block = out.split('\n').filter(l => l.startsWith('  ') && !l.startsWith('  규칙') && !l.startsWith('  검토') && !l.startsWith('  산출물') && !l.startsWith('  효과'));
+  check('지표 · 기준 · 판정일 · 도래 안내 줄이 4줄을 넘지 않는다', block.length <= 4, block.join(' | '));
+});
+
+// ─── 비율 지표 (#1154) ───
+// 위임 기록처럼 한 줄에 분자 · 분모가 있는 지표는 줄 수가 아니라 두 필드의 합으로 비율을 낸다.
+const deleg = rows_ => rows_.map(r => JSON.stringify({ ts: '2026-03-01T00:00:00.000Z', ...r }) + '\n').join('');
+const ratioMetric = (extra = {}) => ({ name: '호출', source: '~/.claude/ops-agent/metrics/delegation.jsonl', ratio: ['calls_made', 'calls_expected'], ...extra });
+withHome(home => {
+  const out = sessionStart(home, [{ name: 'r', started: '2026-01-01', metrics: [ratioMetric()] }],
+    { 'delegation.jsonl': deleg([{ calls_made: 2, calls_expected: 5 }, { calls_made: 3, calls_expected: 12 }, { items: 3, done: 1 }, { calls_made: 'x', calls_expected: 2 }]) });
+  check('비율은 두 필드가 모두 수인 줄만 합산한다 (5/17 · 2줄)', /지표: 호출 0\.29 \(5\/17 · 2줄\)/.test(out), out);
+});
+withHome(home => {
+  const out = sessionStart(home, [{ name: 'r', started: '2026-01-01', metrics: [ratioMetric()] }],
+    { 'delegation.jsonl': deleg([{ items: 3, done: 1 }, { calls_made: 0, calls_expected: 0 }]) });
+  check('분모 합이 0 이면 「기록 없음」', /지표: 호출 기록 없음/.test(out), out);
+});
+withHome(home => {
+  const out = sessionStart(home, [{ name: 'r', started: '2026-01-01', metrics: [
+    ratioMetric(), { name: '결과', source: '~/.claude/ops-agent/metrics/delegation.jsonl', ratio: ['done', 'items'] }] }],
+    { 'delegation.jsonl': deleg([{ items: 4, done: 3, calls_made: 1, calls_expected: 2 }, { ts: '2025-01-01T00:00:00.000Z', items: 100, done: 0 }]) });
+  check('비율 지표 둘을 한 줄에, 시작일 전 줄은 빼고 낸다', /지표: 호출 0\.50 \(1\/2 · 1줄\) \/ 결과 0\.75 \(3\/4 · 1줄\)/.test(out), out);
+});
+withHome(home => {
+  const out = fullStart(home, [{ name: 'r', started: '2026-01-01', metrics: [{ name: '틀린 비율', source: '~/.claude/ops-agent/metrics/delegation.jsonl', ratio: ['done'] }] }], {});
+  check('ratio 가 두 필드 이름이 아니면 유효 지표가 아니다', UNREGISTERED.test(out), out.slice(-300));
+});
+// 지표 필드의 타입: source · groupBy 는 비지 않은 문자열이어야 한다 (주장 검증 1회 사소 10)
+withHome(home => {
+  const out = fullStart(home, [{ name: 'n', started: '2026-01-01', metrics: [{ source: 123, groupBy: 'x' }] }], {});
+  check('source 가 문자열이 아니면 유효 지표가 아니다', UNREGISTERED.test(out), out.slice(-300));
+});
+withHome(home => {
+  const out = fullStart(home, [{ name: 'g', started: '2026-01-01', metrics: [{ source: '~/x.jsonl', groupBy: true }] }], {});
+  check('groupBy 가 문자열이 아니면 유효 지표가 아니다', UNREGISTERED.test(out), out.slice(-300));
+});
+
+// ─── 세션 시작 경로 요약 (#1154, ADR-0043 결정 5) ───
+const ROUTE_LINE = /\[경로 · 최근 7일\][^\n]*/;
+const daysAgo = d => new Date(Date.now() - d * 86400000).toISOString();
+function routeStart(home, files) {
+  const base = join(home, '.claude', 'ops-agent');
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(base, rel)), { recursive: true });
+    writeFileSync(join(base, rel), body);
+  }
+  return fullStart(home, [], {});
+}
+const jl = rs => rs.map(r => JSON.stringify(r) + '\n').join('');
+withHome(home => {
+  const out = routeStart(home, {
+    'metrics/expert-route-2026-11.jsonl': jl([
+      { ts: daysAgo(1), verdict: 'via' }, { ts: daysAgo(1), verdict: 'missed' }, { ts: daysAgo(2), verdict: 'missed' },
+      { ts: daysAgo(3), verdict: 'unknown' }, { ts: daysAgo(9), verdict: 'missed' }]),
+    'metrics/expert-route-2026-10.jsonl': jl([{ ts: daysAgo(2), verdict: 'via' }]),
+    'lessons/judgments.jsonl': jl([
+      { transcript: 'a', first_mtime: Date.now() / 1000 - 86400, mtime: Date.now() / 1000, corrections: [{ cause: 'path' }, { cause: 'content' }] },
+      { transcript: 'b', mtime: Date.now() / 1000 - 2 * 86400, corrections: [{ cause: 'path' }] },
+      { transcript: 'b', mtime: Date.now() / 1000 - 2 * 86400, corrections: [{ cause: 'path' }, { cause: 'path' }] },
+      { transcript: 'c', first_mtime: Date.now() / 1000 - 20 * 86400, mtime: Date.now() / 1000, corrections: [{ cause: 'path' }] }]),
+    'metrics/flow-entry.jsonl': jl([
+      { ts: daysAgo(1), actions: ['commit'], flow: 'missed' }, { ts: daysAgo(1), actions: ['push'], flow: 'missed' },
+      { ts: daysAgo(1), actions: ['pr'], flow: 'missed' }, { ts: daysAgo(1), actions: ['commit'], flow: 'loaded' },
+      { ts: daysAgo(10), actions: ['commit'], flow: 'missed' }]),
+  });
+  const m = out.match(ROUTE_LINE);
+  check('경로 요약: 세 원천을 한 줄로 낸다',
+    m && m[0] === '[경로 · 최근 7일] 공유 표면 쓰기 경유 2 · 누락 2 · 판정 불가 1 / 레슨 원인 「경로」 3건 / 플로우 진입 누락 2건(커밋 · push)', m ? m[0] : out.slice(-300));
+});
+withHome(home => {
+  const out = routeStart(home, {});
+  check('경로 요약: 원천이 하나도 없으면 줄이 없다', !ROUTE_LINE.test(out), out.slice(-300));
+});
+withHome(home => {
+  const out = routeStart(home, { 'metrics/flow-entry.jsonl': jl([{ ts: daysAgo(1), actions: ['commit'], flow: 'missed' }]) });
+  const m = out.match(ROUTE_LINE);
+  check('경로 요약: 원천이 없는 항목은 빼고 낸다', m && m[0] === '[경로 · 최근 7일] 플로우 진입 누락 1건(커밋 · push)', m ? m[0] : out.slice(-300));
+});
+withHome(home => {
+  const out = routeStart(home, { 'metrics/expert-route-2026-11.jsonl': '깨진 줄\n' + jl([{ ts: daysAgo(1), verdict: 'missed' }]) });
+  const m = out.match(ROUTE_LINE);
+  check('경로 요약: 깨진 줄은 건너뛴다', m && m[0] === '[경로 · 최근 7일] 공유 표면 쓰기 경유 0 · 누락 1 · 판정 불가 0', m ? m[0] : out.slice(-300));
 });
 
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과');

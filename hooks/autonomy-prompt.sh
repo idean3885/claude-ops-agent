@@ -6,7 +6,7 @@
 # 가리킨다. 차단이 아니라 알림이다 (편집은 되돌릴 수 있다).
 #
 # 입력: stdin 의 hook JSON (`prompt` 필드)
-# 지표: ~/.claude/ops-agent/metrics/autonomy-prompt.jsonl (발동마다 한 줄)
+# 지표: ~/.claude/ops-agent/metrics/autonomy-prompt.jsonl (발동마다 한 줄, 세션 식별자 포함)
 set -euo pipefail
 
 INPUT=$(cat)
@@ -33,10 +33,17 @@ fi
 
 [[ -n "$MATCHED" ]] || exit 0
 
+# 세션 식별자는 발동한 턴에만 뽑는다 (#1154). 지표를 그 세션의 정답률과 잇는 열쇠이고, 영숫자 · - · _ 밖은 걷는다
+SESSION_ID=$(printf '%s' "$INPUT" | python3 -c 'import json,re,sys
+try:
+    print(re.sub(r"[^A-Za-z0-9_-]", "", str(json.load(sys.stdin).get("session_id") or "")))
+except Exception:
+    pass' 2>/dev/null || true)
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 METRICS_FILE="$HOME/.claude/ops-agent/metrics/autonomy-prompt.jsonl"
 mkdir -p "$(dirname "$METRICS_FILE")"
-printf '{"ts":"%s","matched":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MATCHED" >>"$METRICS_FILE" 2>/dev/null || true
+printf '{"ts":"%s","matched":"%s","session":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MATCHED" "$SESSION_ID" >>"$METRICS_FILE" 2>/dev/null || true
 
 cat <<EOF
 [자율 위임 감지] 편집 · 실행 전에 계획과 권한을 한 번에 받는다 (flow SKILL.md GATE 3 0단계, $PLUGIN_ROOT/skills/flow/SKILL.md).

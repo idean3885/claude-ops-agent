@@ -434,7 +434,9 @@ function assembleGlobalClaudeMd() {
 // 파일이 사용자 스코프(~/.claude/ops-agent/)에 있어 작업 디렉토리가 바뀌어도 풀리지 않는다.
 // 메모리는 프로젝트 디렉토리별이라 운반체로 쓰지 않는다 (#442).
 // 시범이라도 호출형이 아니라 상시형이다. 사용자가 「확인」을 부르지 않는다.
-// 지표: jsonl 의 groupBy 필드 값별 줄 수. since 가 없으면 trial 의 started 이후 ts 만 집계한다.
+// 지표: jsonl 의 groupBy 필드 값별 줄 수, 또는 ratio [분자 필드, 분모 필드] 의 합 비율 (#1154).
+// since 가 없으면 trial 의 started 이후 ts 만 집계한다.
+// 지표도 원인(cause)도 없는 시범은 주입하지 않고 블록 끝 한 줄로 이름만 알린다 (ADR-0043 결정 4).
 // 파일 없음 · 형식 오류는 조용히 건너뛴다 (세션 시작을 막지 않는다).
 const METRIC_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -465,14 +467,24 @@ function readMetricLines(file) {
   }
 }
 
+const RATIO_FIELD_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const isRatio = m => Array.isArray(m.ratio) && m.ratio.length === 2 && m.ratio.every(f => typeof f === 'string' && RATIO_FIELD_RE.test(f));
+// 집계할 수 있는 지표인가. groupBy 와 ratio 중 하나가 있어야 한다.
+// source · groupBy 는 비지 않은 문자열, ratio 는 필드 이름 둘이어야 유효하다. 다른 타입은 집계가 조용히 「기록 없음」이 된다
+const nonEmptyString = v => typeof v === 'string' && v.length > 0;
+const isValidMetric = m => !!(m && nonEmptyString(m.source) && (nonEmptyString(m.groupBy) || isRatio(m)));
+const TRIAL_CAUSES = { content: '내용', level: '수준', path: '경로' };
+
 function buildMetricText(m, started) {
   try {
-    if (!m || !m.source || !m.groupBy) return '';
-    const label = m.name || m.groupBy;
+    if (!isValidMetric(m)) return '';
+    const ratio = isRatio(m) ? m.ratio : null;
+    const label = m.name || (ratio ? ratio.join('/') : m.groupBy);
     const files = metricSources(m.source);
     if (files.length === 0) return `${label} 기록 없음`;
     const from = Date.parse(m.since || started || '');
     const counts = new Map();
+    let num = 0, den = 0, ratioLines = 0;
     let truncated = false;
     for (const file of files) {
       const read = readMetricLines(file);
@@ -486,11 +498,19 @@ function buildMetricText(m, started) {
           const ts = Date.parse(row.ts);
           if (Number.isNaN(ts) || ts < from) continue;
         }
+        if (ratio) {
+          // 두 필드가 모두 수인 줄만 센다. 한쪽만 있는 줄(호출 수를 적지 않은 위임 기록 등)은 분모를 흔든다
+          const [a, b] = ratio.map(f => row[f]);
+          if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) continue;
+          num += a; den += b; ratioLines++;
+          continue;
+        }
         const key = String(row[m.groupBy] ?? '(없음)');
         counts.set(key, (counts.get(key) || 0) + 1);
       }
     }
     const note = truncated ? ` (파일 끝 ${METRIC_MAX_BYTES / 1024 / 1024}MB 만 집계)` : '';
+    if (ratio) return den > 0 ? `${label} ${(num / den).toFixed(2)} (${num}/${den} · ${ratioLines}줄)${note}` : `${label} 기록 없음${note}`;
     if (counts.size === 0) return `${label} 기록 없음${note}`;
     return `${label} ${[...counts].map(([k, n]) => `${k} ${n}`).join(' · ')}${note}`;
   } catch {
@@ -529,22 +549,22 @@ function buildTrialsContext() {
     const path = join(opsAgentGlobal, 'trials.local.json');
     if (!existsSync(path)) return '';
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
-    const active = (parsed.trials || []).filter(t => t && t.name && !t.ended);
-    if (active.length === 0) return '';
-    const lines = [
-      '',
-      '[시범 적용 중 — 자연어 항시 적용. 사용자가 확인을 부르지 않는다. 판정은 검토 조건 충족 시]',
-    ];
+    const live = (parsed.trials || []).filter(t => t && t.name && !t.ended);
+    // 지표도 원인도 없는 시범은 어시스턴트가 스스로 적는 기록에만 기대 판정 근거가 없다. 적용하지 않고 이름만 알린다
+    const registered = t => Object.hasOwn(TRIAL_CAUSES, t.cause) || (Array.isArray(t.metrics) && t.metrics.some(isValidMetric));
+    const active = live.filter(registered);
+    const unregistered = live.filter(t => !registered(t)).map(t => t.name);
+    if (live.length === 0) return '';
+    const lines = [''];
+    if (active.length) lines.push('[시범 적용 중 — 자연어 항시 적용. 사용자가 확인을 부르지 않는다. 판정은 검토 조건 충족 시]');
     for (const t of active) {
       lines.push(`- ${t.name}${t.title ? ` · ${t.title}` : ''}${t.started ? ` (${t.started}~)` : ''}`);
       for (const r of t.rules || []) lines.push(`  규칙: ${r}`);
       if (t.review) lines.push(`  검토 조건: ${t.review}`);
       // 지표 · 기준 · 판정일: trial 당 최대 4줄
       const metricTexts = (Array.isArray(t.metrics) ? t.metrics : []).map(m => buildMetricText(m, t.started)).filter(Boolean);
-      const hasCause = t.cause === 'content' || t.cause === 'level';
+      const hasCause = Object.hasOwn(TRIAL_CAUSES, t.cause);
       if (metricTexts.length) lines.push(`  지표: ${metricTexts.join(' / ')}`);
-      // 지표 줄이 없는 자리에 알림을 둔다. 줄 수가 지표 · 기준 · 판정일 · 도래 안내의 4줄을 넘지 않는다.
-      else if (!hasCause && !(Array.isArray(t.metrics) && t.metrics.length)) lines.push('  자동 지표 없음: metrics 또는 cause 를 붙인다');
       const criteria = (Array.isArray(t.criteria) ? t.criteria : []).filter(c => typeof c === 'string' && c);
       if (criteria.length) lines.push(`  기준: ${criteria.join(' / ')}`);
       if (typeof t.reviewAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.reviewAt)) {
@@ -555,13 +575,71 @@ function buildTrialsContext() {
         }
       }
       if (hasCause) {
-        const causeName = t.cause === 'content' ? '내용' : '수준';
+        const causeName = TRIAL_CAUSES[t.cause];
         lines.push(`  효과: 원인 「${causeName}」 정답률을 시작일 전 기준선과 비교 (scripts/lessons-judge.py report --split ${t.started || '<시작일>'})`);
       } else {
         lines.push(`  산출물·관찰은 ${path} 의 log 에 한 줄씩 더한다`);
       }
     }
+    if (unregistered.length) {
+      lines.push(`[시범 미등록] ${unregistered.join(' · ')}: metrics 또는 cause 가 없어 적용하지 않는다 (docs/hooks-config.md 「시범 적용」)`);
+    }
     return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// --- 경로 요약 (#1154, ADR-0043 결정 5) ---
+// 불렀어야 할 스킬 · 전문가를 거쳤는지를 세션마다 한 줄로 보인다. 원천은 기계 기록 셋이고 모두 최근 7일이다.
+// 공유 표면 쓰기 경유(pre-tool-use 전문가 경유 지표) · 레슨 원인 「경로」(정답률 판정, 세션 시각 기준 · 세션마다 마지막 판정)
+// · 플로우 진입 누락(커밋 · push. PR 생성 누락은 차단된다). 원천이 없는 항목은 빼고, 셋 다 없으면 줄을 내지 않는다.
+const ROUTE_DAYS = 7;
+
+function readJsonRows(file) {
+  const rows = [];
+  for (const line of readMetricLines(file).lines) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line);
+      if (row && typeof row === 'object') rows.push(row);
+    } catch { /* 깨진 줄은 건너뛴다 */ }
+  }
+  return rows;
+}
+
+function buildRouteSummary() {
+  try {
+    const cutoff = Date.now() - ROUTE_DAYS * 86400000;
+    const recent = row => { const ts = Date.parse(row.ts); return !Number.isNaN(ts) && ts >= cutoff; };
+    const parts = [];
+    const routeFiles = metricSources(join(opsAgentGlobal, 'metrics', 'expert-route-*.jsonl'));
+    if (routeFiles.length) {
+      const n = { via: 0, missed: 0, unknown: 0 };
+      for (const row of routeFiles.flatMap(readJsonRows)) if (recent(row) && Object.hasOwn(n, row.verdict)) n[row.verdict]++;
+      parts.push(`공유 표면 쓰기 경유 ${n.via} · 누락 ${n.missed} · 판정 불가 ${n.unknown}`);
+    }
+    const judgments = join(opsAgentGlobal, 'lessons', 'judgments.jsonl');
+    if (existsSync(judgments)) {
+      // 쉬었다 이어 쓴 세션은 다시 판정된다. 세션마다 마지막 판정만 세고, 기간은 처음 판정한 세션 시각으로 본다 (lessons-judge.py 와 같다)
+      const last = new Map();
+      for (const row of readJsonRows(judgments)) last.set(row.transcript, row);
+      let path = 0;
+      for (const row of last.values()) {
+        const at = Number(row.first_mtime || row.mtime) * 1000;
+        if (!(at >= cutoff)) continue;
+        path += (Array.isArray(row.corrections) ? row.corrections : []).filter(c => c && c.cause === 'path').length;
+      }
+      parts.push(`레슨 원인 「경로」 ${path}건`);
+    }
+    const flow = join(opsAgentGlobal, 'metrics', 'flow-entry.jsonl');
+    if (existsSync(flow)) {
+      const missed = readJsonRows(flow).filter(row => recent(row) && row.flow === 'missed'
+        && Array.isArray(row.actions) && row.actions.some(a => a === 'commit' || a === 'push')).length;
+      parts.push(`플로우 진입 누락 ${missed}건(커밋 · push)`);
+    }
+    if (!parts.length) return '';
+    return ['', `[경로 · 최근 ${ROUTE_DAYS}일] ${parts.join(' / ')}`].join('\n');
   } catch {
     return '';
   }
@@ -646,6 +724,7 @@ if (identity) {
 parts.push(buildSkillContext(provider));
 parts.push(buildTermsContext());
 parts.push(buildTrialsContext());
+parts.push(buildRouteSummary());
 parts.push(buildAutoMemoryNotice());
 
 const context = parts.filter(Boolean).join('\n');

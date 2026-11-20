@@ -40,6 +40,10 @@
  *    걸리면 차단한다. 비활성 OPS_AGENT_BODY_LINT_DISABLE=1.
  * 9. 가드 해제 대입 차단 (#1142): Bash 명령 글자에서 이름이 `_DISABLE` 로 끝나는 변수를 대입하면(명령 머리 · env · export
  *    · declare -x) 차단한다. 비활성 변수는 모두 사람이 세션 환경에서 켠다. 비활성 OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE=1.
+ * 10. 전문가 경유 지표 (#1154, ADR-0043): 공유 표면 쓰기(이슈 · PR 생성 · 본문 편집 · 댓글, PR 리뷰, gh api 댓글 · 리뷰, 범위 안 md 를 담은 커밋, 오버레이가 더한 도구)가
+ *    통과할 때 그 세션의 기술 커뮤니케이션 전문가 판정 흔적을 찾아 경유 · 누락 · 판정 불가로 남긴다. 막지 않는다.
+ *    경유는 전문가 호출 결과의 첫 줄 판정 표식뿐이다. 메인 텍스트의 표식 · 전문가 파일 직접 읽기는 경유가 아니다.
+ *    오버레이 ~/.claude/ops-agent/route-surfaces.local.json. 비활성 OPS_AGENT_EXPERT_ROUTE_DISABLE=1.
  *
  * 키워드 소스: ~/.claude/ops-agent/confidential-keywords.local.json
  * 드라이런: OPS_AGENT_CONFIDENTIAL_DRYRUN=1 설정 시 차단 대신 경고만 출력
@@ -50,7 +54,7 @@ import {
   readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync, writeFileSync, openSync, readSync, closeSync, statSync,
   mkdtempSync, rmSync,
 } from 'fs';
-import { join, dirname, basename } from 'path';
+import { join, dirname, basename, resolve as resolvePath } from 'path';
 import { homedir, tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { scanWhatViolations, snippet } from './what-guard-rules.mjs';
@@ -58,6 +62,7 @@ import { findIntrusions } from './han-intrusion.mjs';
 import { detectGitRiskActions, stripGitGlobalOptions } from './git-guard-rules.mjs';
 import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
+import { analyzeCommits, broadScopes } from './commit-scope.mjs';
 import { harnessShapeMismatch, bashAllowRulesFrom } from './harness-rule-shape.mjs';
 import {
   ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, REGISTER_HINT, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
@@ -202,6 +207,71 @@ const FLOW_ACTION_RES = [
   ['pr', /^(?:\S*\/)?gh\s+pr\s+create\b/],
 ];
 const FLOW_SCAN_CHUNK = 4 << 20;
+// 전문가 경유 지표 (#1154). 판정 상수도 훅 본문보다 위에 둔다 (초기화 전 접근 방지).
+// 기록은 통과하는 호출의 respondContinue 안에서만 한다. 뒤 가드에 막힌 쓰기를 세면 재시도가 두 번 남는다.
+const EXPERT_ROUTE_DISABLE = process.env.OPS_AGENT_EXPERT_ROUTE_DISABLE === '1';
+const ROUTE_OVERLAY_FILE = () => join(homedir(), '.claude', 'ops-agent', 'route-surfaces.local.json');
+const ROUTE_GH = String.raw`^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+`;
+const ROUTE_REPO_OPT = String.raw`(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*`;
+// [표면 이름, 세그먼트 정규식, 본문 인자가 있어야 하는가]. 대상은 전문가 파일 「범위」 표의 글이다(ADR-0043 결정 1).
+// 본문 인자가 없는 편집 · 댓글 · 리뷰(제목만 편집, 승인만, 댓글 삭제)는 글을 쓰지 않으므로 뺀다.
+const ROUTE_BUILTIN = [
+  ['issue-create', /(?:^|[\s/])gh-issue\.sh\s+create\b/, false],
+  ['issue-edit', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}issue\\s+${ROUTE_REPO_OPT}edit\\b`), true],
+  ['issue-comment', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}issue\\s+${ROUTE_REPO_OPT}comment\\b`), true],
+  ['pr-create', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}pr\\s+${ROUTE_REPO_OPT}create\\b`), false],
+  ['pr-edit', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}pr\\s+${ROUTE_REPO_OPT}edit\\b`), true],
+  ['pr-comment', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}pr\\s+${ROUTE_REPO_OPT}comment\\b`), true],
+  ['pr-review', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}pr\\s+${ROUTE_REPO_OPT}review\\b`), true],
+];
+const ROUTE_BODY_FLAG_RE = /(?:^|\s)(?:--body(?:-file)?|-b|-F)(?:=|\s|$)/;
+// gh api 로 쓰는 댓글 · 리뷰. 경로(쿼리스트링 제외)와 쓰기 메서드로 본다. 메서드 판정은 이슈 생성 가드와 같은 parseGhApi 다.
+// 이슈 댓글 경로는 PR 대화 댓글도 받는다(GitHub 은 PR 을 이슈로도 다룬다). 그래서 명령 이름이 아니라 api-* 로 남긴다.
+const ROUTE_GH_API_RE = new RegExp(`${ROUTE_GH}api\\b`);
+const ROUTE_API_WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT']);
+const ROUTE_API_PATHS = [
+  ['api-comment', /(?:^|\/)issues\/(?:\d+\/comments|comments\/\d+)$/],
+  ['api-review', /(?:^|\/)pulls\/(?:\d+\/(?:reviews(?:\/\d+(?:\/events)?)?|comments(?:\/\d+\/replies)?)|comments\/\d+)$/],
+];
+const ROUTE_API_MUTATIONS = [
+  ['api-comment', /\b(?:addComment|updateIssueComment)\b/],
+  ['api-review', /\b(?:addPullRequestReview(?:Comment|Thread(?:Reply)?)?|submitPullRequestReview|updatePullRequestReview(?:Comment)?)\b/],
+];
+const ROUTE_API_BODY_FIELD_RE = /(?:^|\s)(-f|--raw-field|-F|--field)(?:=|\s+)body=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g;
+const ROUTE_API_INPUT_RE = /(?:^|\s)--input(?:=|\s+)(\S+)/g;
+// 레포 문서는 초고 쓰기(Write · Edit)가 판정보다 먼저 와서, 「판정 뒤 보낸다」를 커밋 시점에 본다(commit-md).
+// 커밋 판별은 플로우 진입과 같은 정규식이다. 변경 기록은 커밋 메시지와 같은 장르라 범위 표 「다루지 않는다」를 따라 뺀다.
+const ROUTE_DOC_RE = /\.md$/i;
+// 변경 기록의 이름은 둘로 나눈다. CHANGELOG 는 대소문자를 가리지 않고(changelog.md), CHANGES · HISTORY · NEWS ·
+// RELEASES · RELEASE_NOTES 는 대문자일 때만 본다(docs/history.md 같은 소문자 이름은 레포 문서다).
+// 접미는 언어 코드(.ko · .zh-Hant-TW) · 판 번호(-v2 · .1.2) · 보관(.old · -archive)만 받는다(changelog-guide.md 는 레포 문서다).
+// 변경 기록 디렉토리(changelog/ · changelogs/ · .changeset/) 아래 md 도 뺀다.
+const CHANGELOG_SUFFIX = String.raw`(?:\.[a-z]{2}(?:-[A-Za-z]{2,4}){0,2}|[-.]v?\d[\w.]*|[-.](?:old|archive))?\.md$`;
+const ROUTE_DOC_EXCLUDED = [
+  new RegExp(String.raw`(?:^|/)changelog` + CHANGELOG_SUFFIX, 'i'),
+  new RegExp(String.raw`(?:^|/)(?:CHANGES|HISTORY|NEWS|RELEASES|RELEASE[-_]NOTES)` + CHANGELOG_SUFFIX),
+  /(?:^|\/)(?:changelogs?|\.changeset)\//i,
+];
+const isChangelogDoc = path => ROUTE_DOC_EXCLUDED.some(re => re.test(path));
+// 흔적 후보 줄만 문자열로 고르고 JSON 으로 풀어 확인한다. 플로우 진입과 같은 방식이다 (#1116).
+const EXPERT_CANDIDATE_RE_G = /experts\/tech-comm\.md|tech-comm-verdict|agentId|"skill":"(?:ops-agent:)?expert"|"subtype":"compact_boundary"/g;
+const EXPERT_FILE_SUFFIX = '/experts/tech-comm.md';
+const EXPERT_SKILL_RE = /^(?:ops-agent:)?expert$/;
+const EXPERT_VERDICT_RE = /^\[tech-comm-verdict: (pass|revise|hold)\]/;
+const AGENT_ID_TEXT_RE = /agentId: ([A-Za-z0-9_-]{1,128})/;
+// 완료 알림은 문자열이 알림으로 시작할 때만 본다(사용자가 붙여 넣은 글 중간의 알림 형식은 세지 않는다). 한 문자열에 알림이 여럿일 수 있다.
+const TASK_NOTE_START_RE = /^<task-notification>/;
+// 알림 하나는 여는 태그부터 닫는 태그(또는 다음 알림 · 끝)까지다. 그 안에서만 호출 번호와 결과를 찾는다(결과 없는 알림이 뒤 알림의 결과를 가져가지 않게).
+const TASK_NOTE_RE_G = /<task-notification>([\s\S]*?)(?:<\/task-notification>|(?=<task-notification>)|$)/g;
+const NOTE_ID_RE = /<tool-use-id>([^<]+)<\/tool-use-id>/;
+const NOTE_RESULT_RE = /<result>([\s\S]*?)<\/result>/;
+// 결과를 넘김(SubagentHandback)으로 받으면 결과 자리에는 안내만 있고, 보고는 이 틀로 따로 온다. 하네스가 보고의 줄마다 들여쓴다.
+// 한 내용에 넘김 틀이 여럿일 수 있다. 보고는 닫는 태그 · 다음 틀 · 끝 중 먼저 오는 자리까지다.
+// 넘김 틀 하나는 여는 태그부터 닫는 태그(또는 다음 틀 · 끝)까지다. 보고는 그 안의 「The report follows:」 뒤다(보고 없는 틀이 뒤 틀의 보고를 가져가지 않게).
+const HANDBACK_RE_G = /<agent-message from="([A-Za-z0-9_-]{1,128})">([\s\S]*?)(?:<\/agent-message>|(?=<agent-message from=)|$)/g;
+const HANDBACK_REPORT_RE = /The report follows:\n([\s\S]*)/;
+// 공유 표면 쓰기를 기록할 호출 입력. 가드를 모두 통과한 뒤 respondContinue 가 판정한다.
+let routeInput = null;
 const FLOW_PR_DENY = '[ops-agent 플로우 진입 · 차단] 이 세션은 플로우 가이드를 읽지 않고(또는 압축 뒤 다시 읽지 않고) PR 을 만듭니다 (#773 · #891).\n'
   + 'PR 생성의 초안 · 본문 · 리뷰 요청 순서는 가이드에 있습니다. 먼저 읽고 가이드 절차(초안 생성)대로 다시 만듭니다:\n'
   + '  ~/.claude/ops-agent/current/skills/flow/guides/pr.md\n'
@@ -241,6 +311,8 @@ const DIFF_SCAN_LIMIT = 256 * 1024;
 // `git log --grep commit` 같은 조회 명령을 오인하지 않는다.
 const GIT_GLOBAL_OPT = String.raw`(?:-[cC]\s+\S+|--(?:git-dir|work-tree|namespace|exec-path)(?:=\S+|\s+\S+)|--no-pager|--no-replace-objects|--bare|--literal-pathspecs|-p|--paginate)`;
 const GIT_COMMIT_RE = new RegExp(String.raw`\bgit\s+(?:${GIT_GLOBAL_OPT}\s+)*commit\b`);
+// 커밋 세그먼트(전문가 경유 commit-md). 세그먼트 머리에서만 보고, git 과 commit 사이 전역 옵션(-c · -C 등)을 받는다.
+const ROUTE_COMMIT_RE = new RegExp(String.raw`^(?:\S*\/)?git\s+(?:${GIT_GLOBAL_OPT}\s+)*commit\b`);
 const VALUE_FLAGS = new Set([
   '-n', '--namespace', '--context', '--cluster', '--user', '--kubeconfig',
   '-o', '--output', '-l', '--selector', '--field-selector', '-f', '--filename',
@@ -307,6 +379,13 @@ const ENV_VALUE_OPTS = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split
     process.exit(0);
   }
 }
+
+// 전문가 경유 지표: 입력만 잡아 두고 판정 · 기록은 통과할 때 한다. 가드 예산을 대화 기록 읽기에 먼저 쓰지 않는다.
+// 지표는 가드가 아니라 대외비 가드를 끈 세션에서도 기록한다. 끄는 것은 경유 지표 비활성 변수 하나다.
+try {
+  const hookInput = JSON.parse(input);
+  if (!EXPERT_ROUTE_DISABLE && /^(?:Bash|mcp__.+)$/.test(hookInput.tool_name || '')) routeInput = hookInput;
+} catch { /* 입력을 읽지 못하면 기록할 호출이 없다 */ }
 
 if (!DISABLE) {
   try {
@@ -761,6 +840,7 @@ respondContinue();
 // 세션 컨텍스트는 SessionStart 훅이 1회 주입한다 (scripts/session-start.mjs).
 // 이 훅은 가드 판정만 담당한다. 통과 시 추가 컨텍스트는 도구 경계 조치 한 줄(passNotice)뿐이다.
 function respondContinue() {
+  recordExpertRoute();
   if (passNotice) {
     const out = { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: passNotice } };
     if (truncationNotice) out.systemMessage = truncationNotice;
@@ -1131,7 +1211,7 @@ function mergeTargetRepoType(command, hookCwd) {
   return readRepoType(findRepoRoot(extractCwdFromCommand(command, hookCwd)));
 }
 
-function resolveCommandCwd(command, fallbackCwd) {
+function resolveCommandCwd(command, fallbackCwd, relativeToCwd = false) {
   const cdMatch = command.match(/\bcd\s+["']?([^\s"'&;|]+)["']?/);
   const gitCMatch = command.match(/\bgit\s+-C\s+["']?([^\s"'&;|]+)["']?/);
   const raw = (cdMatch && cdMatch[1]) || (gitCMatch && gitCMatch[1]);
@@ -1142,7 +1222,8 @@ function resolveCommandCwd(command, fallbackCwd) {
   if (/[$`*?]/.test(raw)) {
     return { cwd: fallbackCwd, ok: false, source, reason: `${source} 인자에 미확장 셸 표현: ${raw}` };
   }
-  const path = expandHome(raw);
+  // relativeToCwd: 상대 경로를 명령의 작업 디렉토리 기준으로 푼다. 전문가 경유 지표만 쓴다
+  const path = relativeToCwd ? resolvePath(fallbackCwd || process.cwd(), expandHome(raw)) : expandHome(raw);
   if (!existsSync(path)) {
     return { cwd: fallbackCwd, ok: false, source, reason: `${source} 경로 없음: ${path}` };
   }
@@ -1282,6 +1363,44 @@ function extractShortFileOption(command, name, out) {
   }
 }
 
+// 커밋에 담길 변경의 범위. 해석은 commit-scope.mjs(셸 인용 · 명령 대체 · 히어닥 · 리다이렉션을 따라 커밋 인자를 읽는다)다.
+// 경유 지표(commit-md)만 쓴다. 커밋마다 { start, scopes }. 셸로 읽지 못하면 넉넉한 범위 하나다.
+function commitsIn(command) {
+  const commits = analyzeCommits(command);
+  if (commits === null) return [{ start: Infinity, scopes: broadScopes(/\bgit\s+(?:add|stage)\b/.test(command)) }];
+  return commits;
+}
+
+// 범위 하나의 diff. HEAD 가 없으면(첫 커밋) 스테이징분으로 한 번 더 본다. 읽지 못하면 null.
+// untracked 는 추적하지 않는 파일의 줄 수를 --numstat 모양으로 만든다.
+function gitDiffScope(scope, opts, cwd) {
+  if (scope.rev === 'untracked') return untrackedNumstat(cwd);
+  const run = rev => execFileSync('git', ['-c', 'core.quotePath=false', 'diff', rev, ...opts, '--no-color', '--', ...scope.paths], {
+    cwd, encoding: 'utf8', timeout: budgeted(1200), maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  try { return run(scope.rev); } catch {
+    if (scope.rev !== 'HEAD') return null;
+    try { return run('--cached'); } catch { return null; }
+  }
+}
+
+function untrackedNumstat(cwd) {
+  let list;
+  try {
+    list = execFileSync('git', ['ls-files', '-z', '--others', '--exclude-standard'], {
+      cwd, encoding: 'utf8', timeout: budgeted(800), maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+    }).split('\0').filter(Boolean);
+  } catch { return null; }
+  let out = '';
+  for (const rel of list) {
+    let text;
+    try { text = readFileSync(join(cwd, rel), 'utf8'); } catch { continue; }
+    if (text.includes('\0')) continue;
+    out += `${text ? countLines(text) : 0}\t0\t${rel}\n`;
+  }
+  return out;
+}
+
 function stripQuotes(s) {
   if (s.length >= 2) {
     const f = s[0], l = s[s.length - 1];
@@ -1303,9 +1422,19 @@ function stripQuotes(s) {
 // -F/--field)가 있으면 POST 다 (`gh api --help`: 파라미터가 더해지면 POST). --input 은 규격에 메서드 언급이
 // 없어 보수적으로 POST 로 본다. GraphQL 은 경로가 `graphql` 이라 `createIssue` 토큰으로 본다.
 function ghApiCreatesIssue(segment) {
+  const api = parseGhApi(segment);
+  if (!api) return false;
+  if (/^graphql$/.test(api.path)) return /\bcreateIssue\b/.test(segment);
+  if (!/(?:^|\/)issues$/.test(api.path)) return false;
+  return api.method === 'POST';
+}
+
+// gh api 세그먼트의 경로(쿼리스트링 · 끝 슬래시 제외)와 실제 메서드. gh api 가 아니면 null.
+// 이슈 생성 가드와 전문가 경유 지표(댓글 · 리뷰 쓰기)가 같은 판정을 쓴다.
+function parseGhApi(segment) {
   const tokens = segment.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/g) || [];
   const apiIdx = tokens.findIndex(t => /^(?:\S*\/)?gh$/.test(t));
-  if (apiIdx < 0 || tokens[apiIdx + 1] !== 'api') return false;
+  if (apiIdx < 0 || tokens[apiIdx + 1] !== 'api') return null;
   let path = null;
   let method = null;
   let hasParam = false;
@@ -1323,12 +1452,8 @@ function ghApiCreatesIssue(segment) {
     }
     if (path === null) path = t.replace(/^["']|["']$/g, '');
   }
-  if (!path) return false;
-  const bare = path.replace(/\?.*$/, '').replace(/\/+$/, '');
-  if (/^graphql$/.test(bare)) return /\bcreateIssue\b/.test(segment);
-  if (!/(?:^|\/)issues$/.test(bare)) return false;
-  const effective = method || (hasParam ? 'POST' : 'GET');
-  return effective === 'POST';
+  if (!path) return null;
+  return { path: path.replace(/\?.*$/, '').replace(/\/+$/, ''), method: method || (hasParam ? 'POST' : 'GET') };
 }
 
 function detectDirectIssueCreate(command) {
@@ -1801,17 +1926,17 @@ function isGuideReadLine(line) {
     || (b.name === 'Skill' && typeof b.input.skill === 'string' && FLOW_SKILL_RE.test(b.input.skill))));
 }
 
-function flowGuideLoaded(sessionId, transcriptPath) {
-  if (!sessionId || !existsSync(transcriptPath)) return 'unknown';
-  const cacheFile = join(homedir(), '.claude', 'ops-agent', '.cache', 'flow-entry', `${sessionId}.json`);
-  let state = { offset: 0, loaded: false };
+// 대화 기록 이어 읽기. 세션마다 읽은 위치를 캐시에 두고 그 뒤만 줄 경계까지 읽는다. 플로우 진입 · 전문가 경유가 함께 쓴다.
+// fresh 는 첫 상태를 만드는 함수다(중첩 객체를 호출마다 새로 만든다). visit(text, 청크 시작 바이트, state) 가 상태를 고친다.
+// 예산이 모자라면 멈추고 complete false 를 돌려준다. 읽은 데까지는 캐시에 남아 다음 호출이 이어 읽는다.
+function scanTranscriptIncremental(cacheFile, transcriptPath, fresh, visit) {
+  let state = fresh();
   try { state = { ...state, ...JSON.parse(readFileSync(cacheFile, 'utf8')) }; } catch { /* 첫 호출 */ }
-
   let complete = true;
   const fd = openSync(transcriptPath, 'r');
   try {
     const size = statSync(transcriptPath).size;
-    if (size < state.offset) state = { offset: 0, loaded: false }; // 기록이 새로 쓰였다
+    if (size < state.offset) state = fresh(); // 기록이 새로 쓰였다
     let pos = state.offset;
     while (pos < size) {
       if (remainingMs() < 300) { complete = false; break; }
@@ -1825,11 +1950,7 @@ function flowGuideLoaded(sessionId, transcriptPath) {
         if (pos + n >= size) break;
         end = n - 1; // 청크보다 긴 줄
       }
-      const text = buf.toString('utf8', 0, end + 1);
-      const hit = lastGuideReadIndex(text);
-      const boundary = lastMatchIndex(COMPACT_BOUNDARY_RE, text);
-      if (hit > boundary) state.loaded = true;
-      else if (boundary > hit) state.loaded = false;
+      visit(buf.toString('utf8', 0, end + 1), pos, state);
       pos += end + 1;
     }
     state.offset = pos;
@@ -1840,8 +1961,346 @@ function flowGuideLoaded(sessionId, transcriptPath) {
     mkdirSync(dirname(cacheFile), { recursive: true });
     writeFileSync(cacheFile, JSON.stringify(state));
   } catch { /* 캐시가 없으면 다음 호출이 처음부터 읽는다 */ }
+  return { state, complete };
+}
+
+function flowGuideLoaded(sessionId, transcriptPath) {
+  if (!sessionId || !existsSync(transcriptPath)) return 'unknown';
+  const cacheFile = join(homedir(), '.claude', 'ops-agent', '.cache', 'flow-entry', `${sessionId}.json`);
+  const { state, complete } = scanTranscriptIncremental(cacheFile, transcriptPath, () => ({ offset: 0, loaded: false }), (text, _pos, st) => {
+    const hit = lastGuideReadIndex(text);
+    const boundary = lastMatchIndex(COMPACT_BOUNDARY_RE, text);
+    if (hit > boundary) st.loaded = true;
+    else if (boundary > hit) st.loaded = false;
+  });
   if (state.loaded && complete) return 'loaded';
   return complete ? 'missed' : 'unknown';
+}
+
+// ─── 전문가 경유 지표 (#1154, ADR-0043 결정 2) ───
+// 공유 표면 쓰기가 통과할 때 그 세션의 기술 커뮤니케이션 전문가 판정 흔적을 찾아 한 줄 남긴다. 막지 않는다 (2주 기록 뒤 차단 판정).
+// 경유는 전문가 파일을 가리키는 에이전트 호출의 결과 첫 줄이 판정 표식일 때뿐이다. 결과는 세 길로 온다:
+// 도구 결과(동기 호출) · 완료 알림의 result(백그라운드 호출) · 넘김 틀(SubagentHandback, 결과 자리에는 안내만 남는다).
+// 메인 텍스트의 표식은 메인이 스스로 쓴 것이라 세지 않는다. 전문가 파일을 메인이 직접 읽은 것은 판정 불가(inline)다.
+function recordExpertRoute() {
+  if (!routeInput) return;
+  const hookInput = routeInput;
+  routeInput = null;
+  // 대화 기록 경로가 없는 호출(자체 점검 · 수동 실행)은 세지 않는다. 실제 하네스 입력에는 늘 있다 (플로우 진입과 같다)
+  if (!hookInput.transcript_path) return;
+  try {
+    // 한 호출에 표면이 여럿이면 표면마다 한 줄이다. 판정 · 소비는 명령 순서대로 해서, 앞 표면이 소비한 흔적은 뒤 표면에서 stale 이다.
+    for (const found of detectRouteSurfaces(hookInput)) recordOneRoute(hookInput, found);
+  } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
+}
+
+// 경유 지표의 기록 · 캐시 자리. 판별 도구(expert-route-probe.mjs)는 실제 HOME 그대로 훅을 실행하고 이 자리만 임시 디렉토리로 돌린다.
+// HOME 을 바꾸면 명령 · git 설정의 `~` 와 includeIf 조건이 다른 곳으로 풀려 실제 세션과 답이 달라진다.
+// 상단 실행 중에 불리므로 const 가 아니라 함수 선언이다(TDZ).
+function expertRouteBase() { return process.env.OPS_AGENT_EXPERT_ROUTE_DIR || join(homedir(), '.claude', 'ops-agent'); }
+
+function recordOneRoute(hookInput, found) {
+  try {
+    const judged = judgeExpertRoute(hookInput);
+    const now = new Date();
+    const dir = join(expertRouteBase(), 'metrics');
+    mkdirSync(dir, { recursive: true });
+    const cwd = hookInput.cwd || process.cwd();
+    appendFileSync(join(dir, `expert-route-${now.toISOString().slice(0, 7)}.jsonl`), JSON.stringify({
+      ts: now.toISOString(),
+      session: hookInput.session_id || '',
+      ...(hookInput.agent_id ? { agent: hookInput.agent_id } : {}),
+      surface: found.surface,
+      tool: hookInput.tool_name,
+      repo: basename(hookInput.tool_name === 'Bash' ? resolveCommandCwd(String((hookInput.tool_input || {}).command || ''), cwd, true).cwd : cwd),
+      bodyLines: found.bodyLines,
+      verdict: judged.verdict,
+      trace: judged.trace,
+      scope: judged.scope,
+      stale: judged.stale,
+      afterCompact: judged.afterCompact,
+      ...(judged.reason ? { reason: judged.reason } : {}),
+      ...(judged.verdictValue ? { verdictValue: judged.verdictValue } : {}),
+    }) + '\n');
+    // 기록한 쓰기가 흔적을 소비한다. 다음 쓰기는 이 뒤에 생긴 흔적만 본다.
+    for (const c of judged.consume || []) {
+      try {
+        const st = JSON.parse(readFileSync(c.cacheFile, 'utf8'));
+        st.lastWrite = c.offset;
+        writeFileSync(c.cacheFile, JSON.stringify(st));
+      } catch { /* 캐시가 없으면 다음 쓰기가 이 흔적을 다시 본다 */ }
+    }
+  } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
+}
+
+// 표면 오버레이: { "surfaces": [ { "name", "tool"(도구 이름 정규식), "pattern"(Bash 는 명령, 그 밖은 입력 JSON 대상 정규식), "body"?(본문 입력 필드) } ] }
+// 파일이 없으면 내장 표면만 본다. 깨졌으면 알림 한 줄을 남기고 내장 표면만 본다.
+function loadRouteSurfaces() {
+  const file = ROUTE_OVERLAY_FILE();
+  if (!existsSync(file)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8'));
+    if (!parsed || !Array.isArray(parsed.surfaces)) throw new Error('surfaces 배열이 없다');
+    return parsed.surfaces.map((e, i) => {
+      if (!e || typeof e.name !== 'string' || !e.name || typeof e.tool !== 'string' || typeof e.pattern !== 'string') {
+        throw new Error(`surfaces[${i}] 에 name · tool · pattern 문자열이 필요하다`);
+      }
+      return { name: e.name, tool: new RegExp(e.tool), pattern: new RegExp(e.pattern), body: typeof e.body === 'string' ? e.body : null };
+    });
+  } catch (e) {
+    truncationNotice += `[ops-agent 전문가 경유 지표] 표면 오버레이를 읽지 못해 내장 표면만 판별합니다 (${file}): ${(e && e.message) || e}\n`;
+    return [];
+  }
+}
+
+// 함수 선언으로 둔다. 기록은 모듈 끝의 respondContinue 에서 돌아 const 로 두면 초기화 전 접근이 된다.
+function countLines(text) {
+  return String(text).replace(/\n+$/, '').split('\n').length;
+}
+
+// 호출이 쓰는 공유 표면 목록(명령 순서). 본문 줄 수는 그 세그먼트의 본문 인자에서 센다.
+function detectRouteSurfaces(hookInput) {
+  const tool = hookInput.tool_name || '';
+  const toolInput = hookInput.tool_input || {};
+  if (tool === 'Bash') {
+    const command = String(toolInput.command || '');
+    const found = [];
+    let cursor = 0;
+    for (const seg of gateSegments(command)) {
+      // 표면의 순서는 명령 글자 위치다. 커밋은 아래에서 셸 해석으로 따로 찾아 같은 순서에 끼운다
+      const at = seg ? command.indexOf(seg, cursor) : -1;
+      const pos = at >= 0 ? at : cursor;
+      if (at >= 0) cursor = at + seg.length;
+      if (ROUTE_COMMIT_RE.test(seg)) continue;
+      const apiSurface = ROUTE_GH_API_RE.test(seg) ? ghApiRouteSurface(seg, resolveCommandCwd(command, hookInput.cwd || process.cwd(), true).cwd) : null;
+      if (apiSurface) {
+        const texts = ghApiBodyTexts(seg);
+        found.push({ pos, surface: apiSurface, bodyLines: texts.length ? Math.max(...texts.map(t => countLines(t))) : null });
+        continue;
+      }
+      for (const [name, re, needsBody] of ROUTE_BUILTIN) {
+        if (!re.test(seg) || (needsBody && !ROUTE_BODY_FLAG_RE.test(seg))) continue;
+        const texts = [];
+        extractOption(seg, 'body', texts);
+        extractShortOption(seg, 'b', texts);
+        extractFileOption(seg, 'body-file', texts);
+        extractShortFileOption(seg, 'F', texts);
+        // 히어닥 본문은 세그먼트 밖(다음 줄들)에 있다
+        if (STDIN_BODY_RE.test(seg)) for (const m of command.matchAll(HEREDOC_RE)) texts.push({ value: m[3] });
+        found.push({ pos, surface: name, bodyLines: texts.length ? Math.max(...texts.map(t => countLines(t.value))) : null });
+        break;
+      }
+    }
+    if (GIT_COMMIT_RE.test(command)) {
+      const cwd = resolveCommandCwd(command, hookInput.cwd || process.cwd(), true);
+      for (const c of cwd.ok ? commitsIn(command) : []) {
+        const docLines = commitDocLines(c.scopes, cwd.cwd);
+        if (docLines !== null) found.push({ pos: c.start, surface: 'commit-md', bodyLines: docLines });
+      }
+      found.sort((a, b) => a.pos - b.pos);
+    }
+    for (const f of found) delete f.pos;
+    // 내장 표면이어도 오버레이가 깨졌으면 알린다. 깨진 채로 두면 오버레이 표면이 신호 없이 빠진다
+    const overlay = loadRouteSurfaces();
+    if (found.length) return found;
+    const hit = overlay.find(s => s.tool.test(tool) && s.pattern.test(command));
+    return hit ? [{ surface: hit.name, bodyLines: null }] : [];
+  }
+  const target = JSON.stringify(toolInput);
+  const hit = loadRouteSurfaces().find(s => s.tool.test(tool) && s.pattern.test(target));
+  if (!hit) return [];
+  const body = hit.body && typeof toolInput[hit.body] === 'string' ? toolInput[hit.body] : null;
+  return [{ surface: hit.name, bodyLines: body === null ? null : countLines(body) }];
+}
+
+// 커밋에 담길 범위 안 md 의 추가 · 변경 줄 합. 범위 안 md 가 없거나 diff 를 읽지 못하면 null. 파일 경로는 돌려주지 않는다.
+// 담길 범위는 그 커밋의 인자로 정한다(commitsIn). 해석이 불확실하면 스테이징분과 추적 변경을 함께 본다.
+function commitDocLines(scopes, cwd) {
+  const perFile = new Map();
+  for (const scope of scopes) {
+    const out = gitDiffScope(scope, ['--numstat', '--no-renames'], cwd);
+    if (out === null) continue;
+    for (const l of out.split('\n')) {
+      const m = l.match(/^(\d+|-)\t(?:\d+|-)\t(.+)$/);
+      if (!m || !ROUTE_DOC_RE.test(m[2]) || isChangelogDoc(m[2])) continue;
+      perFile.set(m[2], Math.max(perFile.get(m[2]) || 0, m[1] === '-' ? 0 : Number(m[1])));
+    }
+  }
+  if (!perFile.size) return null;
+  return [...perFile.values()].reduce((a, b) => a + b, 0);
+}
+
+// gh api 세그먼트가 댓글 · 리뷰를 쓰면 표면 이름, 아니면 null. GraphQL 은 경로가 graphql 이라 mutation 이름으로 본다.
+function ghApiRouteSurface(seg, cwd) {
+  const api = parseGhApi(seg);
+  if (!api) return null;
+  if (api.path === 'graphql') {
+    // mutation 을 파일로 넘기면(-F query=@파일) 그 파일을 읽는다
+    let text = seg;
+    for (const m of seg.matchAll(/(?:^|\s)(?:-F|--field)(?:=|\s+)query=@(\S+)/g)) {
+      try { text += '\n' + readFileSync(resolvePath(cwd || process.cwd(), stripQuotes(m[1])), 'utf8'); } catch { /* 읽지 못하면 명령 글자만 본다 */ }
+    }
+    if (!/\bmutation\b/.test(text)) return null;
+    const hit = ROUTE_API_MUTATIONS.find(([, re]) => re.test(text));
+    return hit ? hit[0] : null;
+  }
+  if (!ROUTE_API_WRITE_METHODS.has(api.method)) return null;
+  const hit = ROUTE_API_PATHS.find(([, re]) => re.test(api.path));
+  return hit ? hit[0] : null;
+}
+
+// gh api 의 본문 필드: `-f body=…` · `-F body=@파일`(-F 만 @ 를 파일로 읽는다) · `--input 파일`(JSON 의 body). 줄 수만 쓴다.
+function ghApiBodyTexts(command) {
+  const texts = [];
+  for (const m of command.matchAll(ROUTE_API_BODY_FIELD_RE)) {
+    const value = stripQuotes(m[2]);
+    const typed = m[1] === '-F' || m[1] === '--field';
+    if (typed && value.startsWith('@')) {
+      try { texts.push(readFileSync(value.slice(1), 'utf8')); } catch { /* 읽지 못하면 줄 수 없음 */ }
+    } else {
+      texts.push(value);
+    }
+  }
+  for (const m of command.matchAll(ROUTE_API_INPUT_RE)) {
+    try {
+      const body = JSON.parse(readFileSync(stripQuotes(m[1]), 'utf8')).body;
+      if (typeof body === 'string') texts.push(body);
+    } catch { /* 표준 입력 · 깨진 JSON 은 줄 수 없음 */ }
+  }
+  return texts;
+}
+
+// 판정. 서브에이전트는 자기 기록을 먼저 보고, 그 뒤에 생긴 흔적이 없으면 상위 기록을 본다 (scope parent).
+function judgeExpertRoute(hookInput) {
+  const none = reason => ({ verdict: 'unknown', trace: 'none', scope: 'self', stale: false, afterCompact: false, reason });
+  const sessionId = hookInput.session_id;
+  const parent = hookInput.transcript_path;
+  if (!sessionId || !SUBAGENT_ID_RE.test(sessionId) || !parent) return none('no-transcript');
+  const agentId = hookInput.agent_id;
+  const own = agentId && SUBAGENT_ID_RE.test(agentId) ? subagentTranscript(hookInput) : null;
+  if (own) {
+    const self = expertTraceIn(`${sessionId}--${agentId}`, own);
+    if (!self.complete) return none('budget');
+    if (self.fresh || !existsSync(parent)) return { ...classifyExpertRoute(self), scope: 'self', consume: [self.consume] };
+    const up = expertTraceIn(sessionId, parent);
+    if (!up.complete) return none('budget');
+    if (up.fresh) return { ...classifyExpertRoute(up), scope: 'parent', consume: [self.consume, up.consume] };
+    // 둘 다 직전 쓰기 뒤 흔적이 없다. 자기 기록에 앞선 흔적이 있으면 자기 기준, 없고 상위에만 있으면 상위 기준으로 stale 을 남긴다
+    if (!hasTrace(self.state) && hasTrace(up.state)) return { ...classifyExpertRoute(up), scope: 'parent', consume: [self.consume, up.consume] };
+    return { ...classifyExpertRoute(self), scope: 'self', consume: [self.consume] };
+  }
+  if (!existsSync(parent)) return none('no-transcript');
+  const found = expertTraceIn(sessionId, parent);
+  if (!found.complete) return none('budget');
+  return { ...classifyExpertRoute(found), scope: agentId ? 'parent' : 'self', consume: [found.consume] };
+}
+
+function hasTrace(st) {
+  return ['via', 'agent', 'read', 'skill'].some(k => st[k] >= 0);
+}
+
+// 위치는 흔적이 든 청크의 시작 바이트다. 직전 쓰기(lastWrite, 그때 읽은 끝 위치)보다 뒤인지 가르는 데만 쓴다.
+function expertTraceIn(key, transcriptPath) {
+  const cacheFile = join(expertRouteBase(), '.cache', 'expert-route', `${key}.json`);
+  const fresh = () => ({ offset: 0, lastWrite: 0, calls: {}, agents: {}, via: -1, agent: -1, read: -1, skill: -1, compact: -1 });
+  const { state, complete } = scanTranscriptIncremental(cacheFile, transcriptPath, fresh, visitExpertTraces);
+  const isFresh = p => p >= 0 && p >= state.lastWrite;
+  return {
+    state, complete,
+    fresh: ['via', 'agent', 'read', 'skill'].some(k => isFresh(state[k])),
+    consume: { cacheFile, offset: state.offset },
+  };
+}
+
+function visitExpertTraces(text, pos, st) {
+  let checkedLine = -1;
+  for (const m of text.matchAll(EXPERT_CANDIDATE_RE_G)) {
+    const start = text.lastIndexOf('\n', m.index) + 1;
+    if (start === checkedLine) continue;
+    checkedLine = start;
+    let end = text.indexOf('\n', m.index);
+    if (end < 0) end = text.length;
+    let rec;
+    try { rec = JSON.parse(text.slice(start, end)); } catch { continue; }
+    if (!rec || typeof rec !== 'object') continue;
+    if (rec.type === 'system' && rec.subtype === 'compact_boundary') { st.compact = pos; continue; }
+    const msg = rec.message || {};
+    const content = msg.content;
+    if (rec.type === 'assistant' || msg.role === 'assistant') {
+      if (!Array.isArray(content)) continue;
+      for (const b of content) {
+        if (!b || b.type !== 'tool_use' || !b.input) continue;
+        if ((b.name === 'Agent' || b.name === 'Task') && typeof b.input.prompt === 'string' && b.input.prompt.includes('experts/tech-comm.md') && b.id) {
+          st.calls[b.id] = 1;
+          st.agent = pos;
+        } else if (b.name === 'Read' && typeof b.input.file_path === 'string' && b.input.file_path.endsWith(EXPERT_FILE_SUFFIX)) {
+          st.read = pos;
+        } else if (b.name === 'Skill' && typeof b.input.skill === 'string' && EXPERT_SKILL_RE.test(b.input.skill)) {
+          st.skill = pos;
+        }
+      }
+      continue;
+    }
+    // 아래는 어시스턴트가 쓴 줄이 아니다: 도구 결과 · 완료 알림 · 넘김 틀
+    if (Array.isArray(content)) {
+      for (const b of content) {
+        if (!b || b.type !== 'tool_result' || !st.calls[b.tool_use_id]) continue;
+        const resultText = typeof b.content === 'string' ? b.content
+          : Array.isArray(b.content) ? b.content.filter(c => c && c.type === 'text').map(c => c.text || '').join('\n') : '';
+        const idMatch = resultText.match(AGENT_ID_TEXT_RE);
+        if (idMatch) st.agents[idMatch[1]] = 1;
+        if (rec.toolUseResult && typeof rec.toolUseResult.agentId === 'string' && SUBAGENT_ID_RE.test(rec.toolUseResult.agentId)) st.agents[rec.toolUseResult.agentId] = 1;
+        markVerdict(st, resultText, pos);
+      }
+    }
+    for (const s of [typeof content === 'string' ? content : null, typeof rec.content === 'string' ? rec.content : null,
+      rec.attachment && typeof rec.attachment.prompt === 'string' ? rec.attachment.prompt : null]) {
+      if (!s) continue;
+      if (TASK_NOTE_START_RE.test(s)) {
+        for (const note of s.matchAll(TASK_NOTE_RE_G)) {
+          const id = note[1].match(NOTE_ID_RE);
+          const result = note[1].match(NOTE_RESULT_RE);
+          if (id && result && st.calls[id[1].trim()]) markVerdict(st, result[1], pos);
+        }
+      }
+      for (const frame of s.matchAll(HANDBACK_RE_G)) {
+        const report = frame[2].match(HANDBACK_REPORT_RE);
+        if (report && st.agents[frame[1]]) markVerdict(st, report[1], pos);
+      }
+    }
+  }
+}
+
+// 결과 첫 줄이 판정 표식이면 경유 위치와 판정 값을 남긴다. 값은 기록만 하고 판정 규칙(경유)은 바꾸지 않는다.
+function markVerdict(st, text, pos) {
+  const m = firstNonEmptyLine(text).match(EXPERT_VERDICT_RE);
+  if (!m) return;
+  st.via = pos;
+  st.viaValue = m[1];
+}
+
+function firstNonEmptyLine(text) {
+  for (const l of String(text).split('\n')) {
+    const t = l.trim();
+    if (t) return t;
+  }
+  return '';
+}
+
+// 우선순위: 경유 > 직접 읽기(inline) > 표식 없는 전문가 호출(누락) > 전문가 스킬만(판정 불가) > 없음(누락).
+// 직전 쓰기 뒤의 흔적이 없고 앞선 흔적만 있으면 누락 · stale 이다.
+function classifyExpertRoute(found) {
+  const st = found.state;
+  const isFresh = p => p >= 0 && p >= st.lastWrite;
+  const afterCompact = isFresh(st.compact);
+  const base = { stale: false, afterCompact };
+  if (isFresh(st.via)) return { ...base, verdict: 'via', trace: 'agent', verdictValue: st.viaValue || '' };
+  if (isFresh(st.read)) return { ...base, verdict: 'unknown', trace: 'read', reason: 'inline' };
+  if (isFresh(st.agent)) return { ...base, verdict: 'missed', trace: 'agent' };
+  if (isFresh(st.skill)) return { ...base, verdict: 'unknown', trace: 'skill', reason: 'expert-unspecified' };
+  const prior = [['agent', st.via], ['read', st.read], ['agent', st.agent], ['skill', st.skill]]
+    .filter(([, p]) => p >= 0).sort((a, b) => b[1] - a[1])[0];
+  return prior ? { ...base, verdict: 'missed', trace: prior[0], stale: true } : { ...base, verdict: 'missed', trace: 'none' };
 }
 
 function appendFinalCheckMetric(rec) {

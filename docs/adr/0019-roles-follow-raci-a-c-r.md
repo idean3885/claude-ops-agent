@@ -1,6 +1,6 @@
 # ADR-0019: 역할은 RACI 의 A · C · R 세 칸을 따르고, 위탁 작성은 실무자가 한다
 
-- 상태: accepted
+- 상태: accepted (결정 2 의 계획 게이트는 [ADR-0043](0043-doc-structure-change-routes-through-expert.md) 이 계획안 · 승인으로 보정)
 - 일시: 2026-10-01
 - 관련: 이슈 #587
 
