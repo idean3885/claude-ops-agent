@@ -220,6 +220,11 @@ withHome(home => {
   const out = sessionStart(home, [{ name: 'p', started: '2026-01-01', cause: 'path' }], {});
   check('cause path 는 원인 「경로」 효과 줄을 낸다', /효과: 원인 「경로」 정답률을 시작일 전 기준선과 비교 \(scripts\/lessons-judge\.py report --split 2026-01-01\)/.test(out), out);
   check('cause path 시범은 미등록이 아니다', !UNREGISTERED.test(out), out);
+  check('관찰 항목 없는 cause 시범은 log 안내를 내지 않는다', !/산출물·관찰은/.test(out), out);
+});
+withHome(home => {
+  const out = sessionStart(home, [{ name: 'o', started: '2026-01-01', cause: 'content', review: '매주 log 에 「되물음 수」 한 줄' }], {});
+  check('관찰 항목을 정한 cause 시범은 효과 줄과 log 안내를 함께 낸다 (#1170)', /효과: 원인 「내용」/.test(out) && /산출물·관찰은 .* 의 log 에 한 줄씩 더한다/.test(out), out);
 });
 withHome(home => {
   const out = fullStart(home, [{ name: 'x', started: '2026-01-01', cause: 'route' }], {});
