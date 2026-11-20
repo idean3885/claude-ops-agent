@@ -521,6 +521,49 @@ commitCase('앞선 git add', ({ home, transcript, r, add }) => {
   const recs = records(home);
   check('같은 명령 앞의 git add 가 담을 새 md 도 commit-md', recs.length === 1 && recs[0].surface === 'commit-md' && recs[0].bodyLines === 2, JSON.stringify(recs));
 });
+// ─── 커밋 대상 해석기의 남은 미탐 · 오탐 (#1186) ───
+// 셸 안쪽(bash -c · eval · 명령 대체)의 git add 도 같은 명령의 add 다. 담기는 새 md 를 센다
+for (const command of [
+  "bash -c 'git add new.md && git commit -m x'",
+  'bash -lc "git add new.md" && git commit -m x',
+  'out=$(git add new.md) && git commit -m x',
+  'echo "$(git add -A)"; git commit -m x',
+  "eval 'git add new.md'; git commit -m x",
+]) {
+  commitCase(`셸 안쪽 git add ${JSON.stringify(command)}`, ({ home, r }) => {
+    writeFileSync(join(r.repo, 'new.md'), '가\n나\n');
+    const got = probe(command, r.repo, { HOME: home });
+    check(`셸 안쪽 git add 가 담는 새 md 는 commit-md: ${JSON.stringify(command)}`,
+      got.length === 1 && got[0].surface === 'commit-md' && got[0].bodyLines === 2, JSON.stringify(got));
+  });
+}
+// 값을 받는지 모르는 긴 옵션(줄여 쓴 이름 등)의 다음 낱말은 경로로 단정하지 않는다
+commitCase('모르는 긴 옵션 뒤의 낱말', ({ home, r }) => {
+  r.stage('d.md', 'x\n');
+  const got = probe('git commit --mess x', r.repo, { HOME: home });
+  check('값을 받는지 모르는 긴 옵션 뒤 낱말을 경로로 읽지 않아 스테이징된 md 를 센다', got.length === 1 && got[0].surface === 'commit-md' && got[0].bodyLines === 1, JSON.stringify(got));
+  const flag = probe('git commit --no-verify -m x b.mjs', r.repo, { HOME: home });
+  check('대조: 값을 받지 않는 긴 옵션 뒤의 경로 지정은 그대로 그 경로만 본다', flag.length === 0, JSON.stringify(flag));
+});
+// 같은 명령 앞의 git add 가 파일 경로만 담으면 담기지 않는 md 는 세지 않는다
+commitCase('앞선 git add 가 담지 않는 md', ({ home, r }) => {
+  r.stage('a.md', '0\n'); r.commit();
+  writeFileSync(join(r.repo, 'a.md'), '0\n1\n');
+  writeFileSync(join(r.repo, 'new.md'), '가\n');
+  writeFileSync(join(r.repo, 'b.mjs'), 'x\n');
+  const got = probe('git add b.mjs && git commit -m x', r.repo, { HOME: home });
+  check('앞선 git add 가 코드 파일만 담으면 스테이징 안 한 md · 새 md 는 세지 않는다', got.length === 0, JSON.stringify(got));
+  const tracked = probe('git add a.md && git commit -m x', r.repo, { HOME: home });
+  check('대조: 앞선 git add 가 담는 추적 md 는 센다', tracked.length === 1 && tracked[0].surface === 'commit-md', JSON.stringify(tracked));
+  const fresh = probe('git add new.md && git commit -m x', r.repo, { HOME: home });
+  check('대조: 앞선 git add 가 담는 새 md 는 센다', fresh.length === 1 && fresh[0].surface === 'commit-md', JSON.stringify(fresh));
+});
+// 셸 변수로 디렉토리를 옮겨 위치를 못 구하면 훅이 받은 작업 위치로 보고 센다
+commitCase('셸 변수 cd 뒤 커밋', ({ home, r }) => {
+  r.stage('d.md', 'x\n');
+  const got = probe('D=. ; cd "$D" && git commit -m x', r.repo, { HOME: home });
+  check('셸 변수 cd 뒤 커밋도 스테이징된 md 를 commit-md 로 센다', got.length === 1 && got[0].surface === 'commit-md', JSON.stringify(got));
+});
 commitCase('대외비 가드 끔', ({ home, transcript, r, add }) => {
   add(VIA);
   r.stage('d.md', 'x\n');

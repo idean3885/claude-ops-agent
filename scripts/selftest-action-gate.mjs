@@ -733,7 +733,8 @@ const HAN_CASES = [
   ['섞임 없는 커밋은 통과', 'pass', 'git commit -m "fix: 외부 연동"'],
   ['띄어 쓴 한자 낱말은 통과', 'pass', 'git commit -m "docs: 회의 메모 部長 참석"'],
   ['공개 표면 쓰기가 아닌 명령은 통과', 'pass', "cat > note.md <<'EOF'\n남은 일은 외部 대기\nEOF"],
-  ['표준 입력 본문이 아니면 heredoc 은 보지 않는다', 'pass', "git commit -m \"fix: x\" && cat > note.md <<'EOF'\n외部\nEOF"],
+  // 커밋은 단독 호출만 받으므로(#1161 커밋 모양 게이트) 엮는 쓰기 명령으로 PR 코멘트를 쓴다
+  ['표준 입력 본문이 아니면 heredoc 은 보지 않는다', 'pass', "gh pr comment 3 --body \"y\" && cat > note.md <<'EOF'\n외部\nEOF"],
   ['이슈 코멘트는 범위 밖', 'pass', 'gh issue comment 3 --body "部분 완료"'],
   ['비활성은 통과', 'pass', 'git commit -m "fix: 외部 연동"', { env: { OPS_AGENT_HAN_GUARD_DISABLE: '1' } }],
 ];
