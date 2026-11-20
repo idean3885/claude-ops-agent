@@ -63,6 +63,7 @@ import { detectGitRiskActions, stripGitGlobalOptions } from './git-guard-rules.m
 import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 import { analyzeCommits, broadScopes } from './commit-scope.mjs';
+import { hasCommitInvocation, isStandaloneCommit } from './commit-shape.mjs';
 import { harnessShapeMismatch, bashAllowRulesFrom } from './harness-rule-shape.mjs';
 import {
   ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, registerHint, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
@@ -460,7 +461,17 @@ if (!DISABLE) {
         }));
         process.exit(0);
       }
+      // 커밋 모양 게이트 (#1161). 대외비 커밋 검사가 도는 조건(규칙 있음 · public 표면)에서만 돈다.
+      // 검사는 단독 커밋 호출만 정확히 본다. 그 밖의 모양은 검사로 넘기지 않고 나눠 다시 실행하게 한다.
+      const commitGate = commitShapeGate(command, cwd);
+      if (commitGate.deny) denyCommitShape(commitGate.reason);
+      const guardStart = Date.now();
       const result = runConfidentialGuard(command, cwd);
+      // 단독 커밋인데 검사가 예산을 넘겼으면 다 본 것인지 알 수 없다. 통과 대신 다시 실행하게 한다.
+      if (commitGate.gated && !result.blocked
+        && (budgetExceeded || remainingMs() <= 0 || Date.now() - guardStart >= HOOK_BUDGET_MS / 2)) {
+        denyCommitShape(`검사가 시간 예산(${HOOK_BUDGET_MS}ms) 안에 끝나지 않았습니다(공개 여부 조회 지연 포함). 검사하지 못한 커밋을 통과로 두지 않습니다.`);
+      }
       if (result.blocked) {
         const header = DRYRUN ? '[ops-agent 대외비 가드 · 드라이런]' : '[ops-agent 대외비 가드 · 차단]';
         const hitLines = result.hits.map(h =>
@@ -875,6 +886,36 @@ function respondContinue() {
     return;
   }
   process.stdout.write('{"continue":true}');
+}
+
+// 커밋 모양 게이트 (#1161). 명령에 커밋이 있고 대외비 커밋 검사가 도는 자리(규칙 있음 · public 표면,
+// 대상 레포를 못 정하면 public)면 gated 다. 그 명령이 단독 커밋 호출이 아니면 deny 다.
+// 비공개 · 사내 표면의 커밋 모양은 바꾸지 않는다. 검사 함수들은 고치지 않고 그 앞에서만 거른다.
+function commitShapeGate(command, cwd) {
+  if (!hasCommitInvocation(command, GIT_COMMIT_RE)) return { gated: false };
+  const resolved = resolveCommandCwd(command, cwd);
+  const cfg = loadConfig(findRepoRoot(resolved.ok ? resolved.cwd : cwd));
+  if (isEmptyConfig(cfg)) return { gated: false };
+  if (resolved.ok) {
+    const target = resolveTarget(command, resolved.cwd, cfg.internalHosts);
+    if (target.scope !== 'public') return { gated: false };
+  }
+  if (isStandaloneCommit(command)) return { gated: true };
+  return { gated: true, deny: true, reason: '이 명령은 단독 커밋 호출이 아닙니다. 대외비 검사는 git commit 하나만 있는 명령에서만 커밋 대상을 정확히 봅니다.' };
+}
+
+function denyCommitShape(reason) {
+  const header = DRYRUN ? '[ops-agent 대외비 가드 · 커밋 모양 · 드라이런]' : '[ops-agent 대외비 가드 · 커밋 모양 · 차단]';
+  const msg = `${header} ${reason}\n\n`
+    + `해결: add · cd 와 나눠, 레포를 작업 디렉토리로 두고 git commit 단독으로 다시 실행한다.\n`
+    + `  - 허용 옵션: -m/--message(따옴표 문자열 또는 "$(cat <<'EOF' … EOF\n)" 꼴) · -F/--file(경로 또는 - 와 <<'EOF' 히어닥) · -q · -s · -a · --amend · --no-edit · -S/--gpg-sign · --allow-empty\n`
+    + `  - 경로 인자 · -- · git -C · 전역 옵션 · 환경 변수 대입 · 리다이렉션 · ; && || | & 는 쓰지 않는다\n`
+    + `기준: docs/action-gate.md 「대외비 가드」 「커밋 모양 게이트」`;
+  if (DRYRUN) { process.stderr.write(msg + '\n'); return; }
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+  }));
+  process.exit(0);
 }
 
 function runConfidentialGuard(command, cwd) {
