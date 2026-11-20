@@ -109,5 +109,10 @@ OUT=$(run_hook "세션 마무리" "sid-c")
 check "재료 파일이 있으면 그 경로를 낸다" grep -qF "컴팩트 재료: $HOME/.claude/state/compact/sid-c.md" <<<"$OUT"
 check "지표에 재료 유무를 남긴다" grep -q '"compact":true' "$HOME/.claude/ops-agent/metrics/session-wrap-prompt.jsonl"
 
+# 세션 식별자 (#1154): 문구 감지 지표를 그 세션의 결과(정답률)와 잇는다
+check "지표에 세션 식별자를 남긴다" grep -q '"session":"sid-c"' "$HOME/.claude/ops-agent/metrics/session-wrap-prompt.jsonl"
+run_hook "세션 마무리" "../x" >/dev/null
+check "지표의 세션 식별자는 경로 문자를 걷는다" grep -q '"session":"x"' "$HOME/.claude/ops-agent/metrics/session-wrap-prompt.jsonl"
+
 echo "$PASS/$((PASS+FAIL)) 통과"
 [ "$FAIL" -eq 0 ]

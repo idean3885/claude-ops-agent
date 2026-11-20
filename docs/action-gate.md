@@ -567,6 +567,7 @@ Edit · Write · MultiEdit · NotebookEdit 는 경로 끝이 `.ops-agent/repo-ty
 | 최종 점검 통과 기록 | 없음 | `OPS_AGENT_FINAL_CHECK_DISABLE=1` |
 | 플로우 진입 | 없음 | `OPS_AGENT_FLOW_ENTRY_DISABLE=1` |
 | 스킬 사용 기록 | 없음 | `OPS_AGENT_SKILL_USE_DISABLE=1` |
+| 전문가 경유 기록 | 없음 | `OPS_AGENT_EXPERT_ROUTE_DISABLE=1` |
 | 레포 허용 목록 | 없음 | 플래그 없음. 목록 파일이 없으면 판정하지 않습니다 |
 | 가드 해제 대입 차단 | 없음 | `OPS_AGENT_DISABLE_ASSIGN_GUARD_DISABLE=1` (세션 환경에서만. 명령 앞 대입은 이 판정이 막습니다) |
 

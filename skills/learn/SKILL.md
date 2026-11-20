@@ -18,13 +18,13 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 
 ## 작업 시간 밖 판정과 승인 묶음
 
-사람이 챙기지 않는다. 세션 시작 훅이 분리 프로세스로 지난 세션의 교정 · 원인(내용 · 수준) · 막을 수 있던 자산을 추려 `~/.claude/ops-agent/lessons/judgments.jsonl` 에 쌓는다. 작업 시간 밖에서 하는 것은 여기까지다. 자산과의 대조 · 게이트 · 등재는 사람이 /learn 으로 승인 묶음을 열 때 한다. 자동 등재는 없다. 설치 시점 이전 세션은 판정하지 않고, 하루 판정은 10건까지다. 예외는 기준선 1회(`baseline`)뿐이다: 설치 이전 지난 14일 세션에서 표본 20개를 하루 상한과 따로 판정하고, 기준선 행이 쌓이면 다시 실행하지 않는다 (판정이 모두 실패했으면 다시 실행할 수 있다). 설치 뒤 14일이 지나면 그 표본이 없어진다.
+사람이 챙기지 않는다. 세션 시작 훅이 분리 프로세스로 지난 세션의 교정 · 원인(내용 · 수준 · 경로) · 막을 수 있던 자산을 추려 `~/.claude/ops-agent/lessons/judgments.jsonl` 에 쌓는다. 작업 시간 밖에서 하는 것은 여기까지다. 자산과의 대조 · 게이트 · 등재는 사람이 /learn 으로 승인 묶음을 열 때 한다. 자동 등재는 없다. 설치 시점 이전 세션은 판정하지 않고, 하루 판정은 10건까지다. 예외는 기준선 1회(`baseline`)뿐이다: 설치 이전 지난 14일 세션에서 표본 20개를 하루 상한과 따로 판정하고, 기준선 행이 쌓이면 다시 실행하지 않는다 (판정이 모두 실패했으면 다시 실행할 수 있다). 설치 뒤 14일이 지나면 그 표본이 없어진다. 경로 원인의 기준선은 따로 한 번(`baseline --path`) 만든다: 원인 둘 시절에 판정한 세션 중 기록이 남은 것을 다시 판정하고, 승인 대기 · 기준선 표시는 그대로 둔다 ([ADR-0043](../../docs/adr/0043-doc-structure-change-routes-through-expert.md)).
 
 /learn 을 부르면 절차 전에 다음을 한다.
 
-1. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py report` 로 정답률 · 원인 · 승인 대기를 보인다. 기준선이 아직 없으면 `baseline` 을 한 번 실행해 지난 기록 표본으로 만든다.
+1. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py report` 로 정답률 · 원인 · 승인 대기를 보인다. 기준선이 아직 없으면 `baseline` 을 한 번 실행해 지난 기록 표본으로 만든다. 경로 기준선이 없으면(`report --split` 의 원인 경로 행이 「비교 불가」) `baseline --path` 를 한 번 실행한다.
 2. 한 번에 올리는 승인 항목은 report 의 「이번 승인 묶음」 10건까지다. 넘는 건은 남겨 다음 /learn 으로 미룬다.
-3. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py samples` 로 표본 5건을 사용자에게 판정받고, 답마다 `sample-record <트랜스크립트> <답> <correct|content|level>` 로 남긴다. 기계 판정과 사람 판정의 일치도를 보는 표본이다.
+3. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py samples` 로 표본 5건을 사용자에게 판정받고, 답마다 `sample-record <트랜스크립트> <답> <correct|content|level|path>` 로 남긴다. 기계 판정과 사람 판정의 일치도를 보는 표본이다.
 4. report 의 「자산이 있었는데 틀린 답」 표에서 후보(같은 자산 2회 이상)마다, 그 자산에 도구 경계 로드 자리를 줄지 사용자에게 승인받는다 (lessons.md 「도구 경계에서 로드한다」).
 5. 아래 절차(대조 · 게이트 · 등재)로 간다.
 6. 끝나면 `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py approve` 로 이번 묶음만 닫는다. 보이지 않은 대기는 닫지 않는다.
@@ -38,7 +38,7 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 5. 게이트(사실 · 모순 · 일반화)를 통과시킨다.
 6. 통과분만 등재한다. 등재와 세션마다 읽히는 자리의 요약은 한 동작이다 (아래 「등재 시 필수」).
 7. 판정 요약을 남긴다 ([판정 요약 기록](#판정-요약-기록-필수)).
-8. 활성 시범(`~/.claude/ops-agent/trials.local.json`) 가운데 `cause` 가 없는 것마다, 이번 세션에 그 시범의 규칙이 쓰였으면 관찰을 `log` 에 한 줄 더한다. `cause` 가 있는 시범은 판정이 대신 잰다 ([hooks-config 「시범 적용」](../../docs/hooks-config.md#시범-적용-trials)).
+8. 활성 시범(`~/.claude/ops-agent/trials.local.json`) 가운데 `cause` 가 없는 것(지표만 있는 시범)마다, 이번 세션에 그 시범의 규칙이 쓰였으면 관찰을 `log` 에 한 줄 더한다. `cause` 가 있는 시범은 판정이 대신 잰다. 지표도 원인도 없는 시범은 세션 시작이 주입하지 않으므로 대상이 아니다 ([hooks-config 「시범 적용」](../../docs/hooks-config.md#시범-적용-trials)).
 
 판단 · 태도(「확인하고 결론 내라」 · 「묻는 것만 답하라」)는 3번에서 끝난다. 재발 분석으로 보내지 않는다. 남겨도 같은 실수가 줄지 않았다.
 

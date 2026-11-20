@@ -10,7 +10,7 @@
 # 어시스턴트가 판단해서 쓰는 목록이 아니라서 오염 경로가 없다.
 #
 # 입력: stdin 의 hook JSON (`prompt` · `session_id` 필드)
-# 지표: ~/.claude/ops-agent/metrics/session-wrap-prompt.jsonl (발동마다 한 줄)
+# 지표: ~/.claude/ops-agent/metrics/session-wrap-prompt.jsonl (발동마다 한 줄, 세션 식별자 포함)
 set -euo pipefail
 
 INPUT=$(cat)
@@ -47,7 +47,8 @@ mkdir -p "$(dirname "$METRICS_FILE")"
 # 압축 요약의 「마무리 때 할 것」과 함께 대상 출처로 가리킨다. 이슈 목록만 보이면 그 목록이 대상이 된다 (#1148)
 COMPACT=""
 [[ -n "$SESSION_ID" && -s "$HOME/.claude/state/compact/$SESSION_ID.md" ]] && COMPACT="$HOME/.claude/state/compact/$SESSION_ID.md"
-printf '{"ts":"%s","matched":"%s","compact":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MATCHED" "$([[ -n "$COMPACT" ]] && echo true || echo false)" >>"$METRICS_FILE" 2>/dev/null || true
+# 세션 식별자는 지표를 그 세션의 정답률과 잇는 열쇠다 (#1154, lessons-judge.py report --sessions-from)
+printf '{"ts":"%s","matched":"%s","compact":%s,"session":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MATCHED" "$([[ -n "$COMPACT" ]] && echo true || echo false)" "$SESSION_ID" >>"$METRICS_FILE" 2>/dev/null || true
 
 cat <<EOF
 [세션 마무리 감지] 종결로 끝낸다. 절차는 $PLUGIN_ROOT/docs/working-principles.md 「세션 마무리는 종결로 끝낸다」를 읽고 따른다.
