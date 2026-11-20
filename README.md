@@ -118,6 +118,7 @@ PR 리뷰(주장 검증 · 리뷰 봇)까지 AI 가 합니다. 제로베이스 �
 - 호출 정확도는 따로 잽니다. 불러야 했던 판정 자리(보내기 전 전문가 판정 · 검증 단계) 가운데 스스로 부른 비율입니다. 결과가 나쁠 때 「불렀는데 판단이 틀림」과 「부르지 않음」은 고칠 자리가 달라서 한 숫자로 섞지 않습니다.
 - 공유 표면(이슈 · PR 본문과 댓글, PR 리뷰, 범위 안 md 를 담은 커밋 등. 전체는 hooks-config 「전문가 경유 지표」) 쓰기 때 전문가 판정을 거쳤는지는 훅이 기계로 기록합니다(경유 · 누락 · 판정 불가). 어시스턴트가 스스로 적는 호출 기록과 따로 보고, 세션 시작 요약에 최근 7일 수를 보입니다 → [ADR 0043](docs/adr/0043-doc-structure-change-routes-through-expert.md)
 - 드래프트 PR 은 모든 레포의 기본값이고, 사람이 레포 유형 선언에 `skip-draft` 를 둔 개인 레포만 드래프트 없이 PR 을 만듭니다(방화벽식 디폴트 디나이) → [ADR 0044](docs/adr/0044-draft-pr-default-deny-with-repo-opt-out.md)
+- 개념 설명은 정식 정의 + 업계 통용 비유(이름 붙은 업계 패턴) + 그대로 말할 수 있는 완성 문장으로 합니다. 기술 커뮤니케이션 원칙은 TC1~TC9 입니다 → [ADR 0045](docs/adr/0045-concept-explanation-definition-industry-pattern-sentence.md)
 - 기록은 이슈 완료 단계에서 남기고([이슈 가이드 「/issue complete」](skills/flow/guides/issue.md) 12번), 장치를 두면 시범으로 등록해 판정일(기본 1주)에 두 정확도로 유지 · 수정 · 폐기를 정합니다.
 
 ```text
