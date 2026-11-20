@@ -65,7 +65,7 @@ import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
 import { analyzeCommits, broadScopes } from './commit-scope.mjs';
 import { harnessShapeMismatch, bashAllowRulesFrom } from './harness-rule-shape.mjs';
 import {
-  ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, REGISTER_HINT, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
+  ALLOWLIST_FILE_RE, DENY_HEADER as ALLOWLIST_DENY_HEADER, registerHint, checkRepoAllowlist, loadAllowlist, runsRegisterScript,
 } from './repo-allowlist-rules.mjs';
 // 규칙 로딩·공개 여부 판정은 confidential-scan.mjs 와 공유한다.
 // 복제하면 가드와 스캐너의 판정이 달라진다.
@@ -363,9 +363,9 @@ const ENV_VALUE_OPTS = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split
     const toolName = hookInput.tool_name || '';
     const allow = loadAllowlist();
     if (toolName === 'Bash' && runsRegisterScript(hookInput.tool_input && hookInput.tool_input.command)) {
-      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 등록 명령은 사용자가 실행합니다.\n${REGISTER_HINT}`;
+      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 등록 명령은 사용자가 실행합니다.\n${registerHint()}`;
     } else if (allow && writesGuardedFile(toolName, hookInput.tool_input, ALLOWLIST_FILE_RE, 'repo-allowlist')) {
-      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 파일은 어시스턴트가 쓰지 않습니다.\n${REGISTER_HINT}`;
+      deny = `${ALLOWLIST_DENY_HEADER} 허용 목록 파일은 어시스턴트가 쓰지 않습니다.\n${registerHint()}`;
     } else if (allow) {
       deny = checkRepoAllowlist(allow, toolName, hookInput.tool_input, hookInput.cwd || process.cwd());
     }
