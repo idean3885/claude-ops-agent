@@ -13,7 +13,7 @@
  *
  * 훅은 매 도구 호출마다 돈다. 하위 프로세스를 띄우지 않고 .git 을 직접 읽는다.
  */
-import { existsSync, readFileSync, realpathSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { homedir } from 'os';
 
@@ -22,6 +22,40 @@ export const DENY_HEADER = '[ops-agent 레포 허용 목록 · 차단]';
 // 등록은 사용자가 트리거한다. 어시스턴트는 명령 한 줄과 그 행위 · 대상을 제시하고 허락을 받는다 (#972)
 export const REGISTER_HINT = '등록이 필요하면 등록 명령 한 줄과 그 명령이 하는 일 · 대상 레포 · 권한(쓰기 · 읽기 전용)을 사용자에게 설명하고 허락을 받습니다. 실행은 사용자가 `!` 로 합니다.';
 const REGISTER_SCRIPT_RE = /(?:^|\/)repo-allowlist[\w.-]*\.sh$/;
+
+// 확장 저장소 루트. 기본은 resolve-manifest 와 같은 ~/.claude/toolkits, 테스트는 OPS_AGENT_TOOLKIT_ROOTS(: 구분)로 바꾼다.
+function toolkitRoots() {
+  const env = process.env.OPS_AGENT_TOOLKIT_ROOTS;
+  if (env !== undefined) return env.split(':').filter(Boolean);
+  return [join(homedir(), '.claude', 'toolkits')];
+}
+
+/** 설치된 등록 스크립트(<루트>/<저장소>/scripts/repo-allowlist*.sh) 경로들. 없으면 빈 배열. */
+export function findRegisterScripts(roots = toolkitRoots()) {
+  const found = [];
+  for (const root of roots) {
+    let kits = [];
+    try { kits = readdirSync(root); } catch { continue; }
+    for (const kit of kits.sort()) {
+      const dir = join(root, kit, 'scripts');
+      let names = [];
+      try { names = readdirSync(dir); } catch { continue; }
+      for (const n of names.sort()) if (REGISTER_SCRIPT_RE.test(n)) found.push(join(dir, n));
+    }
+  }
+  return found;
+}
+
+/**
+ * 차단 안내의 등록 문구. 설치된 등록 스크립트가 있으면 그 명령을 붙인다.
+ * 목록 파일을 손으로 고치는 방법은 안내하지 않는다 — 확장 저장소 릴리스의 동기화가 원천으로 덮어쓴다 (#1175).
+ */
+export function registerHint(scripts = findRegisterScripts()) {
+  if (!scripts.length) return REGISTER_HINT;
+  const home = homedir();
+  const cmds = scripts.map(p => `\`! bash ${p.startsWith(home + '/') ? '~' + p.slice(home.length) : p} add <read|write> <host/owner/repo>\``);
+  return `${REGISTER_HINT}\n설치된 등록 명령(원천에 등록돼 동기화 뒤에도 유지된다. 목록 파일을 직접 고치는 명령은 안내하지 않는다): ${cmds.join(' · ')}`;
+}
 
 export function allowlistPath() {
   return process.env.OPS_AGENT_REPO_ALLOWLIST || join(homedir(), '.claude', 'ops-agent', 'repo-allowlist.local.json');
@@ -364,7 +398,7 @@ export function checkRepoAllowlist(allow, toolName, toolInput, cwd) {
       : `${t.repo} 는 사용자가 등록한 레포가 아닙니다 (${t.need === 'write' ? '쓰기' : '읽기'} · ${t.why}).`;
     return `${DENY_HEADER} ${what}\n`
       + '등록하지 않은 레포는 클론 · 읽기 · 쓰기 모두 작업 대상이 아닙니다. 요청이 정말 이 레포를 가리키는지 사용자에게 확인합니다.\n'
-      + REGISTER_HINT;
+      + registerHint();
   }
   return null;
 }

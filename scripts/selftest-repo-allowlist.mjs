@@ -118,6 +118,32 @@ for (const [name, tool, input, cwd, want, list = LIST] of CASES) {
   if (!ok) fail++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name} (기대 ${want}, 결과 ${got})${ok ? '' : `\n     ${reason.split('\n')[0] || r.stdout.slice(0, 200)}`}`);
 }
+// 차단 안내의 등록 명령 (#1175): 설치된 등록 스크립트가 있으면 그 명령을, 없으면 지금 안내 그대로
+const KITS = join(base, 'toolkits');
+mkdirSync(join(KITS, 'corp-kit', 'scripts'), { recursive: true });
+writeFileSync(join(KITS, 'corp-kit', 'scripts', 'repo-allowlist.sh'), '#!/bin/bash\n');
+const EMPTY_KITS = join(base, 'toolkits-empty');
+mkdirSync(EMPTY_KITS, { recursive: true });
+const HINT_CASES = [
+  ['등록 스크립트 설치 → 안내에 명령', KITS, true],
+  ['등록 스크립트 없음 → 지금 안내 그대로', EMPTY_KITS, false],
+];
+for (const [name, roots, want] of HINT_CASES) {
+  const r = spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Read', tool_input: { file_path: join(X, 'a.txt') }, cwd: PLAIN, session_id: 'selftest-repo-allowlist' }),
+    encoding: 'utf8',
+    env: { ...process.env, OPS_AGENT_REPO_ALLOWLIST: LIST, OPS_AGENT_TOOLKIT_ROOTS: roots },
+  });
+  let reason = '';
+  try { reason = JSON.parse(r.stdout).hookSpecificOutput?.permissionDecisionReason || ''; } catch { reason = ''; }
+  const path = join(KITS, 'corp-kit', 'scripts', 'repo-allowlist.sh');
+  const got = reason.includes(MARK) && reason.includes('설치된 등록 명령') && reason.includes(`${path} add <read|write>`);
+  const ok = reason.includes(MARK) && got === want;
+  if (!ok) fail++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name} (기대 ${want ? '명령 포함' : '명령 없음'})${ok ? '' : `\n     ${reason.slice(0, 300)}`}`);
+}
+const TOTAL = CASES.length + HINT_CASES.length;
+
 rmSync(base, { recursive: true, force: true });
-console.log(fail ? `\n실패 ${fail}/${CASES.length}` : `\n전부 통과 ${CASES.length}/${CASES.length}`);
+console.log(fail ? `\n실패 ${fail}/${TOTAL}` : `\n전부 통과 ${TOTAL}/${TOTAL}`);
 process.exit(fail ? 1 : 0);
