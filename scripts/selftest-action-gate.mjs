@@ -28,6 +28,11 @@ const storageRepo = mkdtempSync(join(tmpdir(), 'storage-repo-'));
 mkdirSync(join(storageRepo, '.git'));
 mkdirSync(join(storageRepo, '.ops-agent'));
 writeFileSync(join(storageRepo, '.ops-agent', 'repo-type.json'), '{"type": "storage"}');
+// 드래프트 생략을 선언한 개인 레포 (#1166). 선언이 있을 때만 드래프트 없는 생성 · 준비 완료 전환이 통과한다.
+const skipDraftRepo = mkdtempSync(join(tmpdir(), 'skip-draft-repo-'));
+mkdirSync(join(skipDraftRepo, '.git'));
+mkdirSync(join(skipDraftRepo, '.ops-agent'));
+writeFileSync(join(skipDraftRepo, '.ops-agent', 'repo-type.json'), '{"type": "storage", "allow": ["skip-draft"]}');
 
 // want: 'pass' = 통과해야 한다, 'deny' = 차단되어야 한다
 const CASES = [
@@ -513,9 +518,9 @@ const internalWordBody = bodyOf('internal-word.md', '## What\nSELFTEST_INTERNAL_
 const homeWordBody = bodyOf('home-word.md', '## What\nSELFTEST_HOME_WORD 를 다룬다\n\n## Why\n- 사실 1\n- 사실 2\n- 기존 기록: 없음 · docs\n');
 const ADAPTER = 'bash ~/.claude/ops-agent/current/scripts/gh-issue.sh';
 const ISSUE_DENY = '이슈 생성 가드';
-function issueCase(name, want, command, { env = {}, reasonHas = '', label = '이슈 생성 가드' } = {}) {
+function issueCase(name, want, command, { env = {}, reasonHas = '', label = '이슈 생성 가드', cwd = storageRepo } = {}) {
   const res = spawnSync('node', [hook], {
-    input: JSON.stringify({ tool_name: 'Bash', cwd: storageRepo, session_id: 'selftest', tool_input: { command } }),
+    input: JSON.stringify({ tool_name: 'Bash', cwd, session_id: 'selftest', tool_input: { command } }),
     encoding: 'utf8',
     env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg, ...env },
   });
@@ -604,6 +609,34 @@ const PR_DRAFT_CASES = [
   ['문구 검색', 'pass', "grep -n 'gh pr create' skills/flow/guides/pr.md"],
   ['드라이런은 통과', 'pass', 'gh pr create --title "x" --body "y"', { env: { OPS_AGENT_PR_DRAFT_GUARD_DRYRUN: '1' } }],
   ['비활성은 통과', 'pass', 'gh pr create --title "x" --body "y"', { env: { OPS_AGENT_PR_DRAFT_GUARD_DISABLE: '1' } }],
+  // 드래프트 생략 선언 (#1166): 선언한 레포만 통과, 다른 레포 지정 · GraphQL 전환은 기본값(차단)
+  ['생략 선언 레포 · 드래프트 없는 생성', 'pass', 'gh pr create --title "x" --body "y"', { cwd: skipDraftRepo }],
+  ['생략 선언 레포 · 준비 완료 전환', 'pass', 'gh pr ready 12', { cwd: skipDraftRepo }],
+  ['cd 로 생략 레포에 들어가 생성은 기본값', 'deny', `cd ${skipDraftRepo} && gh pr create --title "x" --body "y"`, { reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · cd 로 다른 곳에 나가 생성', 'deny', 'cd /tmp && gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · pushd', 'deny', 'pushd /tmp && gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · git -C', 'deny', 'git -C /tmp status && gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · GH_REPO', 'deny', 'GH_REPO=o/r gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · export GH_REPO', 'deny', 'export GH_REPO=o/r; gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · env GH_HOST', 'deny', 'env GH_HOST=h gh pr ready 12', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 붙여 쓴 -R', 'deny', 'gh pr create -Ro/r --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · --repo=', 'deny', 'gh pr ready --repo=o/r 12', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · URL 인자 전환', 'deny', 'gh pr ready https://github.com/o/r/pull/12', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 알려진 옵션 생성', 'pass', 'gh pr create --base main --title "a -R b" --body-file b.md --fill', { cwd: skipDraftRepo }],
+  ['생략 선언 레포 · --title= 형태', 'pass', 'gh pr create --title=x --body y', { cwd: skipDraftRepo }],
+  ['생략 선언 레포 · 역슬래시 cd', 'deny', '\\cd /tmp && gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 따옴표 cd', 'deny', '"cd" /tmp && gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 따옴표 -R', 'deny', 'gh pr create "-R" o/r --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 묶음 -fR', 'deny', 'gh pr create -fR o/r', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 쪼갠 --repo', 'deny', 'gh pr create --re""po o/r --title "x"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · GIT_DIR', 'deny', 'GIT_DIR=/tmp/x/.git gh pr create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 쪼갠 GH_REPO', 'deny', 'export "GH_""REPO=o/r"; gh pr create --title "x"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 따옴표 안 명령 치환', 'deny', 'gh pr create --title "$(gh repo set-default o/r)" --body y', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · 변수 인자', 'deny', 'gh pr create $A o/r --title "x"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · gh repo set-default 뒤', 'deny', 'gh repo set-default o/r; gh pr create --title "x"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · -R 다른 레포 지정', 'deny', 'gh pr -R o/r create --title "x" --body "y"', { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['생략 선언 레포 · GraphQL 전환', 'deny', "gh api graphql -f query='mutation { markPullRequestReadyForReview(input:{pullRequestId:\"x\"}) { clientMutationId } }'", { cwd: skipDraftRepo, reasonHas: PR_DRAFT_DENY }],
+  ['선언 없는 레포에서 생략 레포로 cd 없이 생성', 'deny', 'gh pr create --title "x" --body "y"', { reasonHas: PR_DRAFT_DENY }],
 ];
 for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, command, { ...opts, label: PR_DRAFT_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
 
