@@ -219,8 +219,9 @@ const ROUTE_GH = String.raw`^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*
 const ROUTE_REPO_OPT = String.raw`(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*`;
 // [표면 이름, 세그먼트 정규식, 본문 인자가 있어야 하는가]. 대상은 전문가 파일 「범위」 표의 글이다(ADR-0043 결정 1).
 // 본문 인자가 없는 편집 · 댓글 · 리뷰(제목만 편집, 승인만, 댓글 삭제)는 글을 쓰지 않으므로 뺀다.
+// 이슈 생성 어댑터는 세그먼트 머리에서 실행될 때만 센다(직접 실행 · bash 같은 셸로 실행). 출력(echo · printf)에 든 이름은 쓰기가 아니다.
 const ROUTE_BUILTIN = [
-  ['issue-create', /(?:^|[\s/])gh-issue\.sh\s+create\b/, false],
+  ['issue-create', /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:(?:\S*\/)?(?:bash|sh|zsh)\s+(?:-\S+\s+)*)?(?:\S*\/)?gh-issue\.sh\s+create\b/, false],
   ['issue-edit', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}issue\\s+${ROUTE_REPO_OPT}edit\\b`), true],
   ['issue-comment', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}issue\\s+${ROUTE_REPO_OPT}comment\\b`), true],
   ['pr-create', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}pr\\s+${ROUTE_REPO_OPT}create\\b`), false],
@@ -229,6 +230,10 @@ const ROUTE_BUILTIN = [
   ['pr-review', new RegExp(`${ROUTE_GH}${ROUTE_REPO_OPT}pr\\s+${ROUTE_REPO_OPT}review\\b`), true],
 ];
 const ROUTE_BODY_FLAG_RE = /(?:^|\s)(?:--body(?:-file)?|-b|-F)(?:=|\s|$)/;
+// 도움말 인자(--help · -h)가 있으면 쓰지 않고 끝난다. 어댑터는 모르는 인자로 끝나고(gh-issue.sh 인자 해석), gh 는 도움말을 낸다.
+// 따옴표 안 글자는 지운 뒤 본다.
+const ROUTE_HELP_RE = /(?:^|\s)(?:--help|-h)(?=\s|=|$)/;
+const ROUTE_HELP_SURFACES = new Set(['issue-create', 'pr-create', 'issue-edit', 'pr-edit', 'issue-comment', 'pr-comment', 'pr-review']);
 // gh api 로 쓰는 댓글 · 리뷰. 경로(쿼리스트링 제외)와 쓰기 메서드로 본다. 메서드 판정은 이슈 생성 가드와 같은 parseGhApi 다.
 // 이슈 댓글 경로는 PR 대화 댓글도 받는다(GitHub 은 PR 을 이슈로도 다룬다). 그래서 명령 이름이 아니라 api-* 로 남긴다.
 const ROUTE_GH_API_RE = new RegExp(`${ROUTE_GH}api\\b`);
@@ -241,7 +246,11 @@ const ROUTE_API_MUTATIONS = [
   ['api-comment', /\b(?:addComment|updateIssueComment)\b/],
   ['api-review', /\b(?:addPullRequestReview(?:Comment|Thread(?:Reply)?)?|submitPullRequestReview|updatePullRequestReview(?:Comment)?)\b/],
 ];
-const ROUTE_API_BODY_FIELD_RE = /(?:^|\s)(-f|--raw-field|-F|--field)(?:=|\s+)body=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g;
+const ROUTE_API_BODY_FIELD_RE = /(?:^|\s)(-f|--raw-field|-F|--field)(?:=|\s+)?(?:"body=((?:[^"\\]|\\.)*)"|'body=((?:[^'\\]|\\.)*)'|body=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+))/g;
+// 리뷰 이벤트(리뷰 만들기 · 보류 리뷰 제출)는 본문 없이 승인만 할 수 있다. 본문 인자가 없으면 글을 쓰지 않으므로 보지 않는다.
+const ROUTE_API_REVIEW_EVENT_PATH_RE = /(?:^|\/)pulls\/\d+\/reviews(?:\/\d+\/events)?$/;
+const ROUTE_API_REVIEW_EVENT_MUTATION_RE = /\b(?:addPullRequestReview|submitPullRequestReview)\b/;
+const ROUTE_API_COMMENTS_FIELD_RE = /(?:^|\s)(?:-f|--raw-field|-F|--field)(?:=|\s+)["']?comments\[/;
 const ROUTE_API_INPUT_RE = /(?:^|\s)--input(?:=|\s+)(\S+)/g;
 // 레포 문서는 초고 쓰기(Write · Edit)가 판정보다 먼저 와서, 「판정 뒤 보낸다」를 커밋 시점에 본다(commit-md).
 // 커밋 판별은 플로우 진입과 같은 정규식이다. 변경 기록은 커밋 메시지와 같은 장르라 범위 표 「다루지 않는다」를 따라 뺀다.
@@ -2159,9 +2168,11 @@ function detectRouteSurfaces(hookInput) {
     const command = String(toolInput.command || '');
     const found = [];
     let cursor = 0;
-    for (const seg of gateSegments(command)) {
+    // 히어닥 본문은 명령이 아니라 입력 글이다. 본문 줄을 빈칸으로 바꿔 세그먼트로 읽지 않는다(글자 위치는 그대로 둔다)
+    const scan = blankHeredocBodies(command);
+    for (const seg of gateSegments(scan)) {
       // 표면의 순서는 명령 글자 위치다. 커밋은 아래에서 셸 해석으로 따로 찾아 같은 순서에 끼운다
-      const at = seg ? command.indexOf(seg, cursor) : -1;
+      const at = seg ? scan.indexOf(seg, cursor) : -1;
       const pos = at >= 0 ? at : cursor;
       if (at >= 0) cursor = at + seg.length;
       if (ROUTE_COMMIT_RE.test(seg)) continue;
@@ -2173,6 +2184,7 @@ function detectRouteSurfaces(hookInput) {
       }
       for (const [name, re, needsBody] of ROUTE_BUILTIN) {
         if (!re.test(seg) || (needsBody && !ROUTE_BODY_FLAG_RE.test(seg))) continue;
+        if (ROUTE_HELP_SURFACES.has(name) && ROUTE_HELP_RE.test(maskShellLiterals(seg))) break;
         const texts = [];
         extractOption(seg, 'body', texts);
         extractShortOption(seg, 'b', texts);
@@ -2206,8 +2218,18 @@ function detectRouteSurfaces(hookInput) {
   return [{ surface: hit.name, bodyLines: body === null ? null : countLines(body) }];
 }
 
+// 히어닥 본문 글자를 빈칸으로 바꾼다. 줄바꿈과 글자 수는 그대로 두어 세그먼트 위치가 원래 명령과 같다.
+function blankHeredocBodies(command) {
+  return command.replace(HEREDOC_RE, (m, _q, _d, body) => {
+    const bodyEnd = m.lastIndexOf('\n');
+    const bodyStart = bodyEnd - body.length;
+    return m.slice(0, bodyStart) + body.replace(/[^\n]/g, ' ') + m.slice(bodyEnd);
+  });
+}
+
 // 커밋에 담길 범위 안 md 의 추가 · 변경 줄 합. 범위 안 md 가 없거나 diff 를 읽지 못하면 null. 파일 경로는 돌려주지 않는다.
 // 담길 범위는 그 커밋의 인자로 정한다(commitsIn). 해석이 불확실하면 스테이징분과 추적 변경을 함께 본다.
+// 내용 변경 없는 파일 삭제 · 이름 변경만 든 md 는 글을 쓰지 않아 뺀다(범위 표 「다루지 않는다」).
 function commitDocLines(scopes, cwd) {
   const perFile = new Map();
   for (const scope of scopes) {
@@ -2219,8 +2241,33 @@ function commitDocLines(scopes, cwd) {
       perFile.set(m[2], Math.max(perFile.get(m[2]) || 0, m[1] === '-' ? 0 : Number(m[1])));
     }
   }
+  const written = docPathsWithContent(scopes, cwd);
+  if (written) for (const path of perFile.keys()) if (!written.has(path)) perFile.delete(path);
   if (!perFile.size) return null;
   return [...perFile.values()].reduce((a, b) => a + b, 0);
+}
+
+// 범위 안에서 내용이 바뀐 경로. 파일 삭제(D)와 내용 그대로인 이름 변경(R100)의 양쪽 경로는 넣지 않는다.
+// 이름을 바꾸며 내용도 고친 것(R100 미만)은 두 경로를 다 넣어 --no-renames 줄 수 그대로 센다.
+// 어느 범위든 상태를 읽지 못하면 null 이다. 모르는 것을 빼면 쓰기가 빠진다
+function docPathsWithContent(scopes, cwd) {
+  const written = new Set();
+  for (const scope of scopes) {
+    if (scope.rev === 'untracked') {
+      const out = untrackedNumstat(cwd);
+      if (out === null) return null;
+      for (const l of out.split('\n')) { const m = l.match(/^[^\t]*\t[^\t]*\t(.+)$/); if (m) written.add(m[1]); }
+      continue;
+    }
+    const out = gitDiffScope(scope, ['--name-status', '-M'], cwd);
+    if (out === null) return null;
+    for (const l of out.split('\n')) {
+      const [status, ...paths] = l.split('\t');
+      if (!status || !paths.length || status === 'D' || status === 'R100') continue;
+      for (const p of paths) written.add(p);
+    }
+  }
+  return written;
 }
 
 // gh api 세그먼트가 댓글 · 리뷰를 쓰면 표면 이름, 아니면 null. GraphQL 은 경로가 graphql 이라 mutation 이름으로 본다.
@@ -2235,18 +2282,33 @@ function ghApiRouteSurface(seg, cwd) {
     }
     if (!/\bmutation\b/.test(text)) return null;
     const hit = ROUTE_API_MUTATIONS.find(([, re]) => re.test(text));
+    if (hit && ROUTE_API_REVIEW_EVENT_MUTATION_RE.test(text) && !/\bbody\b/.test(text)) return null;
     return hit ? hit[0] : null;
   }
   if (!ROUTE_API_WRITE_METHODS.has(api.method)) return null;
   const hit = ROUTE_API_PATHS.find(([, re]) => re.test(api.path));
+  if (hit && ROUTE_API_REVIEW_EVENT_PATH_RE.test(api.path) && !ghApiHasReviewText(seg, cwd)) return null;
   return hit ? hit[0] : null;
+}
+
+// 리뷰 이벤트 호출에 글이 있는가: body 필드, 줄 댓글(comments[]) 필드, --input JSON 의 body · comments.
+// --input 을 읽지 못하면(표준 입력 · 없는 파일) 글이 있다고 본다. 모르는 것을 승인만으로 보면 쓰기가 빠진다
+function ghApiHasReviewText(seg, cwd) {
+  if ([...seg.matchAll(ROUTE_API_BODY_FIELD_RE)].length || ROUTE_API_COMMENTS_FIELD_RE.test(seg)) return true;
+  for (const m of seg.matchAll(ROUTE_API_INPUT_RE)) {
+    try {
+      const input = JSON.parse(readFileSync(resolvePath(cwd || process.cwd(), stripQuotes(m[1])), 'utf8'));
+      if ((typeof input.body === 'string' && input.body) || (Array.isArray(input.comments) && input.comments.length)) return true;
+    } catch { return true; }
+  }
+  return false;
 }
 
 // gh api 의 본문 필드: `-f body=…` · `-F body=@파일`(-F 만 @ 를 파일로 읽는다) · `--input 파일`(JSON 의 body). 줄 수만 쓴다.
 function ghApiBodyTexts(command) {
   const texts = [];
   for (const m of command.matchAll(ROUTE_API_BODY_FIELD_RE)) {
-    const value = stripQuotes(m[2]);
+    const value = m[2] ?? m[3] ?? stripQuotes(m[4]);
     const typed = m[1] === '-F' || m[1] === '--field';
     if (typed && value.startsWith('@')) {
       try { texts.push(readFileSync(value.slice(1), 'utf8')); } catch { /* 읽지 못하면 줄 수 없음 */ }

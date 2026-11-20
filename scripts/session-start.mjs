@@ -577,7 +577,10 @@ function buildTrialsContext() {
       if (hasCause) {
         const causeName = TRIAL_CAUSES[t.cause];
         lines.push(`  효과: 원인 「${causeName}」 정답률을 시작일 전 기준선과 비교 (scripts/lessons-judge.py report --split ${t.started || '<시작일>'})`);
-      } else {
+      }
+      // why: 판정은 원인별 정답률만 낸다. 검토 조건이 log 관찰 항목을 정한 시범은 cause 가 있어도 마무리에서 log 에 적는다 (#1170)
+      const observes = typeof t.review === 'string' && /log\s*에/.test(t.review);
+      if (!hasCause || observes) {
         lines.push(`  산출물·관찰은 ${path} 의 log 에 한 줄씩 더한다`);
       }
     }

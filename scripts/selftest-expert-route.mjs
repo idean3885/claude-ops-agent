@@ -11,7 +11,8 @@
  * 사용: node scripts/selftest-expert-route.mjs
  * 종료 코드: 실패 1, 전부 통과 0
  */
-import { probe } from './expert-route-probe.mjs';
+import { probe as probeTool } from './expert-route-probe.mjs';
+const probe = probeTool;
 import { spawnSync, execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { tmpdir } from 'os';
@@ -90,6 +91,8 @@ function runHook(home, { tool = 'Bash', input, transcript, session = 's1', agent
       OPS_AGENT_FINAL_CHECK_DISABLE: '1',
       OPS_AGENT_FLOW_ENTRY_DISABLE: '1',
       OPS_AGENT_EXPERT_ROUTE_DISABLE: '',
+      // 호출자의 기록 자리를 물려받으면 기록이 임시 HOME 밖에 쌓여 검사가 엉뚱한 자리를 읽는다
+      OPS_AGENT_EXPERT_ROUTE_DIR: '',
       ...env,
     },
   });
@@ -645,11 +648,21 @@ withOverlay(JSON.stringify({ surfaces: [{ name: 'bad', tool: '^mcp__', pattern: 
 {
   const fakeHome = mkdtempSync(join(tmpdir(), 'probe-real-home-'));
   const env = { HOME: fakeHome };
+  // 사용자 HOME 의 파일 목록과 내용. 레포(work/)는 도구가 git diff 로 인덱스 시각 정보를 바꿀 수 있어 뺀다
   const snapshot = dir => {
     const out = [];
-    const walk = d => { for (const n of readdirSync(d).sort()) { const f = join(d, n); try { if (statSync(f).isDirectory()) walk(f); else out.push(`${f.slice(fakeHome.length)}:${readFileSync(f, 'utf8')}`); } catch { out.push(`${f}:?`); } } };
+    const walk = d => { for (const n of readdirSync(d).sort()) { const f = join(d, n); if (f === join(fakeHome, 'work')) continue; try { if (statSync(f).isDirectory()) walk(f); else out.push(`${f.slice(fakeHome.length)}:${readFileSync(f, 'utf8')}`); } catch { out.push(`${f}:?`); } } };
     walk(dir);
     return out.join('\n');
+  };
+  // 호출마다 앞뒤를 찍는다. 첫 호출 뒤에 찍으면 첫 호출이 남긴 파일(다른 기능의 기록 · 캐시)은 기준에 들어가 보이지 않는다
+  const homeChanges = [];
+  const probe = (command, repo, extraEnv) => {
+    const before = snapshot(fakeHome);
+    try { return probeTool(command, repo, extraEnv); } finally {
+      const after = snapshot(fakeHome);
+      if (after !== before) homeChanges.push(`${command}: ${after.split('\n').filter(l => !before.split('\n').includes(l)).join(' | ').slice(0, 200)}`);
+    }
   };
   try {
     const repo = join(fakeHome, 'work', 'probe-repo');
@@ -680,17 +693,22 @@ withOverlay(JSON.stringify({ surfaces: [{ name: 'bad', tool: '^mcp__', pattern: 
     writeFileSync(join(fakeHome, '.claude', 'ops-agent', 'route-surfaces.local.json'), OVERLAY);
     const ov = probe('doc-cli publish page.md', repo, env);
     check('판별 도구는 사용자 표면 오버레이를 따른다', ov.length === 1 && ov[0].surface === 'doc-cli', JSON.stringify(ov));
-    // 사용자 HOME 무변경
-    const before = snapshot(fakeHome);
+    // 사용자 HOME 무변경: 위 모든 호출과 아래 두 호출 각각의 앞뒤를 비교한다
     probe('gh pr comment 1 --body "한 줄"', repo, env);
     probe('git commit -m x', repo, env);
-    check('판별 도구는 사용자 HOME 의 어떤 파일도 바꾸지 않는다(같은 이름의 transcript.jsonl 포함)', snapshot(fakeHome) === before);
+    check('판별 도구는 호출마다 사용자 HOME 의 어떤 파일도 바꾸지 않는다(다른 기능의 기록 · 캐시, 같은 이름의 transcript.jsonl 포함)',
+      homeChanges.length === 0, homeChanges.join(' / '));
     // 훅 실행 실패
     let threw = false;
     try { probe('gh pr comment 1 --body hi', repo, { ...env, NODE_OPTIONS: '--no-such-node-flag' }); } catch { threw = true; }
     check('훅을 실행하지 못하면 기록 없음이 아니라 실패로 알린다', threw);
     // CLI 종료 코드 · --repo
-    const cli = (...a) => spawnSync('node', [join(dirname(hook), 'expert-route-probe.mjs'), ...a], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+    const cli = (...a) => {
+      const before = snapshot(fakeHome);
+      const r = spawnSync('node', [join(dirname(hook), 'expert-route-probe.mjs'), ...a], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+      if (snapshot(fakeHome) !== before) homeChanges.push(`CLI ${a.join(' ')}`);
+      return r;
+    };
     const c0 = cli('--repo', repo, '--', 'gh pr comment 1 --body "한 줄"');
     check('CLI: 기록 있음은 종료 0 과 표면 · 본문 줄 수', c0.status === 0 && /pr-comment/.test(c0.stdout) && /본문 1줄/.test(c0.stdout), `${c0.status} ${c0.stdout}`);
     const c1 = cli('--repo', repo, '--', 'ls');
@@ -703,10 +721,270 @@ withOverlay(JSON.stringify({ surfaces: [{ name: 'bad', tool: '^mcp__', pattern: 
     writeFileSync(join(repo, 'docs', 'only-here.md'), '# 여기만\n'); git('add', 'docs/only-here.md');
     const c4 = cli('--repo', repo, '--json', '--', 'git commit -m x');
     check('CLI: --repo 의 레포 상태로 센다', c4.status === 0 && JSON.parse(c4.stdout)[0]?.surface === 'commit-md', `${c4.status} ${c4.stdout}`);
+    check('CLI 도 사용자 HOME 의 어떤 파일도 바꾸지 않는다', !homeChanges.some(c => c.startsWith('CLI ')), homeChanges.join(' / '));
   } finally {
     rmSync(fakeHome, { recursive: true, force: true });
   }
 }
+
+// ─── 흔적을 소비하는 오탐 셋 (#1162) ───
+// 오탐 한 줄은 그 뒤 쓰기의 흔적을 소비해 뒤 쓰기를 누락으로 만든다. 판별 도구로 실행해 기록 없음이 나와야 한다
+commitCase('오탐 셋: 판별 도구 기록 없음', ({ home, r }) => {
+  r.stage('d.md', 'x\n');
+  for (const [kind, command] of [
+    ['히어닥 본문의 gh 쓰기 줄', "cat > note.txt <<'EOF'\ngh pr comment 3 --body x\ngh issue edit 4 --body y\nEOF"],
+    ['히어닥 본문의 어댑터 줄', "cat > note.txt <<'EOF'\nbash scripts/gh-issue.sh create --title x --body-file b.md\nEOF"],
+    ['히어닥 본문의 gh api 리뷰 줄', "cat > note.txt <<-EOF\n\tgh api repos/o/r/pulls/3/comments -f body=x\n\tEOF"],
+    ['어댑터 이름을 출력', "echo 'bash scripts/gh-issue.sh create --title x'"],
+    ['어댑터 이름을 따옴표 없이 출력', 'printf "%s\\n" bash scripts/gh-issue.sh create --title x'],
+    ['어댑터 도움말(--help)', 'bash scripts/gh-issue.sh create --help'],
+    ['어댑터 도움말(-h)', '~/.claude/ops-agent/current/scripts/gh-issue.sh create -h'],
+    ['gh api 리뷰 승인만', 'gh api repos/o/r/pulls/3/reviews -f event=APPROVE'],
+    ['gh api 보류 리뷰 승인 제출', 'gh api -X POST repos/o/r/pulls/3/reviews/9/events -f event=APPROVE'],
+    ['GraphQL 리뷰 승인 제출', `gh api graphql -f query='mutation { submitPullRequestReview(input: {pullRequestReviewId: "x", event: APPROVE}) { clientMutationId } }'`],
+    ['GraphQL 리뷰 승인 만들기', `gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: "x", event: APPROVE}) { clientMutationId } }'`],
+  ]) {
+    const got = probe(command, r.repo, { HOME: home });
+    check(`오탐 셋: ${kind} 는 기록 없음`, got.length === 0, JSON.stringify(got));
+  }
+  // 대조: 고친 자리 옆의 쓰기는 그대로 센다
+  for (const [kind, command, surfaces, bodyLines] of [
+    ['히어닥 본문을 표준 입력으로 받는 PR 생성은 한 줄, 본문 줄 수는 히어닥', "gh pr create --draft --title t --body-file - <<'EOF'\n## 요약\ngh issue comment 3 --body x\nEOF", ['pr-create'], 2],
+    ['히어닥 뒤 줄의 gh 쓰기는 센다', "cat > note.txt <<'EOF'\n메모\nEOF\ngh pr comment 3 --body x", ['pr-comment'], 1],
+    ['셸로 실행한 어댑터 생성', "bash -e scripts/gh-issue.sh create --title 'how --help works' --type docs --no-start x", ['issue-create'], null],
+    ['env 접두 어댑터 생성', 'env A=1 scripts/gh-issue.sh create --title x', ['issue-create'], null],
+    ['gh api 리뷰 본문', 'gh api repos/o/r/pulls/3/reviews -f event=COMMENT -f body=x', ['api-review'], 1],
+    // 본문 인자 전체를 따옴표로 감싸거나 옵션에 붙여 써도 본문이다(주장 검증 1회차 반례)
+    ['gh api 리뷰 본문(인자 전체를 큰따옴표로)', 'gh api repos/o/r/pulls/3/reviews -f event=COMMENT -f "body=two words here"', ['api-review'], 1],
+    ['gh api 리뷰 본문(인자 전체를 작은따옴표로)', "gh api repos/o/r/pulls/3/reviews -f event=COMMENT -f 'body=two words here'", ['api-review'], 1],
+    ['gh api 리뷰 본문(--raw-field 인자 전체를 따옴표로)', 'gh api repos/o/r/pulls/3/reviews --raw-field "body=two words" -f event=REQUEST_CHANGES', ['api-review'], 1],
+    ['gh api 리뷰 본문(-fbody 붙여 씀)', 'gh api repos/o/r/pulls/3/reviews -fbody=x -f event=COMMENT', ['api-review'], 1],
+    ['gh api 리뷰 줄 댓글만', "gh api repos/o/r/pulls/3/reviews -f event=COMMENT -f 'comments[][body]=x' -f 'comments[][path]=a.md'", ['api-review'], null],
+    ['gh api 리뷰 표준 입력(읽지 못하면 글이 있다고 본다)', 'gh api repos/o/r/pulls/3/reviews --input -', ['api-review'], null],
+    ['GraphQL 리뷰 본문', `gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: "x", event: COMMENT, body: "y"}) { clientMutationId } }'`, ['api-review'], null],
+  ]) {
+    const got = probe(command, r.repo, { HOME: home });
+    check(`오탐 셋 대조: ${kind}`, JSON.stringify(got.map(x => x.surface)) === JSON.stringify(surfaces) && got[0].bodyLines === bodyLines, JSON.stringify(got));
+  }
+});
+{
+  // --input JSON 에 본문도 줄 댓글도 없으면 승인만이다. 파일은 명령의 작업 디렉토리 기준
+  const home = newHome();
+  try {
+    writeFileSync(join(home, 'work', 'my-repo', 'approve.json'), JSON.stringify({ event: 'APPROVE' }));
+    writeFileSync(join(home, 'work', 'my-repo', 'lines.json'), JSON.stringify({ event: 'COMMENT', comments: [{ path: 'a.md', line: 1, body: '가' }] }));
+    const approve = probe('gh api repos/o/r/pulls/3/reviews --input approve.json', join(home, 'work', 'my-repo'), { HOME: home });
+    check('오탐 셋: gh api 리뷰 --input 이 승인만이면 기록 없음', approve.length === 0, JSON.stringify(approve));
+    const lines = probe('gh api repos/o/r/pulls/3/reviews --input lines.json', join(home, 'work', 'my-repo'), { HOME: home });
+    check('오탐 셋 대조: gh api 리뷰 --input 에 줄 댓글이 있으면 api-review', lines.length === 1 && lines[0].surface === 'api-review', JSON.stringify(lines));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+{
+  // 오탐이 흔적을 소비하지 않는다: 오탐 모양 호출 뒤의 실제 쓰기가 경유로 남는다
+  const home = newHome();
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, VIA.map(l => l + '\n').join(''));
+    runHook(home, { input: { command: "cat > note.txt <<'EOF'\ngh pr comment 3 --body x\nEOF" }, transcript });
+    runHook(home, { input: { command: 'gh api repos/o/r/pulls/3/reviews -f event=APPROVE' }, transcript });
+    runHook(home, { input: { command: 'bash scripts/gh-issue.sh create --help' }, transcript });
+    runHook(home, { input: { command: PR_CREATE }, transcript });
+    const recs = records(home);
+    check('오탐 셋: 오탐 모양 호출이 흔적을 소비하지 않아 뒤 PR 생성이 경유', recs.length === 1 && recs[0].surface === 'pr-create' && recs[0].verdict === 'via', JSON.stringify(recs));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+// ─── 내용 변경 없는 md 삭제 · 이름 변경 (#1162) ───
+// 범위 표 「다루지 않는다」: 내용 변경 없는 파일 삭제 · 이름 변경은 글을 쓰지 않아 레포 문서 커밋으로 세지 않는다.
+// 파일이 남은 채 줄만 지운 커밋, 이름을 바꾸며 내용도 고친 커밋은 센다
+for (const [kind, change, want] of [
+  ['삭제만', r => r.git('rm', '-q', 'docs/a.md'), null],
+  ['이름 변경만', r => r.git('mv', 'docs/a.md', 'docs/b.md'), null],
+  ['이름 변경과 내용 수정', r => { r.git('mv', 'docs/a.md', 'docs/b.md'); r.stage('docs/b.md', '# 안내\n\n첫 줄\n둘째 줄\n셋째 줄\n덧붙인 줄\n'); }, 6],
+  ['줄만 삭제', r => r.stage('docs/a.md', '# 안내\n\n첫 줄\n'), 0],
+]) {
+  commitCase(`md ${kind}`, ({ home, r }) => {
+    r.stage('docs/a.md', '# 안내\n\n첫 줄\n둘째 줄\n셋째 줄\n');
+    r.commit();
+    change(r);
+    const got = probe('git commit -m "docs: 정리"', r.repo, { HOME: home });
+    if (want === null) check(`md ${kind} 커밋은 기록 없음`, got.length === 0, JSON.stringify(got));
+    else check(`md ${kind} 커밋은 commit-md, 본문 줄 수 ${want}`, got.length === 1 && got[0].surface === 'commit-md' && got[0].bodyLines === want, JSON.stringify(got));
+  });
+}
+commitCase('md 이름 변경과 다른 md 수정', ({ home, r }) => {
+  r.stage('docs/a.md', '가\n'); r.stage('docs/c.md', '나\n'); r.commit();
+  r.git('mv', 'docs/a.md', 'docs/b.md');
+  r.stage('docs/c.md', '나\n다\n');
+  const got = probe('git commit -m x', r.repo, { HOME: home });
+  check('md 이름 변경만 한 파일과 다른 md 수정이 든 커밋은 수정한 md 줄만 센다', got.length === 1 && got[0].surface === 'commit-md' && got[0].bodyLines === 1, JSON.stringify(got));
+});
+
+// ─── gh 쓰기 표면의 도움말 (#1162) ───
+// gh 는 --help · -h 를 받으면 도움말만 내고 쓰지 않는다. 따옴표 안 글자는 인자가 아니다
+commitCase('gh 쓰기 도움말: 판별 도구 기록 없음', ({ home, r }) => {
+  for (const command of [
+    'gh pr create --help',
+    'gh pr create -h',
+    'gh issue comment 3 --body x --help',
+    'gh issue edit 3 --body x --help',
+    'gh pr edit 3 --body x -h',
+    'gh pr comment 3 --body x -h',
+    'gh pr review 3 --comment --body x --help',
+    'gh -R o/r pr create --title t --body b --help',
+  ]) {
+    const got = probe(command, r.repo, { HOME: home });
+    check(`gh 쓰기 도움말은 기록 없음: ${command}`, got.length === 0, JSON.stringify(got));
+  }
+  for (const [command, surface] of [
+    ["gh pr create --title 'how -h works' --body b", 'pr-create'],
+    ['gh pr comment 3 --body "see --help"', 'pr-comment'],
+  ]) {
+    const got = probe(command, r.repo, { HOME: home });
+    check(`gh 쓰기 대조(따옴표 안 도움말 글자는 센다): ${command}`, got.length === 1 && got[0].surface === surface, JSON.stringify(got));
+  }
+});
+
+// ─── 대화 기록 이어 읽기 (#1162) ───
+// 읽는 중인 마지막 줄(줄바꿈 전)은 읽은 것으로 치지 않고 다음 호출이 다시 읽는다
+{
+  const home = newHome();
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    const result = syncResult('t1', '[tech-comm-verdict: pass]');
+    writeFileSync(transcript, agentCall('t1', TC_PROMPT) + '\n' + result.slice(0, 40));
+    runHook(home, { input: { command: 'gh pr comment 3 --body x' }, transcript });
+    appendFileSync(transcript, result.slice(40) + '\n');
+    runHook(home, { input: { command: PR_CREATE }, transcript });
+    const recs = records(home);
+    check('이어 읽기: 앞 호출이 쓰는 중이던 줄은 다음 호출이 처음부터 다시 읽는다', recs.length === 2 && recs[0].verdict === 'missed'
+      && recs[1].verdict === 'via' && recs[1].stale === false, JSON.stringify(recs));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+// 기록이 읽은 위치보다 짧아지면(새로 쓰임) 처음부터 읽는다
+{
+  const home = newHome();
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, (mainText('가'.repeat(4000)) + '\n').repeat(3));
+    runHook(home, { input: { command: 'gh pr comment 3 --body x' }, transcript });
+    writeFileSync(transcript, VIA.map(l => l + '\n').join(''));
+    runHook(home, { input: { command: PR_CREATE }, transcript });
+    const recs = records(home);
+    check('이어 읽기: 기록이 줄면 처음부터 읽는다(새 기록의 경유를 본다)', recs.length === 2 && recs[1].verdict === 'via' && recs[1].stale === false, JSON.stringify(recs));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+// 예산이 모자라 판정 불가로 남긴 쓰기는 흔적을 소비하지 않는다. 다음 호출이 이어 읽어 경유를 본다
+{
+  const home = newHome();
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, VIA.map(l => l + '\n').join(''));
+    runHook(home, { input: { command: 'gh pr comment 3 --body x' }, transcript, env: { OPS_AGENT_HOOK_BUDGET_MS: '200' } });
+    runHook(home, { input: { command: PR_CREATE }, transcript });
+    const recs = records(home);
+    check('이어 읽기: 예산 부족은 판정 불가(budget)이고 흔적을 소비하지 않는다', recs.length === 2 && recs[0].verdict === 'unknown' && recs[0].reason === 'budget'
+      && recs[1].verdict === 'via' && recs[1].stale === false, JSON.stringify(recs));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+// ─── 표면 판별 · 기록 (#1162) ───
+scenario('gh api 리뷰 수정(PUT)은 api-review', [], { surface: 'api-review', bodyLines: 1 },
+  { command: 'gh api -X PUT repos/o/r/pulls/3/reviews/9 -f body="고친 리뷰"' });
+scenario('gh api 리뷰 수정을 --method PUT 으로 줘도 api-review', [], { surface: 'api-review' },
+  { command: 'gh api --method PUT repos/o/r/pulls/3/reviews/9 -f body=x' });
+{
+  // 기록만 하고 막지 않는다: 누락으로 판정한 쓰기도 통과한다
+  const home = newHome();
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, mainText('흔적 없음') + '\n');
+    const res = runHook(home, { input: { command: PR_CREATE }, transcript });
+    const recs = records(home);
+    check('누락으로 기록한 쓰기도 막지 않는다', recs.length === 1 && recs[0].verdict === 'missed' && !/deny/.test(res.stdout || '') && res.status === 0,
+      `${JSON.stringify(recs)} ${(res.stdout || '').slice(0, 160)}`);
+    const unknown = runHook(home, { input: { command: PR_CREATE }, transcript: join(home, 'none.jsonl') });
+    check('판정 불가로 기록한 쓰기도 막지 않는다', records(home).length === 2 && records(home)[1].verdict === 'unknown' && !/deny/.test(unknown.stdout || ''),
+      `${JSON.stringify(records(home))} ${(unknown.stdout || '').slice(0, 160)}`);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+{
+  // 기록 필드: 판정 불가는 reason 을 남기고 verdictValue 는 없다. 서브에이전트는 agent 를 남긴다
+  const home = newHome();
+  try {
+    const transcript = join(home, 'proj', 'sess.jsonl');
+    mkdirSync(join(home, 'proj', 'sess', 'subagents'), { recursive: true });
+    writeFileSync(transcript, READ_TC + '\n');
+    runHook(home, { input: { command: PR_CREATE }, transcript, session: 'sess', agentId: 'op1' });
+    const recs = records(home);
+    const keys = recs[0] ? Object.keys(recs[0]).sort().join(',') : '';
+    check('기록 필드(판정 불가 · 서브에이전트)', keys === 'afterCompact,agent,bodyLines,reason,repo,scope,session,stale,surface,tool,trace,ts,verdict', keys);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+{
+  // 판정 불가 갈래: 서브에이전트 자기 기록을 예산 안에 다 읽지 못하면 상위 기록으로 넘어가지 않고 판정 불가.
+  // 상위 기록은 비워 둔다. 비어 있으면 남은 예산과 무관하게 다 읽혀, 자기 기록의 읽다 만 상태로 누락을 내는 길이 열린다
+  const home = newHome();
+  try {
+    const transcript = join(home, 'proj', 'sess.jsonl');
+    mkdirSync(join(home, 'proj', 'sess', 'subagents'), { recursive: true });
+    writeFileSync(transcript, '');
+    const slow = line({ type: 'user', message: { role: 'user', content: 'agentId: x' } }) + '\n';
+    writeFileSync(join(home, 'proj', 'sess', 'subagents', 'agent-op1.jsonl'), slow.repeat(1200000));
+    runHook(home, { input: { command: PR_CREATE }, transcript, session: 'sess', agentId: 'op1', env: { OPS_AGENT_HOOK_BUDGET_MS: '600' } });
+    const last = records(home).slice(-1)[0] || {};
+    check('자기 기록을 예산 안에 다 읽지 못하면 판정 불가(budget, 읽다 만 자기 기록으로 누락을 내지 않는다)', last.verdict === 'unknown' && last.reason === 'budget', JSON.stringify(last));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+{
+  // 자체 점검은 호출자의 기록 자리 변수를 물려받지 않는다: 호출자에 그 변수가 있어도 기록은 임시 HOME 에 쌓인다
+  const decoy = mkdtempSync(join(tmpdir(), 'expert-route-decoy-'));
+  const saved = process.env.OPS_AGENT_EXPERT_ROUTE_DIR;
+  process.env.OPS_AGENT_EXPERT_ROUTE_DIR = decoy;
+  const home = newHome();
+  try {
+    const transcript = join(home, 'transcript.jsonl');
+    writeFileSync(transcript, '');
+    runHook(home, { input: { command: PR_CREATE }, transcript });
+    check('자체 점검은 호출자의 기록 자리 변수(OPS_AGENT_EXPERT_ROUTE_DIR)를 물려받지 않는다',
+      records(home).length === 1 && readdirSync(decoy).length === 0, `임시 HOME ${records(home).length}건, 호출자 자리 ${readdirSync(decoy).join(',')}`);
+  } finally {
+    if (saved === undefined) delete process.env.OPS_AGENT_EXPERT_ROUTE_DIR; else process.env.OPS_AGENT_EXPERT_ROUTE_DIR = saved;
+    rmSync(home, { recursive: true, force: true });
+    rmSync(decoy, { recursive: true, force: true });
+  }
+}
+
+// 기록 자리 바꾸기 변수는 경유 지표의 기록 · 캐시만 옮긴다. 다른 기능(플로우 진입)의 기록은 사용자 자리에 그대로 쌓인다
+commitCase('기록 자리 바꾸기의 범위', ({ home, transcript, r }) => {
+  const moved = mkdtempSync(join(tmpdir(), 'expert-route-moved-'));
+  try {
+    r.stage('d.md', 'x\n');
+    runHook(home, { input: { command: 'git commit -m x' }, transcript, env: { OPS_AGENT_EXPERT_ROUTE_DIR: moved, OPS_AGENT_FLOW_ENTRY_DISABLE: '' } });
+    const movedMetrics = existsSync(join(moved, 'metrics')) ? readdirSync(join(moved, 'metrics')) : [];
+    check('기록 자리 바꾸기: 경유 지표는 바꾼 자리에 쌓인다', movedMetrics.some(f => /^expert-route-/.test(f)) && records(home).length === 0, movedMetrics.join(','));
+    check('기록 자리 바꾸기: 다른 기능(플로우 진입)의 기록은 사용자 자리 그대로', existsSync(join(metricsDir(home), 'flow-entry.jsonl')) && !movedMetrics.includes('flow-entry.jsonl'),
+      `사용자 자리 ${existsSync(metricsDir(home)) ? readdirSync(metricsDir(home)).join(',') : '없음'} · 바꾼 자리 ${movedMetrics.join(',')}`);
+  } finally {
+    rmSync(moved, { recursive: true, force: true });
+  }
+});
 
 // ─── 비활성 · 무관 호출 ───
 {
