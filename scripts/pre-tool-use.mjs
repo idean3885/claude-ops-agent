@@ -599,8 +599,11 @@ if (!DISABLE) {
       // 초안 PR 가드: PR 은 초안으로 만든다 (#876). 준비 완료 전환(gh pr ready)은 작성자가 정하고 어시스턴트 호출은 막는다 (#977).
       if (!PR_DRAFT_GUARD_DISABLE && remainingMs() <= 0) noteBudgetExceeded('초안 PR 가드');
       if (!PR_DRAFT_GUARD_DISABLE && remainingMs() > 0) {
-        const prHits = detectNonDraftPrCreate(command);
-        const readyHits = detectPrReady(command);
+        // 드래프트 생략을 선언한 레포는 드래프트 없는 생성과 준비 완료 전환을 통과시킨다 (#1166).
+        // 기본값은 드래프트 필수다. 선언을 빠뜨렸을 때 피해가 작은 쪽이다 (방화벽식 디폴트 디나이).
+        const skipDraft = draftSkipDeclared(command, hookInput.cwd);
+        const prHits = skipDraft ? [] : detectNonDraftPrCreate(command);
+        const readyHits = skipDraft ? [] : detectPrReady(command);
         if (readyHits.length) {
           const header = PR_DRAFT_GUARD_DRYRUN
             ? '[ops-agent 초안 PR 가드 · 드라이런]'
@@ -1478,6 +1481,47 @@ function detectNonDraftPrCreate(command) {
     if (!draft) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
   }
   return hits;
+}
+
+// 명령 대상 레포가 레포 유형 선언의 허용 목록에 `skip-draft` 를 두었는가 (#1166, ADR-0044).
+// 선언은 사람만 쓴다(레포 유형 편집 차단). 대상은 훅 cwd 의 레포 하나다.
+// 통과는 허용 목록으로만 정한다: 명령 하나가 단독으로 `gh pr create`(알려진 옵션만) 또는 `gh pr ready <번호>` 이고,
+// 이스케이프 · `$` · 백틱이 없을 때뿐이다. 앞뒤 명령 · 환경 변수 접두 · 다른 레포 지정 · 작업 위치 이동은 모두 이 밖이라
+// 기본값(드래프트 필수)이다. 위험한 형태를 하나씩 막는 방식은 셸 표기(따옴표 · 묶음 플래그 · GIT_DIR)로 계속 우회됐다.
+function draftSkipDeclared(command, hookCwd) {
+  const SKIP_DRAFT_VALUE_FLAGS = new Set(['--title', '-t', '--body', '-b', '--body-file', '-F', '--base', '-B', '--head', '-H',
+    '--label', '-l', '--assignee', '-a', '--reviewer', '-r', '--milestone', '-m', '--project', '-p']);
+  const SKIP_DRAFT_BOOL_FLAGS = new Set(['--fill', '-f', '--fill-first', '--fill-verbose', '--draft', '-d', '--no-maintainer-edit']);
+  const segs = gateSegments(command);
+  if (segs.length !== 1) return false;
+  const seg = command.trim();
+  if (/[\\`$]/.test(seg)) return false;
+  const toks = seg.match(/"[^"]*"|'[^']*'|\S+/g) || [];
+  if (toks.join(' ') !== seg.replace(/\s+/g, ' ')) return false;
+  if (toks[0] !== 'gh' || toks[1] !== 'pr') return false;
+  const rest = toks.slice(3);
+  if (toks[2] === 'ready') {
+    if (!(rest.length === 1 && /^\d+$/.test(rest[0]))) return false;
+  } else if (toks[2] === 'create') {
+    for (let i = 0; i < rest.length; i++) {
+      const t = rest[i];
+      if (SKIP_DRAFT_BOOL_FLAGS.has(t)) continue;
+      const eq = t.indexOf('=');
+      if (eq > 0 && t.startsWith('--') && SKIP_DRAFT_VALUE_FLAGS.has(t.slice(0, eq))) continue;
+      if (SKIP_DRAFT_VALUE_FLAGS.has(t) && i + 1 < rest.length && !/^-/.test(rest[i + 1])) { i++; continue; }
+      return false;
+    }
+  } else {
+    return false;
+  }
+  const root = findRepoRoot(hookCwd);
+  if (!root) return false;
+  try {
+    const d = JSON.parse(readFileSync(join(root, '.ops-agent', 'repo-' + 'type.json'), 'utf8'));
+    return Array.isArray(d.allow) && d.allow.includes('skip-draft');
+  } catch {
+    return false;
+  }
 }
 
 // 세그먼트마다 최상위 `gh pr ready`(`--undo` 없음)와 GraphQL 전환 mutation 을 잡는다.
