@@ -640,6 +640,41 @@ const PR_DRAFT_CASES = [
 ];
 for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, command, { ...opts, label: PR_DRAFT_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
 
+// 드래프트 생략 선언 레포의 드래프트 생성은 통과하되 기록 · 안내한다 (#1178). 임시 HOME 의 지표 파일로 본다.
+{
+  const DRAFT_METRIC_CASES = [
+    // [이름, cwd, 명령, 기록 기대, form 기대]
+    ['선언 레포 · 단독 드래프트 생성', skipDraftRepo, 'gh pr create --draft --title "x" --body "y"', true, 'standalone'],
+    ['선언 레포 · cd 로 묶은 드래프트 생성', storageRepo, `cd ${skipDraftRepo} && git status && gh pr create --draft --title "x" --body "y"`, true, 'compound'],
+    ['선언 없는 레포 · 드래프트 생성은 기록 안 함', storageRepo, 'gh pr create --draft --title "x" --body "y"', false, ''],
+    ['선언 레포 · 드래프트 없는 단독 생성은 기록 안 함', skipDraftRepo, 'gh pr create --title "x" --body "y"', false, ''],
+  ];
+  for (const [name, cwd, command, wantRec, wantForm] of DRAFT_METRIC_CASES) {
+    const home = mkdtempSync(join(tmpdir(), 'draft-metric-home-'));
+    const res = spawnSync('node', [hook], {
+      input: JSON.stringify({ tool_name: 'Bash', cwd, session_id: 'selftest', tool_input: { command } }),
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_FLOW_ENTRY_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg },
+    });
+    const file = join(home, '.claude', 'ops-agent', 'metrics', 'draft-in-skip-repo.jsonl');
+    let rows = [];
+    try { rows = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { rows = []; }
+    let ctx = '';
+    let denied = false;
+    try {
+      const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput || {};
+      ctx = hs.additionalContext || '';
+      denied = hs.permissionDecision === 'deny';
+    } catch { /* 출력 없음 */ }
+    const recOk = wantRec ? rows.length === 1 && rows[0].form === wantForm : rows.length === 0;
+    const noticeOk = wantRec ? ctx.includes('드래프트 생략(skip-draft)을 선언') : !ctx.includes('드래프트 생략(skip-draft)을 선언');
+    const ok = !denied && recOk && noticeOk;
+    if (!ok) failed++;
+    console.log(`${ok ? '  OK' : '  XX'}  드래프트 지표: ${name} — 기록 ${rows.length}건${rows[0] ? `(${rows[0].form})` : ''} · 안내 ${ctx ? '있음' : '없음'}${denied ? ' · 차단됨' : ''}`);
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
 // 한자 섞임 가드 (#1107). 커밋 메시지 · PR 제목 · 본문 · 코멘트에 한글과 붙은 한자가 있으면 거부한다.
 // 커밋 대상 파일 · 이슈 · 공개 표면이 아닌 명령은 보지 않는다. 플로우 진입 가드는 끈다.
 const HAN_DENY = '한자 섞임 가드';

@@ -155,6 +155,10 @@ const PR_DRAFT_GUARD_DISABLE = process.env.OPS_AGENT_PR_DRAFT_GUARD_DISABLE === 
 const PR_DRAFT_GUARD_DRYRUN = process.env.OPS_AGENT_PR_DRAFT_GUARD_DRYRUN === '1';
 // 최상위 생성 명령. `env` 접두와 `create` 앞의 -R/--repo 도 같은 생성이다. 판정은 detectNonDraftPrCreate.
 const PR_CREATE_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*create\b/;
+const DRAFT_IN_SKIP_NOTICE = '[ops-agent 초안 PR 가드 · 안내] 이 레포는 드래프트 생략(skip-draft)을 선언했습니다. '
+  + 'PR 은 레포를 작업 위치로 두고 다른 명령과 묶지 않은 단독 `gh pr create`(드래프트 플래그 없이)로 만듭니다. '
+  + '묶은 명령은 대상 레포를 알 수 없어 드래프트가 필수가 됩니다 (ADR-0044). 이 생성은 지표에 기록했습니다 (#1178).';
+
 // 준비 완료 전환(#977). 전환은 리뷰어에게 알림이 가는 행동이라 작성자가 웹에서 한다. 리뷰 준비와 머지 준비는 초안 상태로 진행한다.
 // `--undo`(초안으로 되돌림)는 대상이 아니다. GraphQL 전환 mutation 도 같은 전환이다. 판정은 detectPrReady.
 const PR_READY_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*ready\b/;
@@ -638,6 +642,13 @@ if (!DISABLE) {
             }));
             process.exit(0);
           }
+        }
+        // 드래프트 생략 선언 레포에서 드래프트로 만든 생성은 막지 않고 기록 · 안내한다 (#1178).
+        // 선언의 효과(전환 단계 제거)가 사라진 사례를 세어야 선언 · 안내를 고칠지 판단할 수 있다.
+        const draftInSkip = draftCreateInSkipRepo(command, hookInput.cwd);
+        if (draftInSkip) {
+          recordDraftInSkipRepo(hookInput, draftInSkip);
+          passNotice = (passNotice ? passNotice + '\n' : '') + DRAFT_IN_SKIP_NOTICE;
         }
       }
 
@@ -1481,6 +1492,44 @@ function detectNonDraftPrCreate(command) {
     if (!draft) hits.push(seg.length > 120 ? seg.slice(0, 120) + '…' : seg);
   }
   return hits;
+}
+
+// 드래프트 플래그를 단 `gh pr create` 가 드래프트 생략 선언 레포를 향하는가 (#1178).
+// 통과 판정(draftSkipDeclared)과 달리 기록 전용이라 묶은 명령도 `cd` · `git -C` 로 작업 위치를 구해 본다.
+// 위치를 구하지 못하면(셸 변수 등) 기록하지 않는다. 돌려주는 값: { repo, form: 'standalone' | 'compound' } 또는 null.
+function draftCreateInSkipRepo(command, hookCwd) {
+  const segs = gateSegments(command);
+  const hasDraftCreate = segs.some(seg => {
+    if (!PR_CREATE_RE.test(seg)) return false;
+    const tokens = seg.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/g) || [];
+    return tokens.some(t => t === '--draft' || /^-[few]*d(?:=(?:true|1|t))?$/i.test(t) || /^--draft=(?:true|1|t)$/i.test(t));
+  });
+  if (!hasDraftCreate) return null;
+  const { cwd, ok } = resolveCommandCwd(command, hookCwd);
+  if (!ok) return null;
+  const root = findRepoRoot(cwd);
+  if (!root) return null;
+  try {
+    const d = JSON.parse(readFileSync(join(root, '.ops-agent', 'repo-' + 'type.json'), 'utf8'));
+    if (!(Array.isArray(d.allow) && d.allow.includes('skip-draft'))) return null;
+  } catch {
+    return null;
+  }
+  return { repo: basename(root), form: segs.length === 1 ? 'standalone' : 'compound' };
+}
+
+function recordDraftInSkipRepo(hookInput, hit) {
+  try {
+    const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'draft-in-skip-repo.jsonl');
+    mkdirSync(dirname(file), { recursive: true });
+    appendFileSync(file, JSON.stringify({
+      ts: new Date().toISOString(),
+      session: hookInput.session_id || '',
+      ...(hookInput.agent_id ? { agent: hookInput.agent_id } : {}),
+      repo: hit.repo,
+      form: hit.form,
+    }) + '\n');
+  } catch { /* 기록 실패는 판정에 영향을 주지 않는다 */ }
 }
 
 // 명령 대상 레포가 레포 유형 선언의 허용 목록에 `skip-draft` 를 두었는가 (#1166, ADR-0044).
