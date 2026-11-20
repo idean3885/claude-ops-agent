@@ -508,6 +508,54 @@ def test_path_baseline_cap_and_state() -> None:
         check("경로 기준선: 판정 실패가 실패 횟수 · 판정한 세션 표시를 바꾸지 않는다", not st.get("fails") and not st.get("judged"), str(st))
 
 
+def test_path_baseline_scope() -> None:
+    """#1162: 경로 기준선의 범위. 답 0건 세션은 공용 상태를 쓰지 않고, 판 2 로 판정한 세션은 대상에서 빠지며,
+    비교는 같은 원인 갈래 판끼리만 한다 (ADR-0043 결정 3)."""
+    with tempfile.TemporaryDirectory() as home:
+        fake = make_fake_claude(home)
+        d = os.path.join(home, ".claude", "projects", "proj")
+        os.makedirs(d, exist_ok=True)
+        empty = os.path.join(d, "noanswer.jsonl")
+        with open(empty, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "user", "message": {"content": "질문만"}}, ensure_ascii=False) + "\n")
+        seed_state(home, 86400)
+        run(home, "worker", empty, env={"OPS_AGENT_LESSONS_CLAUDE": fake, "OPS_AGENT_LESSONS_PATH_BASELINE": "1"})
+        check("경로 기준선: 답 0건 세션은 판정한 세션 표시(공용 상태)를 쓰지 않는다", not read_state(home).get("judged"), str(read_state(home)))
+        run(home, "worker", empty, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        check("대조: 평소 판정은 답 0건 세션을 판정한 세션으로 표시한다", empty in read_state(home).get("judged", {}), str(read_state(home)))
+    with tempfile.TemporaryDirectory() as home:
+        fake = make_fake_claude(home)
+        p1 = write_transcript(home, "proj", "old1", 3 * 86400)
+        p2 = write_transcript(home, "proj", "new2", 3 * 86400)
+        write_rows(home, [
+            {"ts": iso(3), "transcript": p1, "session": "old1", "mtime": 1, "answers": 2, "corrections": [], "status": "reviewed"},
+            {"ts": iso(3), "transcript": p2, "session": "new2", "mtime": 1, "answers": 2, "taxonomy": 2, "corrections": [], "status": "reviewed"},
+        ])
+        seed_state(home, 86400)
+        r = run(home, "baseline", "--path", env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        check("경로 기준선: 판 2 로 판정한 세션은 대상에서 빠진다", "경로 기준선 판정 1세션" in r.stdout, r.stdout + r.stderr)
+        end = time.time() + 15
+        while time.time() < end and not read_state(home).get("path_baseline_at"):
+            time.sleep(0.2)
+        while time.time() < end and os.path.exists(lessons(home, "judge.lock")):
+            time.sleep(0.2)
+        pb = [json.loads(l)["transcript"] for l in open(lessons(home, "path-baseline.jsonl"), encoding="utf-8")] if os.path.exists(lessons(home, "path-baseline.jsonl")) else []
+        check("경로 기준선: 다시 판정한 세션은 판 1 세션뿐", pb == [p1], str(pb))
+    old = datetime.datetime(2026, 1, 5).timestamp()
+    new = datetime.datetime(2026, 1, 20).timestamp()
+    with tempfile.TemporaryDirectory() as home:
+        write_rows(home, [
+            {"ts": iso(0), "transcript": "a", "mtime": old, "answers": 10, "taxonomy": 2, "corrections": [{"cause": "path"}] * 2, "status": "reviewed"},
+            {"ts": iso(0), "transcript": "b", "mtime": new, "answers": 10, "taxonomy": 2, "corrections": [{"cause": "path"}], "status": "reviewed"},
+            {"ts": iso(0), "transcript": "d", "mtime": new, "answers": 10, "corrections": [{"cause": "path"}] * 3, "status": "reviewed"},
+        ])
+        with open(lessons(home, "path-baseline.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": iso(0), "transcript": "a", "first_mtime": old, "answers": 10, "taxonomy": 2, "corrections": [{"cause": "path"}] * 5}) + "\n")
+        r = run(home, "report", "--split", "2026-01-10")
+        check("판: 경로 비교는 판 2 행끼리(판 2 판정 행이 있는 세션은 기준선 파일 행을 쓰지 않고, 시범 쪽 판 1 행은 뺀다)",
+              "| 원인 경로 | 80.0% (1세션 · 답 10) | 90.0% (1세션 · 답 10) |" in r.stdout, r.stdout)
+
+
 def main() -> int:
     test_selection_and_worker()
     test_guards()
@@ -525,6 +573,7 @@ def main() -> int:
     test_sessions_from()
     test_path_baseline()
     test_path_baseline_cap_and_state()
+    test_path_baseline_scope()
     print(f"통과 {passed} · 실패 {len(failures)}")
     for f in failures:
         print(f"  실패: {f}")
