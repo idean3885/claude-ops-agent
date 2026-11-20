@@ -20,6 +20,14 @@ const COMMIT_VALUE_LONG = new Set(['message', 'file', 'author', 'date', 'templat
   'fixup', 'squash', 'cleanup', 'trailer', 'pathspec-from-file']);
 // 값을 붙여서만 받는 긴 옵션(다음 낱말은 값이 아니다)
 const COMMIT_OPTIONAL_LONG = new Set(['untracked-files', 'gpg-sign']);
+// 값을 받지 않는 긴 옵션 (git-commit(1)). 여기에도 위에도 없는 긴 옵션(줄여 쓴 이름 · 새 옵션)은 다음 낱말이 값인지 경로인지 모른다
+const COMMIT_FLAG_LONG = new Set(['all', 'include', 'only', 'patch', 'interactive', 'amend', 'no-edit', 'edit', 'reset-author',
+  'short', 'branch', 'porcelain', 'long', 'null', 'signoff', 'no-signoff', 'verify', 'no-verify', 'allow-empty', 'allow-empty-message',
+  'no-post-rewrite', 'dry-run', 'status', 'no-status', 'no-gpg-sign', 'quiet', 'verbose', 'pathspec-file-nul']);
+// 다른 셸에 글자로 명령을 넘기는 것. `bash -c '…'` · `eval '…'` 안의 명령도 이 명령의 일이다
+const SHELL_NAMES = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
+// git add 경로가 파일 하나를 가리킨다고 볼 수 있는 꼴: 글롭 · 디렉토리 꼴이 아니고 이름에 확장자가 있다
+const isLiteralFile = p => !/^[:!]|[*?[\]]|\/$/.test(p) && /^[^.][^/]*\.[^./]+$/.test(p.replace(/^.*\//, ''));
 // 값을 받는 짧은 옵션. 같은 낱말 안에서 뒤 글자가 있으면 그것이 값이다(`-m"a b"` · `-mfix`)
 const COMMIT_VALUE_SHORT = new Set(['m', 'F', 'c', 'C', 't']);
 // 값을 붙여서만 받는 짧은 옵션
@@ -30,7 +38,7 @@ const COMMAND_PREFIX = new Set(['sudo', 'env', 'command', 'exec', 'time', 'nohup
 /**
  * 셸 명령을 단순 명령 목록으로 읽는다. 각 명령은 { start, words: [{ text, dynamic }] } 다.
  * dynamic 은 낱말에 명령 대체 · 변수가 있어 글자로 값을 알 수 없다는 뜻이다.
- * 리다이렉션 대상 · 히어닥 본문은 낱말에 넣지 않는다. 명령 대체 안의 명령은 바깥 목록에 넣지 않는다.
+ * 리다이렉션 대상 · 히어닥 본문은 낱말에 넣지 않는다. 명령 대체 안의 명령은 바깥 명령보다 앞에 넣는다(먼저 실행된다).
  * 인용이 닫히지 않는 등 읽지 못하면 null.
  */
 export function shellSimpleCommands(src) {
@@ -45,6 +53,8 @@ function lex(src, start, inSubst) {
   let word = null;
   let redirect = null; // 'target' | 'heredoc' | null
   const heredocs = [];
+  // 명령 대체 안의 명령. 바깥 명령보다 먼저 실행되므로 바깥 명령을 넣기 전에 목록에 넣는다
+  const inner = [];
   let depth = 0;
   let i = start;
   const n = src.length;
@@ -68,6 +78,8 @@ function lex(src, start, inSubst) {
   };
   const endCommand = () => {
     endWord();
+    cmds.push(...inner);
+    inner.length = 0;
     if (words.length) cmds.push({ start: cmdStart, words });
     words = [];
   };
@@ -176,6 +188,7 @@ function lex(src, start, inSubst) {
       word.dynamic = true;
       const sub = lex(src, i + 2, true);
       if (!sub) return null;
+      inner.push(...sub.cmds);
       i = sub.end;
       continue;
     }
@@ -216,6 +229,7 @@ function lex(src, start, inSubst) {
           word.dynamic = true;
           const sub = lex(src, j + 2, true);
           if (!sub) return null;
+          inner.push(...sub.cmds);
           j = sub.end;
           continue;
         }
@@ -261,7 +275,9 @@ function stripPrefix(words) {
  * 커밋 인자(commit 뒤 낱말)를 읽어 담길 범위를 낸다.
  * 인자대로의 범위를 내고, 글자로 범위를 확정하지 못하면(값을 모르는 경로 · pathspec 파일 · 앞선 git add) 넉넉한 범위를 낸다.
  */
-export function commitArgsScope(args, sawAdd) {
+export function commitArgsScope(args, added) {
+  const add = addState(added);
+  const sawAdd = add.broad || add.paths.length > 0;
   let all = false;
   let include = false;
   let uncertain = false;
@@ -284,6 +300,7 @@ export function commitArgsScope(args, sawAdd) {
       else if (name === 'pathspec-from-file') { uncertain = true; if (eq < 0) i++; }
       else if (COMMIT_VALUE_LONG.has(name) && eq < 0) i++;
       else if (COMMIT_OPTIONAL_LONG.has(name)) { /* 붙여 쓴 값만 받는다 */ }
+      else if (!COMMIT_FLAG_LONG.has(name) && eq < 0 && i + 1 < args.length) uncertain = true;
       continue;
     }
     if (t.startsWith('-') && t.length > 1) {
@@ -303,8 +320,17 @@ export function commitArgsScope(args, sawAdd) {
   if (all) precise = [{ rev: 'HEAD', paths: [] }];
   else if (paths.length) precise = include ? [{ rev: '--cached', paths: [] }, { rev: 'HEAD', paths }] : [{ rev: 'HEAD', paths }];
   else precise = [{ rev: '--cached', paths: [] }];
-  if (uncertain || sawAdd) {
+  if (uncertain || add.broad) {
     return { scopes: broadScopes(sawAdd) };
+  }
+  if (add.paths.length) {
+    // 앞선 git add 가 파일 경로만 담으면 그 경로만 더 담긴다. 추적 파일 변경은 HEAD 대비, 새 md 는 추적하지 않는 파일로 본다
+    const scopes = [...precise];
+    if (!scopes.some(s => s.rev === '--cached' && !s.paths.length)) scopes.push({ rev: '--cached', paths: [] });
+    if (!all) scopes.push({ rev: 'HEAD', paths: add.paths });
+    const md = add.paths.filter(p => /\.md$/i.test(p));
+    if (md.length) scopes.push({ rev: 'untracked', paths: md });
+    return { scopes };
   }
   return { scopes: precise };
 }
@@ -315,6 +341,56 @@ export function broadScopes(withUntracked) {
   return s;
 }
 
+// 앞선 git add 들이 담는 것. broad 면 무엇을 담는지 글자로 모른다. paths 는 파일 하나씩 가리키는 경로다
+function addState(added) {
+  if (!added) return { broad: false, paths: [] };
+  if (added === true) return { broad: true, paths: [] };
+  return added;
+}
+
+// git add 인자가 파일 경로만이면 그 경로 목록, 아니면(-A · -u · -p · 디렉토리 · 글롭 · 값을 모르는 경로) null
+function addLiteralPaths(args) {
+  const paths = [];
+  let rest = false;
+  for (const w of args) {
+    if (w.dynamic) return null;
+    const t = w.text;
+    if (!rest && t === '--') { rest = true; continue; }
+    if (!rest && t.startsWith('-')) {
+      if (['-v', '--verbose', '-f', '--force', '-N', '--intent-to-add'].includes(t)) continue;
+      return null;
+    }
+    if (!isLiteralFile(t)) return null;
+    paths.push(t.replace(/^\.\//, ''));
+  }
+  return paths.length ? paths : null;
+}
+
+// `bash -c '<글>'` · `eval <글>` 이 실행하는 글. 없거나 글자로 모르면 null
+function shellScript(w) {
+  const name = w[0] && w[0].text.replace(/^.*\//, '');
+  if (name === 'eval') return w.length > 1 && w.slice(1).every(x => !x.dynamic) ? w.slice(1).map(x => x.text).join(' ') : null;
+  if (!SHELL_NAMES.has(name)) return null;
+  for (let k = 1; k < w.length; k++) {
+    const t = w[k].text;
+    if (!t.startsWith('-') || t.startsWith('--')) return null;
+    if (t.slice(1).includes('c')) return w[k + 1] && !w[k + 1].dynamic ? w[k + 1].text : null;
+  }
+  return null;
+}
+
+// 셸 안쪽(bash -c · eval) 명령을 펼친다. 안쪽 명령의 위치는 감싼 명령의 위치다
+function flatten(cmds, depth = 0) {
+  const out = [];
+  for (const cmd of cmds) {
+    const script = depth < 3 ? shellScript(stripPrefix(cmd.words)) : null;
+    const inner = script === null ? null : shellSimpleCommands(script);
+    if (inner) out.push(...flatten(inner, depth + 1).map(c => ({ ...c, start: cmd.start })));
+    else out.push(cmd);
+  }
+  return out;
+}
+
 /**
  * 명령에 든 커밋들. [{ start, scopes }] (명령 순서).
  * 셸로 읽지 못하면 null 이다. 호출자가 넉넉한 범위로 다룬다.
@@ -323,8 +399,8 @@ export function analyzeCommits(command) {
   const cmds = shellSimpleCommands(command);
   if (!cmds) return null;
   const commits = [];
-  let sawAdd = false;
-  for (const cmd of cmds) {
+  let added = false;
+  for (const cmd of flatten(cmds)) {
     const w = stripPrefix(cmd.words);
     if (!w.length || w[0].text.replace(/^.*\//, '') !== 'git') continue;
     let k = 1;
@@ -333,9 +409,14 @@ export function analyzeCommits(command) {
       k += GIT_GLOBAL_VALUE.has(t) ? 2 : 1;
     }
     const sub = w[k] && w[k].text;
-    if (sub === 'add' || sub === 'stage') { sawAdd = true; continue; }
+    if (sub === 'add' || sub === 'stage') {
+      const paths = addLiteralPaths(w.slice(k + 1));
+      const prev = addState(added);
+      added = paths && !prev.broad ? { broad: false, paths: [...prev.paths, ...paths] } : true;
+      continue;
+    }
     if (sub !== 'commit') continue;
-    commits.push({ start: cmd.start, ...commitArgsScope(w.slice(k + 1), sawAdd) });
+    commits.push({ start: cmd.start, ...commitArgsScope(w.slice(k + 1), added) });
   }
   return commits;
 }

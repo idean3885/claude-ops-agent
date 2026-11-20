@@ -2239,8 +2239,10 @@ function detectRouteSurfaces(hookInput) {
     }
     if (GIT_COMMIT_RE.test(command)) {
       const cwd = resolveCommandCwd(command, hookInput.cwd || process.cwd(), true);
-      for (const c of cwd.ok ? commitsIn(command) : []) {
-        const docLines = commitDocLines(c.scopes, cwd.cwd);
+      // why: 지표는 최선만 한다. 셸 변수 cd 처럼 위치를 못 구하면 훅이 받은 작업 위치로 보고 센다 (#1186)
+      const base = cwd.ok ? cwd.cwd : (hookInput.cwd || process.cwd());
+      for (const c of commitsIn(command)) {
+        const docLines = commitDocLines(c.scopes, base);
         if (docLines !== null) found.push({ pos: c.start, surface: 'commit-md', bodyLines: docLines });
       }
       found.sort((a, b) => a.pos - b.pos);
