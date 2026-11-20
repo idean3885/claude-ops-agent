@@ -449,7 +449,7 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 | 항목 | 내용 |
 |------|------|
 | 선언 자리 | 레포 루트의 `.ops-agent/repo-type.json` = `{"type": "work" \| "principle" \| "storage"}`. 루트는 `.git` 이 있는 상위 디렉토리입니다. 선택 키 `"allow": ["git-default-push"]` 는 [대화창 위임](#대화창-위임)을, `"allow": ["skip-draft"]` 는 드래프트 PR 생략을 허용합니다. |
-| 드래프트 생략 | 드래프트 PR 은 모든 레포의 기본값입니다. `skip-draft` 를 선언한 레포만 드래프트 없는 생성과 준비 완료 전환이 통과합니다. 통과는 허용 목록으로 정합니다: 훅 cwd 가 선언 레포이고, 명령 하나가 단독으로 `gh pr create`(알려진 옵션만) 또는 `gh pr ready <번호>` 이고, 이스케이프 · `$` · 백틱이 없을 때뿐입니다. 그 밖(앞뒤 명령 · 환경 변수 접두 · 다른 레포 지정 · GraphQL 전환)은 기본값(드래프트 필수)을 따릅니다 ([ADR-0044](adr/0044-draft-pr-default-deny-with-repo-opt-out.md)). |
+| 드래프트 생략 | 드래프트 PR 은 모든 레포의 기본값입니다. `skip-draft` 를 선언한 레포만 드래프트 없는 생성과 준비 완료 전환이 통과합니다. 통과는 허용 목록으로 정합니다: 훅 cwd 가 선언 레포이고, 명령 하나가 단독으로 `gh pr create`(알려진 옵션만) 또는 `gh pr ready <번호>` 이고, 이스케이프 · `$` · 백틱이 없을 때뿐입니다. 그 밖(앞뒤 명령 · 환경 변수 접두 · 다른 레포 지정 · GraphQL 전환)은 기본값(드래프트 필수)을 따릅니다 ([ADR-0044](adr/0044-draft-pr-default-deny-with-repo-opt-out.md)). 선언 레포에서 드래프트 플래그를 단 생성은 막지 않고 `~/.claude/ops-agent/metrics/draft-in-skip-repo.jsonl` 에 단독 · 묶음 형태와 함께 기록하고, 단독 생성 방법을 안내합니다 (#1178). |
 | 기본값 | 파일이 없거나 파싱에 실패하거나 모르는 값이면 `work` 로 봅니다. 잘못 분류해도 피해가 작은 쪽입니다. |
 | 편집 차단 | 어시스턴트가 이 파일을 쓰지 못합니다. 유형을 AI 가 선언하면 자기 자율의 범위를 스스로 정하게 됩니다. |
 | 병합 거부 | `work` · `principle` 레포의 `gh pr merge` 는 `repo-merge` 갈래가 열려 있어도 차단합니다. |
