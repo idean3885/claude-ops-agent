@@ -228,6 +228,11 @@ expect('none', 'git commit --gpg-sign=ABCDEF12 -m x', 'pass', '--gpg-sign=<키>'
 // 따옴표 안의 커밋 글자는 커밋이 아니다
 expect('none', "cat <<'EOF' > /dev/null\nrun git commit -m x\nEOF", 'pass', '인용 구분자 히어닥 본문');
 expect('none', 'cat <<"EOF" > /dev/null\nrun $(git commit -m x)\nEOF', 'pass', '큰따옴표 구분자 히어닥 본문은 펼치지 않는다');
+expect('none', 'cat <<\\EOF > /dev/null\nrun $(git commit -m x)\nEOF', 'pass', '역슬래시 구분자 히어닥 본문은 펼치지 않는다 (#1188)');
+expect('none', 'gh pr view 1 --json title --jq "$(cat <<\'EOF\'\nsplit add and git commit\nEOF\n)"', 'pass', '큰따옴표 안 명령 대체의 인용 히어닥은 실제 히어닥이다 (#1188)');
+expect('none', "cat <<'A' > /dev/null\nit's\nA\ncat <<'B' > /dev/null\ngit commit -m x\nB", 'pass', '앞선 인용 히어닥 본문 뒤에서 따옴표 상태를 새로 센다 (#1188)');
+expect('none', "cat <<<'X'\ngit add . && git commit -m x\nX", 'deny', '히어스트링은 히어닥 머리가 아니다 (#1188)', { text: '단독으로 다시 실행' });
+expect('none', 'echo "<<\'X\'"\ngit add . && git commit -m x\nX', 'deny', '따옴표 안의 히어닥 머리 글자는 히어닥이 아니다 (#1188)', { text: '단독으로 다시 실행' });
 expect('none', 'echo "git commit -m x" > /dev/null', 'pass', '따옴표 안');
 // 비공개 레포의 커밋 모양은 바꾸지 않는다
 expect('none', 'git add . && git commit -m x', 'pass', '비공개 레포', { gh: 'private' });

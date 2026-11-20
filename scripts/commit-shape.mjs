@@ -16,8 +16,32 @@ function stripQuotedHeredocBodies(command) {
   let out = '';
   let from = 0;
   QUOTED_HEREDOC_HEAD_RE.lastIndex = 0;
+  // why: 히어스트링(<<<'X')과 따옴표 안의 「<<'X'」 글자는 히어닥이 아니다. 머리로 읽으면 뒤 줄의 실행되는 명령까지 지운다 (#1188)
+  //      명령 대체 $( 는 큰따옴표 안에서도 새 인용 문맥을 연다. "$(cat <<'EOF' … )" 의 머리는 실제 히어닥이다
+  let q = null;
+  let pos = 0;
+  let depth = 0;
+  const stack = [];
+  const advance = to => {
+    for (; pos < to; pos++) {
+      const c = command[pos];
+      if (q === "'") { if (c === "'") q = null; continue; }
+      if (c === '\\') { pos++; continue; }
+      if (c === '$' && command[pos + 1] === '(') { stack.push({ q, depth }); q = null; depth = 0; pos++; continue; }
+      if (q === '"') { if (c === '"') q = null; continue; }
+      if (c === '(') { depth++; continue; }
+      if (c === ')') {
+        if (depth > 0) depth--;
+        else if (stack.length) ({ q, depth } = stack.pop());
+        continue;
+      }
+      if (c === "'" || c === '"') q = c;
+    }
+  };
   let m;
   while ((m = QUOTED_HEREDOC_HEAD_RE.exec(command))) {
+    advance(m.index);
+    if (q !== null || command[m.index - 1] === '<') { QUOTED_HEREDOC_HEAD_RE.lastIndex = m.index + 2; continue; }
     const name = m[1] || m[2] || m[3];
     const bodyStart = m.index + m[0].length;
     const end = new RegExp(`(?:^|\\n)[ \\t]*${name}(?=\\s|\\)|$)`, 'g');
@@ -26,6 +50,8 @@ function stripQuotedHeredocBodies(command) {
     if (!e) break;
     out += command.slice(from, bodyStart);
     from = e.index;
+    pos = e.index;
+    q = null;
     QUOTED_HEREDOC_HEAD_RE.lastIndex = e.index + e[0].length;
   }
   return out + command.slice(from);
