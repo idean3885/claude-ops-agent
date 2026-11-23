@@ -23,6 +23,7 @@
 | 위치 | 역할 |
 |------|------|
 | `config/style-rules/forbidden-words.json` | 룰 전체 (표현 가드 패턴). 기계에 두는 개인 룰 파일은 읽지 않는다 (ADR-0026). |
+| `config/style-rules/base/terms.md` 의 「검출」 칸 | 표준 용어 항목에 단 정규식. 같은 Stop hook 이 직전 응답에서 찾아 표준 용어로 교정을 요청한다. 칸 해석은 `scripts/terms.py` 가 맡는다 (#1245) |
 
 룰 추가는 JSON 에 객체 하나만 더하면 즉시 반영됩니다(Python 정규식).
 
@@ -266,6 +267,28 @@ DB 클라이언트(`mysql` · `mariadb` · `mysqldump` · `mysqlsh`)를 실행�
 | 알려진 한계 | 뒤 가드(한시 권한 · 대외비 등)에 막힌 생성도 센다. 작업 위치를 구하지 못한 명령(셸 변수로 옮긴 디렉토리)과 세션 번호 없는 호출은 세지 않는다. |
 | 보는 자리 | 세션 시작 「경로 요약」 줄 |
 | 자체 점검 | `node scripts/selftest-action-gate.mjs` 「세션당 PR 지표」 |
+
+## 사용량 지표
+
+모델 사용량을 쓰는 작업의 비용을 5시간 · 주간 한도 대비 %, 토큰, 달러로 모은다 (#1242, [작업 원칙](working-principles.md) 「메트릭 수집은 자기 비용을 함께 수집한다」). 첫 대상은 레슨런 판정 · 처리다. 상태줄 입력에 계정의 사용률이 들어오므로 그것을 가로채 남기고, 같은 구간의 이 기기 사용량(API 환산 달러)과 맞춰 역산한다.
+
+```text
+상태줄 갱신 → usage-statusline.sh → 원래 상태줄 명령 → 출력 그대로
+상태줄 갱신 → usage-statusline.sh → (뒤로) usage-log.py record → metrics/usage-statusline.jsonl
+세션 시작 → lessons-judge.py spawn → (판정 뒤, 판정이 없으면 바로) usage-log.py estimate --write → metrics/usage-estimate.md
+```
+
+| 항목 | 값 |
+|------|-----|
+| 켜기 · 끄기 | `python3 ~/.claude/ops-agent/current/scripts/usage-log.py install` 이 지금 상태줄 명령을 `~/.claude/ops-agent/statusline/` 에 보관하고 래퍼로 바꾼다. 다시 실행해도 그대로다. `uninstall` 이 원복한다. 상태줄이 없었으면 래퍼는 기록만 하고 빈 출력을 낸다. |
+| 작업 흐름 | 모델을 부르지 않는다. 기록은 뒤로 떼어 상태줄이 기다리지 않고, 기록 · 파싱 실패는 무시한다. 상태줄 출력과 종료 코드는 원래 명령 그대로다. |
+| 상태줄 기록 | `metrics/usage-statusline.jsonl`. 세션별 마지막 값과 같으면 남기지 않는다. 필드: `ts` · `session` · `model` · `cost_usd`(세션 누적, API 환산) · `input_tokens` · `output_tokens`(세션 누적) · `rate_limits`(받은 모양 그대로: `five_hour` · `seven_day` 의 `used_percentage` · `resets_at` 과 다른 윈도우), 이름에 `model_scoped` 가 든 키도 그대로 |
+| 판정 비용 | 레슨런 판정은 비대화 실행이라 상태줄이 없다. `lessons/judgments.jsonl` 행의 `cost_usd` · `usage`(입력 · 출력 · 캐시 토큰)와, 같은 세션을 다시 판정해도 실행마다 이어지는 `judge_runs` 를 쓴다. |
+| 처리 구간 | /learn 시작 · 끝에 `usage-log.py mark learn start` · `mark learn end` 가 `metrics/usage-marks.jsonl` 에 세션 식별자와 시각을 남긴다. 그 세션 그 구간의 비용 증가분을 레슨런 몫으로 센다. 끝이 없는 구간은 세지 않고 수만 낸다. |
+| 역산 | 윈도우(`resets_at`)마다 Δ사용률(관측 최대 − 최소), 전체 달러(앞뒤 두 줄이 모두 그 윈도우에 든 세션별 증가분 합 + 관측 구간 안의 판정 비용), 계수(%/달러). 누적값이 줄면 재시작으로 보고 그 값을 새 기준으로 삼는다. 레슨런 몫 = 레슨런 달러 / 전체 달러(정확값), 추정 한도 % = 몫 × Δ사용률(추정값). 건별 % 는 내지 않는다. |
+| 보는 자리 | `metrics/usage-estimate.md` (또는 `usage-log.py estimate`). 맨 위 「재판단 자리」에 수집 평일 수 · 첫 주간 초기화 · 5시간 · 주간 계수의 중앙값과 변동계수가 모인다. 평일 3일째에 5시간 계수의 흩어짐으로 % 환산 유지 · 폐기를 판정한다. 주간 윈도우마다 「예측 대 실측」 줄이 있다: 관측 구간을 시각으로 반으로 나눠 전반 계수에 후반 달러를 곱한 예측 Δ% 와 후반 실측 Δ%, 그 비율이다. 전반 Δ% 나 달러가 0 이면 「표본 부족」으로 낸다. 첫 주간 초기화 직후 이 줄로 최종 판정한다. |
+| 알려진 한계 | 사용률은 계정 전체 값이라 이 기기 밖 사용이 계수에 섞이고, 정수라 작은 윈도우는 Δ사용률 0 으로 계수가 빠진다. 윈도우 경계를 넘는 증가분과 세션 첫 줄 이전 사용은 세지 않는다. |
+| 자체 점검 | `python3 scripts/selftest-usage-log.py`, 판정 쪽은 `python3 scripts/selftest-lessons-judge.py` |
 
 ## 세션 시작 경로 요약
 

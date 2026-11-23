@@ -48,6 +48,7 @@ TAXONOMY = 2             # 원인 갈래 판. 1 = 내용 · 수준 (ADR-0037), 2
 INPUT = 2                # 판정 입력 판. 1 = 문자열 사용자 발화만, 2 = 블록 목록 사용자 발화 포함 (#1237). 판이 다른 행은 전후 비교에 섞지 않는다
 INTERRUPT_MARK = "[Request interrupted"  # 하네스가 넣는 중단 표시. 사용자가 쓴 글이 아니다
 CAUSES = ("content", "level", "path")
+USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 
 PROMPT = """아래는 한 작업 세션의 대화다. A<번호> 는 어시스턴트 답, USER 는 사용자 발화다.
 사용자 발화가 직전 답을 바로잡는 경우(사실 · 판단 정정, 같은 것을 다시 물음, 분량 · 단계 · 형식 지적)만 교정으로 센다. 새 지시 · 승인 · 다음 질문은 교정이 아니다. 어시스턴트가 사용자의 말을 바로잡은 답(용어 교정 줄 등)은 어시스턴트의 실수가 아니므로 교정이 아니다.
@@ -375,6 +376,8 @@ def cmd_spawn() -> None:
         )
         state["last_scan"] = now
         save_state(state)
+    else:
+        start_estimate()
     pending = pending_count()
     last = state.get("last_approval")
     # why: 첫 승인 전에는 설치 시점부터 기한을 센다. 비어 있다고 바로 기한 경과로 치면 설치 첫 주에 매 세션 고지가 뜬다
@@ -390,19 +393,22 @@ def log_line(text: str) -> None:
         f.write(f"{now_iso()} {text}\n")
 
 
-def parse_verdict(stdout: str) -> tuple[dict, float]:
+def parse_verdict(stdout: str) -> tuple[dict, float, dict]:
     outer = json.loads(stdout)
     cost = float(outer.get("total_cost_usd") or outer.get("cost_usd") or 0)
+    # why: 달러만 남기면 판정 비용을 토큰으로 볼 수 없다. 같은 결과의 토큰을 함께 남긴다 (#1242)
+    raw = outer.get("usage") if isinstance(outer.get("usage"), dict) else {}
+    usage = {k: raw[k] for k in USAGE_KEYS if isinstance(raw.get(k), (int, float))}
     body = outer.get("result", outer) if isinstance(outer, dict) else outer
     if isinstance(body, str):
         start, end = body.find("{"), body.rfind("}")
         body = json.loads(body[start:end + 1])
     if not isinstance(body, dict) or not isinstance(body.get("corrections"), list):
         raise ValueError("corrections 없음")
-    return body, cost
+    return body, cost, usage
 
 
-def judge(text: str) -> tuple[dict, float]:
+def judge(text: str) -> tuple[dict, float, dict]:
     claude = os.environ.get("OPS_AGENT_LESSONS_CLAUDE") or "claude"
     proc = subprocess.run(
         [claude, "-p", "--model", "sonnet", "--output-format", "json"],
@@ -427,7 +433,7 @@ def judge_one(path: str, state: dict) -> None:
             state["judged"][path] = mtime
         return
     try:
-        verdict, cost = judge(text)
+        verdict, cost, usage = judge(text)
     except Exception as e:  # noqa: BLE001 판정 실패는 로그로 남기고 다음에 다시 한다
         if path_baseline:
             log_line(f"경로 기준선 판정 실패 {path}: {e}")
@@ -467,6 +473,9 @@ def judge_one(path: str, state: dict) -> None:
         status = "rejected"
     if baseline:
         status = "reviewed"
+    # why: 다시 판정하면 옛 행이 지워져 그 판정의 비용도 사라진다. 실행마다의 비용을 이어 붙여 사용량 역산이 빠짐없이 센다 (#1242)
+    runs = (prev.get("judge_runs") or [{"ts": prev.get("ts"), "cost_usd": prev.get("cost_usd"), "usage": prev.get("usage")}]) if prev else []
+    runs = runs + [{"ts": now_iso(), "cost_usd": cost, "usage": usage}]
     rows.append({
         "ts": now_iso(),
         "transcript": path,
@@ -478,6 +487,8 @@ def judge_one(path: str, state: dict) -> None:
         "model_answers": verdict.get("answers"),
         "corrections": corrections,
         "cost_usd": cost,
+        "usage": usage,
+        "judge_runs": runs,
         "status": status,
         "baseline": baseline,
         "taxonomy": TAXONOMY,
@@ -634,6 +645,20 @@ def cmd_worker(paths: list[str]) -> None:
             save_state(state)
     finally:
         release_lock()
+    start_estimate()
+
+
+def start_estimate() -> None:
+    """사용량 역산을 뒤로 떼어 돌린다. 모델을 부르지 않고 기록만 읽는다 (#1242).
+    판정이 있으면 판정 뒤에, 없으면 세션 시작 때 돈다. 스크립트가 없거나 실패해도 판정과 무관하다."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "usage-log.py")
+    if not os.path.exists(script):
+        return
+    try:
+        subprocess.Popen([sys.executable, script, "estimate", "--write"], start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
 
 
 # --- report / samples / approve ---

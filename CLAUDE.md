@@ -251,9 +251,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-forbidden-words.py
   ```
-- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재되고, 정답률 집계가 무너지면 익히지 않은 항목이 제거 후보로 나온다.
+- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재되고, 정답률 집계가 무너지면 익히지 않은 항목이 제거 후보로 나온다. 「검출」 칸은 응답 검사 훅이 읽으므로 금지 표현 점검도 함께 돌린다.
   ```bash
   python3 scripts/selftest-terms.py
+  python3 scripts/selftest-forbidden-words.py
   ```
 - [ ] **`hooks/session-wrap-prompt.sh` 를 고쳤으면 자체 점검을 실행한다.** 발동 조건이 넓어지면 마무리 신호가 아닌 턴에 종결 절차가 끼어들고, 좁아지면 마무리 신호를 놓쳐도 신호가 없다.
   ```bash
@@ -293,6 +294,11 @@ main ────────────────●─────
   ```
 - [ ] **`scripts/lessons-judge.py` 를 고쳤으면 자체 점검을 실행한다.** 판정은 작업 시간 밖에서 조용히 돌아 재귀 가드 · 대상 선정 · 고지 조건이 무너져도 신호가 없다.
   ```bash
+  python3 scripts/selftest-lessons-judge.py
+  ```
+- [ ] **`scripts/usage-log.py` · `scripts/usage-statusline.sh` 를 고쳤으면 자체 점검을 실행한다.** 래퍼는 상태줄이 갱신될 때마다 돌아 출력이 깨지면 작업 화면이 깨지고, 기록 · 역산이 무너지면 판정 비용의 한도 몫이 신호 없이 틀린다.
+  ```bash
+  python3 scripts/selftest-usage-log.py
   python3 scripts/selftest-lessons-judge.py
   ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
