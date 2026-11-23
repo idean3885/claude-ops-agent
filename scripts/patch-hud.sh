@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-HUD_CACHE="$HOME/.claude/plugins/cache/claude-hud/claude-hud"
+HUD_CACHE="${PATCH_HUD_CACHE:-$HOME/.claude/plugins/cache/claude-hud/claude-hud}"
 
 LATEST=$(ls -1 "$HUD_CACHE" 2>/dev/null | sort -V | tail -1)
 if [ -z "$LATEST" ]; then
@@ -33,38 +33,12 @@ import os, pathlib
 target = pathlib.Path(os.environ["PATCH_TARGET"])
 content = target.read_text()
 
-original = "\n".join([
-    "  const physicalLines = lines.flatMap(line => line.split('\\n'));",
-    "  // Only wrap when terminal width is real (known). When width is the",
-    "  // UNKNOWN_TERMINAL_WIDTH fallback, wrapping would use an arbitrary value",
-    "  // and produce incorrect line breaks.",
-    "  const wrapWidth = terminalWidth !== UNKNOWN_TERMINAL_WIDTH ? (terminalWidth ?? 0) : 0;",
-    "  const visibleLines = physicalLines.flatMap(line => wrapLineToWidth(line, wrapWidth));",
-    "",
-    "  for (const line of visibleLines) {",
-    "    const outputLine = `${RESET}${line}`;",
-    "    console.log(outputLine);",
-    "  }",
-])
+# claude-hud 0.15 렌더 구조(src/render/index.ts renderLines)를 기준으로 한다 (#1238)
+original = "    .flatMap((line) => wrapToWidth(line, frame.width ?? 0))"
 
 patched = "\n".join([
-    "  const physicalLines = lines.flatMap(line => line.split('\\n'));",
-    "  // Only wrap when terminal width is real (known). When width is the",
-    "  // UNKNOWN_TERMINAL_WIDTH fallback, wrapping would use an arbitrary value",
-    "  // and produce incorrect line breaks.",
-    "  const wrapWidth = terminalWidth !== UNKNOWN_TERMINAL_WIDTH ? (terminalWidth ?? 0) : 0;",
-    "",
-    "  if (lineLayout === 'compact') {",
     "    // Compact: single line, no wrap, no truncation — terminal clips naturally",
-    "    for (const line of physicalLines) {",
-    "      console.log(`${RESET}${line}`);",
-    "    }",
-    "  } else {",
-    "    const visibleLines = physicalLines.flatMap(line => wrapLineToWidth(line, wrapWidth));",
-    "    for (const line of visibleLines) {",
-    "      console.log(`${RESET}${line}`);",
-    "    }",
-    "  }",
+    "    .flatMap((line) => ((ctx.config?.lineLayout ?? 'expanded') === 'compact' ? [line] : wrapToWidth(line, frame.width ?? 0)))",
 ])
 
 if original not in content:
