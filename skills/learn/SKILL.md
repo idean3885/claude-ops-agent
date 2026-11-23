@@ -23,11 +23,11 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 /learn 을 부르면 절차 전에 다음을 한다.
 
 1. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py report` 로 정답률 · 원인 · 승인 대기를 보인다. 기준선이 아직 없으면 `baseline` 을 한 번 실행해 지난 기록 표본으로 만든다. 경로 기준선이 없으면(`report --split` 의 원인 경로 행이 「비교 불가」) `baseline --path` 를 한 번 실행한다.
-2. 한 번에 올리는 승인 항목은 report 의 「이번 승인 묶음」 5건까지이고, 3분 안에 끝낸다. 넘는 건은 남겨 다음 마무리로 미룬다. 묶음 줄의 「등재 후보」 수만큼만 대조하고, `admit` 이 「없음」인 교정은 넘어간다.
+2. 한 번에 올리는 승인 항목은 report 의 「이번 승인 묶음」 등재 후보 5개까지이고, 3분 안에 끝낸다. 묶음은 세션이 아니라 후보 단위다. 같은 자산이 재발한 후보가 먼저 오고, 한 세션의 남은 후보는 그 세션에 남아 다음 마무리로 넘어간다 (#1209). `admit` 이 「없음」인 교정은 묶음에 오지 않는다.
 3. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py samples` 로 표본 5건을 사용자에게 판정받고, 답마다 `sample-record <트랜스크립트> <답> <correct|content|level|path>` 로 남긴다. 기계 판정과 사람 판정의 일치도를 보는 표본이다.
 4. report 의 「자산이 있었는데 틀린 답」 표에서 후보(같은 자산 2회 이상)마다, 그 자산에 도구 경계 로드 자리를 줄지 사용자에게 승인받는다 (lessons.md 「도구 경계에서 로드한다」).
 5. 아래 절차(대조 · 게이트 · 등재)로 간다.
-6. 끝나면 `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py approve` 로 이번 묶음만 닫는다. 보이지 않은 대기는 닫지 않는다.
+6. 끝나면 `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py approve` 로 이번 묶음의 후보만 닫는다. 보이지 않은 후보는 닫지 않고, 세션은 남은 후보가 없을 때 검토 완료가 된다.
 
 ## 절차
 
