@@ -1,6 +1,6 @@
 # ADR-0037: 레슨런은 작업 시간 밖에서 판정하고 정답률로 효과를 잰다
 
-- 상태: accepted (결정 3 의 원인 둘 · 결정 5 의 기준선 재생성 금지는 [ADR-0043](0043-doc-structure-change-routes-through-expert.md) 이 경로 원인에 한해 대체)
+- 상태: accepted (결정 3 의 원인 둘 · 결정 5 의 기준선 재생성 금지는 [ADR-0043](0043-doc-structure-change-routes-through-expert.md) 이 경로 원인에 한해 대체. 결정 2 의 승인 시점 · 묶음 상한은 [ADR-0047](0047-lesson-approval-opens-at-session-wrap-with-caps.md) 이 세션 마무리 묶음 5건으로 대체)
 - 일시: 2026-11-13
 - 관련: #986, #991(실행 경로 실측), #992(구현, #986 으로 합침), #775(닫음, 이 결정이 이어받음), ADR-0022(무엇을 남기는가), ADR-0023(관찰), #516(정규식 교정 판별 제거)
 

@@ -9,6 +9,7 @@
     lessons-judge.py samples [--n 5]       사람이 판정할 표본
     lessons-judge.py sample-record <transcript> <answer> <correct|content|level|path>
     lessons-judge.py approve               이번 승인 묶음을 검토 완료로 바꾼다
+    lessons-judge.py wrap                  세션 마무리 훅. 올릴 대기가 있으면 승인 묶음 안내 한 줄 (ADR-0047)
     lessons-judge.py baseline [--sample 20] 기준선 1회: 설치 이전 지난 기록 표본을 판정한다 (다시 실행하지 않는다)
     lessons-judge.py baseline --path [--sample 20]  경로 원인 기준선 1회: 원인 둘 시절에 판정한 세션을 다시 판정한다 (ADR-0043)
 
@@ -40,15 +41,17 @@ SAMPLE_GOAL = 50
 AGREEMENT_MIN = 0.8      # 사람 표본과의 일치도가 이 값 밑이면 기계 판정 지표를 쓰지 않는다 (ADR-0037)
 DAILY_MAX = 10           # 하루 판정 상한. 비용이 사용 한도를 갉아먹지 않게 한다
 INPUT_CAP = 150_000      # 판정 입력 글자 상한 (#991 실측: 14만 자 ≈ 0.41달러)
-APPROVE_BATCH = 10       # 한 번에 올리고 닫는 승인 건수
+APPROVE_BATCH = 5        # 한 번에 올리고 닫는 승인 건수. 세션 마무리 3분 안에 끝나는 양이다 (ADR-0047)
+EXPIRE_DAYS = 14         # 이보다 오래된 대기는 만료로 닫는다. 맥락이 사라진 세션은 판정 가치가 낮다 (ADR-0047)
 TAXONOMY = 2             # 원인 갈래 판. 1 = 내용 · 수준 (ADR-0037), 2 = 내용 · 수준 · 경로 (ADR-0043). 판이 다른 행은 경로를 비교하지 않는다
 CAUSES = ("content", "level", "path")
 
 PROMPT = """아래는 한 작업 세션의 대화다. A<번호> 는 어시스턴트 답, USER 는 사용자 발화다.
 사용자 발화가 직전 답을 바로잡는 경우(사실 · 판단 정정, 같은 것을 다시 물음, 분량 · 단계 · 형식 지적)만 교정으로 센다. 새 지시 · 승인 · 다음 질문은 교정이 아니다.
 교정마다 원인을 content(질문에 맞게 답하지 못함), level(정해 둔 수준 · 분량 · 형식에 맞추지 못함), path(불렀어야 할 스킬 · 전문가 · 검증 단계를 부르지 않고 직접 해서 생긴 교정) 중 하나로 분류한다. 사용자 지적이 부르지 않은 스킬 · 전문가 · 단계를 가리키면 path 를 우선한다.
+admit: 그 교정에서 남길 것이 등재 조건에 드는지 분류한다. fact(다시 조사하려면 비용이 드는 환경 사실) · procedure(되돌릴 수 없는 작업의 절차) · taste(추측할 수 없는 사용자 취향) · none(그 밖. 판단 · 태도 · 그 자리의 실수).
 asset_hint: 그 실수를 막을 수 있던 규칙 · 원칙 · 자산이 대화 안에 언급되었거나 사용자가 「이미 정해 둔 것」이라고 했으면, 대화에 나온 파일 경로나 이름을 그대로 옮긴다(바꿔 부르지 않는다). 없으면 빈 문자열.
-JSON 한 줄만 출력: {"answers": <A 개수>, "corrections": [{"answer": "A12", "cause": "content|level|path", "why": "<20자>", "asset_hint": ""}]}
+JSON 한 줄만 출력: {"answers": <A 개수>, "corrections": [{"answer": "A12", "cause": "content|level|path", "admit": "fact|procedure|taste|none", "why": "<20자>", "asset_hint": ""}]}
 
 """
 
@@ -273,6 +276,7 @@ def cmd_spawn() -> None:
         # why: 설치 시점(since)을 지금 저장하지 않으면 매 실행마다 「지금」이 되어 판정이 영영 시작되지 않는다
         save_state(state)
     now = time.time()
+    close_stale()
     targets = select_targets(state, session_id, now)
     if targets and not lock_active():
         log = open(lesson_path("judge.log"), "a", encoding="utf-8")
@@ -349,7 +353,7 @@ def judge_one(path: str, state: dict) -> None:
             log_line(f"skip {path}")
         return
     corrections = [
-        {k: c.get(k, "") for k in ("answer", "cause", "why", "asset_hint")}
+        {k: c.get(k, "") for k in ("answer", "cause", "admit", "why", "asset_hint")}
         for c in verdict["corrections"] if isinstance(c, dict)
     ]
     if path_baseline:
@@ -361,10 +365,14 @@ def judge_one(path: str, state: dict) -> None:
     prev = next((r for r in reversed(old) if r.get("transcript") == path), None)
     rows = [r for r in old if r.get("transcript") != path]
     # why: 이어 쓴 세션을 다시 판정해도 이미 승인한 교정을 다시 올리지 않고, 기간은 처음 판정한 시점의 세션 시각으로 고정한다
-    seen = {c.get("answer") for c in prev.get("corrections", [])} if prev and prev.get("status") == "reviewed" else set()
-    status = "pending" if any(c.get("answer") not in seen for c in corrections) or not prev or prev.get("status") == "pending" else "reviewed"
+    # why: 기각 · 만료로 닫힌 세션도 검토가 끝난 것이다. reviewed 만 보면 그 세션을 다시 판정할 때 옛 교정이 후보로 되살아난다
+    closed = bool(prev) and prev.get("status") != "pending"
+    seen = {c.get("answer") for c in prev.get("corrections", [])} if closed else set()
+    status = "pending" if any(c.get("answer") not in seen for c in corrections) or not closed else prev.get("status", "reviewed")
     first_mtime = (prev.get("first_mtime") or prev.get("mtime")) if prev else mtime
     baseline = bool(os.environ.get("OPS_AGENT_LESSONS_BASELINE"))
+    if status == "pending" and not has_candidate(corrections, seen):
+        status = "rejected"
     if baseline:
         status = "reviewed"
     rows.append({
@@ -387,6 +395,38 @@ def judge_one(path: str, state: dict) -> None:
     state["fails"].pop(path, None)
     if os.environ.get("OPS_AGENT_LESSONS_BASELINE") and not state.get("baseline_at"):
         state["baseline_at"] = today()
+
+
+def has_candidate(corrections: list[dict], seen: set) -> bool:
+    """사람에게 올릴 교정이 있는가. 판정 전 행(admit 없음)은 후보로 둔다. 확인 없이 닫지 않는다."""
+    return any(c.get("answer") not in seen and c.get("admit") != "none" for c in corrections)
+
+
+def close_stale() -> None:
+    """올릴 것이 없는 대기를 닫는다. 교정이 없거나 모두 등재 조건 없음이면 기각, 기한이 지나면 만료.
+
+    판정이 잠금을 쥐고 있으면 이번에는 건너뛴다. 다음 세션 시작이나 보고에서 다시 닫는다.
+    """
+    if not acquire_lock():
+        return
+    try:
+        path = lesson_path("judgments.jsonl")
+        rows = read_jsonl(path)
+        cutoff = time.time() - EXPIRE_DAYS * 86400
+        changed = False
+        for r in rows:
+            if r.get("status") != "pending":
+                continue
+            if not has_candidate(r.get("corrections", []), set()):
+                r["status"] = "rejected"
+                changed = True
+            elif session_time(r) < cutoff:
+                r["status"] = "expired"
+                changed = True
+        if changed:
+            rewrite_jsonl(path, rows)
+    finally:
+        release_lock()
 
 
 def record_path_baseline(path: str, mtime: float, answers: int, corrections: list[dict], state: dict) -> None:
@@ -554,6 +594,7 @@ def cmd_split(rows: list[dict], start: str) -> None:
 
 
 def cmd_report(args: list[str]) -> None:
+    close_stale()
     rows = latest_per_transcript(read_jsonl(lesson_path("judgments.jsonl")))
     if "--split" in args:
         cmd_split(rows, args[args.index("--split") + 1])
@@ -581,6 +622,8 @@ def cmd_report(args: list[str]) -> None:
     print(f"| 원인 수준 | {by_cause['level']} |")
     print(f"| 원인 경로 | {by_cause['path']} |")
     print(f"| 승인 대기 | {pending}건 |")
+    print(f"| 자동 기각 | {sum(1 for r in rows if r.get('status') == 'rejected')}건 |")
+    print(f"| 기한 만료 | {sum(1 for r in rows if r.get('status') == 'expired')}건 |")
     base = [r for r in rows if r.get("baseline")]
     print(f"| 기준선 | {len(base)}세션{'' if base else ' (없음: baseline 을 한 번 실행)'} |")
     hints: dict[str, int] = {}
@@ -603,7 +646,8 @@ def cmd_report(args: list[str]) -> None:
     if waiting:
         print(f"\n이번 승인 묶음 ({len(waiting)}건, approve 가 이 건만 닫는다)\n")
         for r in waiting:
-            print(f"- {r['transcript']} · 답 {r.get('answers', 0)} · 교정 {len(r.get('corrections', []))}")
+            cands = sum(1 for c in r.get("corrections", []) if c.get("admit") != "none")
+            print(f"- {r['transcript']} · 답 {r.get('answers', 0)} · 교정 {len(r.get('corrections', []))} · 등재 후보 {cands}")
 
 
 def cmd_sessions_from(rows: list[dict], source: str, args: list[str]) -> None:
@@ -700,6 +744,15 @@ def cmd_approve() -> None:
         release_lock()
 
 
+def cmd_wrap() -> None:
+    """세션 마무리 훅이 부른다. 올릴 대기가 있을 때만 승인 묶음 안내 한 줄을 낸다 (ADR-0047)."""
+    close_stale()
+    pending = pending_count()
+    if pending:
+        print(f"레슨 승인 대기 {pending}건: 판결 전에 /learn 으로 승인 묶음 {min(pending, APPROVE_BATCH)}건만 연다. "
+              f"3분 상한이고, 남은 건은 다음 마무리로 넘긴다. {EXPIRE_DAYS}일이 지난 대기는 만료로 닫힌다.")
+
+
 def main(argv: list[str]) -> int:
     cmd, args = (argv[1] if len(argv) > 1 else ""), argv[2:]
     if cmd == "spawn":
@@ -714,6 +767,7 @@ def main(argv: list[str]) -> int:
         "samples": lambda: cmd_samples(args),
         "sample-record": lambda: cmd_sample_record(args),
         "approve": cmd_approve,
+        "wrap": cmd_wrap,
         "baseline": lambda: cmd_baseline(args),
     }
     if cmd not in handlers:

@@ -88,3 +88,7 @@ PY
 else
   echo "세션 인덱스 없음: 어댑터로 만들거나 시작한 이슈가 없다. 대상 이슈는 대화에서 모은다."
 fi
+
+# 레슨 승인 묶음: 올릴 대기가 있을 때만 한 줄. 판정 · 집계는 lessons-judge.py 가 하고 여기는 전달만 한다 (ADR-0047).
+# 실패해도 마무리 안내는 그대로 나간다.
+python3 "$PLUGIN_ROOT/scripts/lessons-judge.py" wrap 2>/dev/null || true

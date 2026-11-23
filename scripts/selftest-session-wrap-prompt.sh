@@ -114,5 +114,18 @@ check "지표에 세션 식별자를 남긴다" grep -q '"session":"sid-c"' "$HO
 run_hook "세션 마무리" "../x" >/dev/null
 check "지표의 세션 식별자는 경로 문자를 걷는다" grep -q '"session":"x"' "$HOME/.claude/ops-agent/metrics/session-wrap-prompt.jsonl"
 
+# 레슨 승인 묶음 (ADR-0047): 올릴 대기가 있을 때만 한 줄을 낸다
+check "레슨 대기가 없으면 레슨 줄을 내지 않는다" test -z "$(grep '레슨 승인 대기' <<<"$OUT")"
+mkdir -p "$HOME/.claude/ops-agent/lessons"
+printf '{"ts":"%s","transcript":"t1","answers":3,"corrections":[{"answer":"A1","cause":"content","admit":"fact"}],"status":"pending"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" > "$HOME/.claude/ops-agent/lessons/judgments.jsonl"
+OUT=$(run_hook "세션 마무리" "sid-l")
+check "레슨 대기가 있으면 승인 묶음 줄을 낸다" grep -q '레슨 승인 대기 1건' <<<"$OUT"
+
+BROKEN="$(mktemp -d)"; mkdir -p "$BROKEN/scripts"; printf 'raise SystemExit(3)\n' > "$BROKEN/scripts/lessons-judge.py"
+OUT=$(CLAUDE_PLUGIN_ROOT="$BROKEN" run_hook "세션 마무리" "sid-f"); RC=$?
+check "레슨 판정이 실패해도 마무리 안내는 나간다" grep -q '세션 마무리 감지' <<<"$OUT"
+check "레슨 판정이 실패해도 훅은 성공으로 끝난다" test "$RC" = 0
+rm -rf "$BROKEN"
+
 echo "$PASS/$((PASS+FAIL)) 통과"
 [ "$FAIL" -eq 0 ]
