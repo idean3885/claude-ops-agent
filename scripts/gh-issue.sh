@@ -244,17 +244,17 @@ cmd_create() {
   # 한자 섞임 검사. 제목 · 본문에 한글과 붙은 한자가 있으면 생성하지 않는다 (#1090). 사유는 모듈이 stderr 에 낸다
   node "$SCRIPT_DIR/han-intrusion.mjs" --text "$TITLE" "$BODY" || exit 1
 
-  # 글 판정. 본문이 문서 규칙의 확정 항목(L9 불릿 안 머리말 · PN8 물결표 취소선)에 걸리면 생성하지 않는다 (#1112).
+  # 글 판정. 본문이 문서 규칙의 확정 항목(L9 불릿 안 머리말 · PN8 물결표 취소선 · PN9 의도한 취소선)에 걸리면 생성하지 않는다 (#1112 · #1190).
   # 판정은 문서 규칙 카운터가 하고, PreToolUse 훅의 글 판정 가드와 같은 규칙 목록을 쓴다
   if [ "${OPS_AGENT_BODY_LINT_DISABLE:-}" != 1 ]; then
     local LINT
-    LINT=$(python3 "$SCRIPT_DIR/../config/style-rules/metrics/readability_count.py" --only L9,PN8 "$BODY" 2>/dev/null) || true
+    LINT=$(python3 "$SCRIPT_DIR/../config/style-rules/metrics/readability_count.py" --only L9,PN8,PN9 "$BODY" 2>/dev/null) || true
     if [ -n "$LINT" ]; then
       python3 -c '
 import json, sys
 hits = [l.split(" ", 1)[1] if " " in l else l for l in sys.argv[1].splitlines() if l.strip()]
 print(json.dumps({"status": "error", "step": "body-lint", "hits": hits,
-                  "message": "글 판정 실패. 생성하지 않았다. 머리말은 소제목 줄로 올린다 (readability L9) · 물결표는 이스케이프한다 (punctuation PN8)"}, ensure_ascii=False))' "$LINT" >&2
+                  "message": "글 판정 실패. 생성하지 않았다. 머리말은 소제목 줄로 올린다 (readability L9) · 물결표는 이스케이프한다 (punctuation PN8) · 정정은 취소선 없이 본문을 고친다 (punctuation PN9)"}, ensure_ascii=False))' "$LINT" >&2
       exit 1
     fi
   fi

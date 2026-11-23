@@ -19,7 +19,7 @@
 #   c. `.coderabbit.yaml` 이 있고 CodeRabbit 마지막 리뷰가 HEAD 가 아닌데 ## 자체 검증 이 비어 있음
 #      (체크 상태 SUCCESS 는 리뷰 여부와 무관하다. 리뷰의 commit_id 로 판정한다)
 #   d. 레포의 `.ops-agent/final-check.sh` 가 있고 종료 코드가 0 이 아님 (레포가 선언한 체크리스트)
-#   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) · PN8(물결표 취소선) 검출. 기존 줄의 검출과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
+#   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) · PN8(물결표 취소선) · PN9(의도한 취소선) 검출. 기존 줄의 검출과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
 #   f. 노트의 세 절 중 없거나 비어 있는 것
 #   g. merge-base 이후 커밋이 여럿인데 제목에 이슈 번호가 없는 커밋이 있거나, 한 이슈의 커밋이 둘 이상 (이슈마다 커밋 하나로 합친다, ADR-0039). 커밋 하나는 통과
 #   h. 노트의 ## 주장 검증 에 주장 검증 회차 기록이 없거나, 형식이 다른 회차 줄(그 절 또는 제목에 「주장」과 「검증」이 든 다른 절의,
@@ -271,7 +271,7 @@ if [ -f "$COUNTER" ]; then
   done < <(gh pr diff "$PR" --name-only 2>/dev/null)
   if [ "${#files[@]}" -gt 0 ]; then
     hits=$(cd "$tmp" && python3 "$COUNTER" "${files[@]}" 2>&1 || true)
-    # PR 이 추가한 줄(+ 줄의 새 파일 기준 줄 번호)을 `파일:줄` 로 모은다. 기존 줄의 PN7 · PN8 은 이 PR 의 몫이 아니다.
+    # PR 이 추가한 줄(+ 줄의 새 파일 기준 줄 번호)을 `파일:줄` 로 모은다. 기존 줄의 PN7 · PN8 · PN9 는 이 PR 의 몫이 아니다.
     added=$(gh pr diff "$PR" 2>/dev/null | awk '
       /^\+\+\+ b\// { f=substr($0, 7); next }
       /^\+\+\+ / { f=""; next }
@@ -281,16 +281,16 @@ if [ -f "$COUNTER" ]; then
       /^-/ { next }
       { n++ }
     ')
-    doc_all=$(grep -E '\[PN[78]\]' <<<"$hits" || true)
+    doc_all=$(grep -E '\[PN[789]\]' <<<"$hits" || true)
     doc_new=$(while IFS= read -r l; do
       [ -n "$l" ] && grep -qxF -- "${l%% *}" <<<"$added" && printf '%s\n' "$l"
     done <<<"$doc_all")
     total=$(grep -c . <<<"$doc_all" || true)
     new=$(grep -c . <<<"$doc_new" || true)
-    other=$(grep -vE '\[PN[78]\]' <<<"$hits" | sed '/^$/d' || true)
+    other=$(grep -vE '\[PN[789]\]' <<<"$hits" | sed '/^$/d' || true)
     [ -n "$other" ] && printf '참고 (실패 아님):\n%s\n' "$other"
-    [ "${total:-0}" -gt 0 ] && echo "참고 (실패 아님): 기존 줄의 PN7 · PN8 $((total - new))건"
-    [ "${new:-0}" -gt 0 ] && { fail e "PR 이 추가한 줄의 PN7 · PN8 ${new}건"; head -20 <<<"$doc_new"; }
+    [ "${total:-0}" -gt 0 ] && echo "참고 (실패 아님): 기존 줄의 PN7 · PN8 · PN9 $((total - new))건"
+    [ "${new:-0}" -gt 0 ] && { fail e "PR 이 추가한 줄의 PN7 · PN8 · PN9 ${new}건"; head -20 <<<"$doc_new"; }
   fi
 else
   echo "참고: 카운터를 찾지 못해 문서 검출을 건너뛴다 ($COUNTER)"
