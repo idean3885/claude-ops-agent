@@ -45,6 +45,8 @@ TERMS_ASSET = "terms.md"  # 표준 용어 목록. 항목마다 등재일이 있�
 APPROVE_BATCH = 5        # 한 번에 올리고 닫는 등재 후보 수. 세션 마무리 3분 안에 끝나는 양이다 (ADR-0047, 단위는 #1209 부터 후보)
 EXPIRE_DAYS = 7          # 이보다 오래된 대기는 만료로 닫는다. 맥락이 사라진 세션은 판정 가치가 낮고, 진짜 교훈은 재발해 다시 올라온다 (ADR-0047)
 TAXONOMY = 2             # 원인 갈래 판. 1 = 내용 · 수준 (ADR-0037), 2 = 내용 · 수준 · 경로 (ADR-0043). 판이 다른 행은 경로를 비교하지 않는다
+INPUT = 2                # 판정 입력 판. 1 = 문자열 사용자 발화만, 2 = 블록 목록 사용자 발화 포함 (#1237). 판이 다른 행은 전후 비교에 섞지 않는다
+INTERRUPT_MARK = "[Request interrupted"  # 하네스가 넣는 중단 표시. 사용자가 쓴 글이 아니다
 CAUSES = ("content", "level", "path")
 
 PROMPT = """아래는 한 작업 세션의 대화다. A<번호> 는 어시스턴트 답, USER 는 사용자 발화다.
@@ -146,8 +148,10 @@ def extract(path: str) -> list[tuple[str, str]]:
         kind = row.get("type")
         content = (row.get("message") or {}).get("content")
         if kind == "user":
-            if isinstance(content, str) and content.strip() and not content.lstrip().startswith("<"):
-                items.append(("USER", content.strip()[:USER_CAP]))
+            # why: 메타 행은 하네스가 넣은 글(스킬 본문 · 이미지 경로 주석)이다
+            text = "" if row.get("isMeta") else user_text(content)
+            if text:
+                items.append(("USER", text[:USER_CAP]))
         elif kind == "assistant" and isinstance(content, list):
             text = "\n".join(
                 b.get("text", "") for b in content
@@ -157,6 +161,20 @@ def extract(path: str) -> list[tuple[str, str]]:
                 count += 1
                 items.append((f"A{count}", text[:ANSWER_CAP]))
     return items
+
+
+def user_text(content) -> str:
+    """사용자가 쓴 글. 이미지 첨부 · 붙여 넣기 발화는 블록 목록으로 저장돼 텍스트 블록만 모은다 (#1237).
+    도구 결과 블록, 태그로 시작하는 주입 글, 중단 표시는 사용자가 쓴 글이 아니라 뺀다."""
+    if isinstance(content, str):
+        parts = [content]
+    elif isinstance(content, list):
+        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+    else:
+        parts = []
+    kept = [p.strip() for p in parts
+            if p.strip() and not p.lstrip().startswith(("<", INTERRUPT_MARK))]
+    return "\n".join(kept)
 
 
 def render(items: list[tuple[str, str]]) -> str:
@@ -463,6 +481,7 @@ def judge_one(path: str, state: dict) -> None:
         "status": status,
         "baseline": baseline,
         "taxonomy": TAXONOMY,
+        "input": INPUT,
     })
     rewrite_jsonl(out, rows)
     state["judged"][path] = mtime
@@ -516,6 +535,7 @@ def record_path_baseline(path: str, mtime: float, answers: int, corrections: lis
         "first_mtime": (prev.get("first_mtime") or prev.get("mtime")) if prev else mtime,
         "answers": answers,
         "taxonomy": TAXONOMY,
+        "input": INPUT,
         "corrections": [c for c in corrections if c.get("cause") == "path"],
     })
     rewrite_jsonl(out, rows)
@@ -639,12 +659,26 @@ def accuracy(rows: list[dict], cause: str = "") -> str:
     return f"{(1 - wrong / answers) * 100:.1f}% ({len(rows)}세션 · 답 {answers})" if answers else "-"
 
 
+def same_input(rows: list[dict], base: list[dict] | None = None) -> tuple[list[dict], list[dict], str]:
+    """가장 새 입력 판의 행만 남긴다. 뺀 세션이 있으면 알림 문구를 돌려준다.
+    why: 입력 판이 바뀌면 교정 수가 대책이 아니라 입력 때문에 달라진다 (#1237)"""
+    base = base or []
+    newest = max([r.get("input", 1) for r in rows + base] or [1])
+    dropped = {r.get("transcript") for r in rows + base if r.get("input", 1) != newest}
+    keep = lambda rs: [r for r in rs if r.get("input", 1) == newest]  # noqa: E731
+    note = f"입력 판이 달라 뺀 세션 {len(dropped)} (입력 판 {newest} 행끼리만 비교한다)" if dropped else ""
+    return keep(rows), keep(base), note
+
+
 def cmd_split(rows: list[dict], start: str) -> None:
     """시범 시작일 전(기준선)과 뒤의 정답률을 원인별로 나란히 낸다."""
     t = datetime.datetime.fromisoformat(start).timestamp()
+    rows, base, note = same_input(rows, read_jsonl(lesson_path("path-baseline.jsonl")))
     before = [r for r in rows if session_time(r) < t]
     after = [r for r in rows if session_time(r) >= t]
     print(f"## 기준선 비교 (시작일 {start})\n")
+    if note:
+        print(f"{note}\n")
     print("| 구분 | 기준선 (전) | 시범 (뒤) |\n|---|---|---|")
     # why: 전체(교정 수)는 원인 갈래와 무관하다. 내용 · 수준은 판 2 가 경로를 먼저 갈라 판 1 과 뜻이 달라, 같은 판끼리만 비교한다
     print(f"| 전체 | {accuracy(before)} | {accuracy(after)} |")
@@ -658,7 +692,7 @@ def cmd_split(rows: list[dict], start: str) -> None:
     # 경로 기준선(path-baseline.jsonl)은 판 1 세션을 다시 판정한 경로 수다. 판 2 판정 행이 있는 세션은 그 행을 쓴다
     before2 = [r for r in before if r.get("taxonomy", 1) >= TAXONOMY]
     have = {r.get("transcript") for r in rows if r.get("taxonomy", 1) >= TAXONOMY}
-    before2 += [r for r in latest_per_transcript(read_jsonl(lesson_path("path-baseline.jsonl")))
+    before2 += [r for r in latest_per_transcript(base)
                 if r.get("transcript") not in have and session_time(r) < t]
     after2 = [r for r in after if r.get("taxonomy", 1) >= TAXONOMY]
     if not before2:
@@ -736,6 +770,7 @@ def cmd_sessions_from(rows: list[dict], source: str, args: list[str]) -> None:
     if "--days" in args:
         cutoff = time.time() - option(args, "--days", 7) * 86400
         rows = [r for r in rows if session_time(r) >= cutoff]
+    rows, _, note = same_input(rows)
     inside = [r for r in rows if r.get("session") in sessions]
     rest = [r for r in rows if r.get("session") not in sessions]
     print(f"## 세션 집합 정답률 ({os.path.basename(source)})\n")
@@ -744,6 +779,8 @@ def cmd_sessions_from(rows: list[dict], source: str, args: list[str]) -> None:
     print(f"| 나머지 | {accuracy(rest)} |")
     if missing:
         print(f"\n세션 식별자 없는 줄 {missing}: 식별자를 남기기 전 기록이라 어느 쪽에도 넣지 않았다")
+    if note:
+        print(f"\n{note}")
 
 
 def latest_per_transcript(rows: list[dict]) -> list[dict]:
