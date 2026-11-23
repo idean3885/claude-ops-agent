@@ -12,7 +12,7 @@
 |------|------|---------|
 | Stop (`hooks/forbidden-words-stop.sh`) | 응답 종료 시 | 직전 응답 스캔 → 위반을 `.forbidden-violations-pending` 에 기록 |
 | PostToolUse · Stop (`hooks/response-language.py`) | 도구 호출마다 · 응답 종료 시 | 한국어 대화에서 한글 비율 0.3 미만이고 영어 문장이 있는 문단(빈 줄 단위, 코드 · 인라인 코드 · URL · 경로 · 링크 · 표 · 상자 그림 · `>` 인용 · JSON 제외)을 잰다. 글자 20자 미만 문단은 세지 않는다. PostToolUse 는 그 호출 앞의 글을 재서, 한 문단뿐인 진행 문장 · 스킬 호출 문구는 막지 않고 턴에서 처음 한 번 「다음 글부터 한국어로」를 모델에 알린다. 여러 문단이면 다음 글에서 한국어로 다시 내게 한다. 병렬 호출은 첫 호출에서만 잰다. Stop 은 마지막 도구 호출 뒤 글을 재고 막지 않으며, 사용자에게 작업을 마친 뒤 새 세션으로 이어 가라는 안내 한 줄만 낸다. 대화 언어는 한글 비율 0.2 이상인 마지막 사람 입력(로마자 10자 미만 입력은 건너뜀)으로, 사람이 친 입력(CLI 는 origin.kind=human)으로 잰다 (#792, #1080) |
-| UserPromptSubmit (`hooks/forbidden-words-prompt.sh`) | 위반이 있는 턴만 | pending 내역으로 교정 요청 후 파일 삭제. 위반이 없으면 무출력 종료 |
+| UserPromptSubmit (`hooks/forbidden-words-prompt.sh`) | 매 턴 | 「검출」 칸이 달린 재발 용어를 대상 낱말 → 표준 용어 한 줄씩 싣는다(상한 10줄, #1249). 위반이 있는 턴은 pending 내역으로 교정 요청 후 파일 삭제 |
 
 이 문서와 [action-gate.md](action-gate.md) 의 비활성 변수(`…_DISABLE=1`)는 사람이 세션 환경에서 켭니다. 어시스턴트가 명령 앞 · `env` · `export` 로 대입하면 PreToolUse 가 막습니다 (action-gate.md 「가드 해제 대입 차단」, #1142).
 
@@ -23,7 +23,7 @@
 | 위치 | 역할 |
 |------|------|
 | `config/style-rules/forbidden-words.json` | 룰 전체 (표현 가드 패턴). 기계에 두는 개인 룰 파일은 읽지 않는다 (ADR-0026). |
-| `config/style-rules/base/terms.md` 의 「검출」 칸 | 표준 용어 항목에 단 정규식. 같은 Stop hook 이 직전 응답에서 찾아 표준 용어로 교정을 요청한다. 칸 해석은 `scripts/terms.py` 가 맡는다 (#1245) |
+| `config/style-rules/base/terms.md` 의 「검출」 칸 | 표준 용어 항목에 단 대상 낱말 · 정규식. 입력 훅이 대상 낱말을 매 턴 실어 쓰기 전에 막고(#1249), 같은 Stop hook 이 직전 응답에서 정규식을 찾아 재발을 통지한다. 칸 해석은 `scripts/terms.py` 가 맡는다 (#1245) |
 
 룰 추가는 JSON 에 객체 하나만 더하면 즉시 반영됩니다(Python 정규식).
 

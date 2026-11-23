@@ -31,7 +31,7 @@ CORRECTION_TARGET = re.compile(r"→\s*「([^」]+)」")
 # 다른 세트 칸: 「세트 이름」(쓰는 곳) 갈리는 지점. 세트 이름 안에 「 · 」가 들어 있어 「」로 감싼다
 OTHER_SET = re.compile(r"「([^」]+)」\(([^)]+)\)")
 # 검출 칸: `정규식` → 「표준 용어」. 응답 검사 훅(hooks/forbidden-words-stop.sh)이 직전 답에서 찾는다
-DETECTION = re.compile(r"^`([^`]+)`\s*→\s*「([^」]+)」$")
+DETECTION = re.compile(r"^「([^」]+)」\s*`([^`]+)`\s*→\s*「([^」]+)」$")
 
 
 def parse_entries(text: str, section: str = "항목") -> list[tuple[str, dict[str, str]]]:
@@ -121,14 +121,16 @@ def check_detections(entries: list[tuple[str, dict[str, str]]]) -> list[str]:
             continue
         match = DETECTION.match(value)
         if not match:
-            problems.append(f"{title}: 「검출」은 `정규식` → 「표준 용어」 형식이다")
+            problems.append(f"{title}: 「검출」은 「섞어 쓴 말」 `정규식` → 「표준 용어」 형식이다")
             continue
         try:
-            re.compile(match.group(1))
+            re.compile(match.group(2))
         except re.error as error:
             problems.append(f"{title}: 「검출」 정규식이 컴파일되지 않는다 ({error})")
-        if match.group(2) not in [t.strip() for t in title.split(" · ")]:
-            problems.append(f"{title}: 「검출」 대체어 「{match.group(2)}」 가 제목의 표준 용어가 아니다")
+        if match.group(3) not in [t.strip() for t in title.split(" · ")]:
+            problems.append(f"{title}: 「검출」 대체어 「{match.group(3)}」 가 제목의 표준 용어가 아니다")
+        if match.group(1) not in mixed_words(fields.get("섞어 쓴 말", "")):
+            problems.append(f"{title}: 「검출」 대상 「{match.group(1)}」 이 「섞어 쓴 말」 칸에 없다")
     return problems
 
 
@@ -141,11 +143,47 @@ def detection_rules(text: str) -> list[dict[str, str]]:
             if not match:
                 continue
             try:
-                re.compile(match.group(1))
+                re.compile(match.group(2))
             except re.error:
                 continue
-            rules.append({"title": title, "pattern": match.group(1), "replacement": match.group(2)})
+            rules.append({"title": title, "word": match.group(1), "pattern": match.group(2), "replacement": match.group(3)})
     return rules
+
+
+REMIND_LIMIT = 10
+
+
+def mixed_words(value: str) -> list[str]:
+    """섞어 쓴 말 칸에서 괄호 풀이를 걷은 낱말만 낸다. 괄호 안의 쉼표는 나누지 않는다."""
+    words, depth, current = [], 0, ""
+    for ch in value:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif ch == "," and depth == 0:
+            words.append(current)
+            current = ""
+        elif depth == 0:
+            current += ch
+    words.append(current)
+    return [w.strip().strip("`「」") for w in words if w.strip()]
+
+
+def remind_lines(text: str, limit: int = REMIND_LIMIT) -> list[str]:
+    """검출 칸이 달린 재발 항목을 매 턴 입력에 붙일 짧은 줄로 낸다 (#1249).
+    전체 룰 주입은 세션마다 수천 토큰이라 없앴으므로(#564) 재발 항목만, 상한까지만 싣는다."""
+    lines = []
+    for section in ENTRY_SECTIONS:
+        for title, fields in parse_entries(text, section):
+            match = DETECTION.match(fields.get("검출", ""))
+            if not match:
+                continue
+            if len(lines) >= limit:
+                return lines
+            # 검출 대상 낱말만 싣는다. 같은 칸의 다른 낱말은 조건부라 조건 없이 실으면 맞는 쓰임까지 피하게 된다
+            lines.append(f"- 「{match.group(1)}」 → 「{match.group(3)}」 ({title})")
+    return lines
 
 
 def other_set_names(value: str) -> list[str]:
@@ -285,6 +323,13 @@ def main(argv: list[str]) -> int:
         for problem in problems:
             print(problem)
         return 1 if problems else 0
+    if len(argv) >= 2 and argv[1] == "remind":
+        path = argv[2] if len(argv) > 2 else DEFAULT_TERMS
+        lines = remind_lines(open(path, encoding="utf-8").read())
+        if lines:
+            print("[재발 용어 · 답을 쓸 때 왼쪽 말을 쓰지 않는다]")
+            print("\n".join(lines))
+        return 0
     if len(argv) >= 2 and argv[1] == "stats":
         path = argv[2] if len(argv) > 2 else DEFAULT_TERMS
         transcript_dir = argv[3] if len(argv) > 3 else DEFAULT_TRANSCRIPTS
