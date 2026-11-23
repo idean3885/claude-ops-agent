@@ -13,6 +13,9 @@
 
 ## [Unreleased]
 
+### Fixed
+* 상태줄 compact 패치를 claude-hud 0.15 렌더 구조에 맞춰, 세션 시작 경고 없이 compact 모드가 다시 한 줄로 나온다 (#1238)
+
 ## [9.78.0] - 2026-11-23
 
 ### Added
