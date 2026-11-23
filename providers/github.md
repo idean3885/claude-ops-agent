@@ -74,7 +74,7 @@ bash ~/.claude/ops-agent/current/scripts/gh-issue.sh start {이슈번호} [--typ
 - 브랜치 패턴: `{타입}/{이슈번호}`. `--branch` 로 덮는다.
 - 이슈 내용은 변경될 수 있으므로 설명은 붙이지 않는다.
 - 어댑터가 `gh issue develop {번호} --name {브랜치} --base {base}` 로 이슈에 연결된 브랜치를 원격에 만들고, `git fetch origin` 뒤 그 브랜치를 연다. 브랜치 이름만으로는 이슈와 연결되지 않는다 (#813). 원격에 이미 있는 다른 이슈의 브랜치(세션 묶음)를 `--branch` 로 주면 만들지 않고 그 브랜치를 열며 `bundled=true` 를 낸다 (#1078).
-- **워크트리 (권장)**: `--worktree` → `git worktree add ../{프로젝트}-{타입}-{번호} -b {브랜치} --track origin/{브랜치}`
+- **워크트리 (권장)**: `--worktree` → `git worktree add <레포>/.claude/worktrees/{타입}-{번호} -b {브랜치} --track origin/{브랜치}`. 레포 안에 두어 하네스 작업 디렉토리 안에 남긴다. 무시 목록에 없으면 공용 git 디렉토리의 `info/exclude` 에 더한다 (#1211).
 - **직접 체크아웃**: `--checkout` → `git checkout -b {브랜치} --track origin/{브랜치}`
 - 연결된 브랜치의 PR 은 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다. 이슈와 PR 은 1:1 이다 ([ADR-0032](../docs/adr/0032-one-issue-one-pr-review-design-not-code.md)).
 
