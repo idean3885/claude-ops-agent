@@ -113,6 +113,26 @@ export function pushTargetBranch(seg, runGit) {
 }
 
 /**
+ * `git branch -D <이름…>` 의 브랜치가 모두 원격 기본 브랜치에 이미 들어 있는지 본다.
+ * why: 머지된 PR 의 로컬 브랜치는 로컬 체크아웃이 기본 브랜치 최신이 아니면 `-d` 가 거부해,
+ *      정리할 때마다 사람에게 권한을 요청하게 된다 (#1204). 원격 기본 브랜치에 들어 있으면 지워도 잃는 커밋이 없다.
+ *      원격 브랜치 삭제(-r)와 이름을 확정하지 못한 경우 · 원격 기본 브랜치를 모르는 경우는 그대로 막는다.
+ */
+export function branchesMergedIntoDefault(seg, defaultBranch, runGit) {
+  if (!defaultBranch) return false;
+  const tokens = seg.trim().split(/\s+/);
+  const at = tokens.indexOf('branch');
+  if (at < 0) return false;
+  const args = tokens.slice(at + 1);
+  if (args.some(t => /^(?:-r|--remotes|-a|--all)$/.test(t) || /^-\w*r\w*$/.test(t))) return false;
+  const names = args.filter(t => !t.startsWith('-'));
+  if (!names.length) return false;
+  return names.every(name => /^[\w./-]+$/.test(name)
+    && runGit(`rev-parse --verify --quiet refs/heads/${name}`) !== null
+    && runGit(`merge-base --is-ancestor refs/heads/${name} refs/remotes/origin/${defaultBranch}`) !== null);
+}
+
+/**
  * 세그먼트 목록에서 git 위험 조작을 찾는다.
  * @param {string[]} segments 파이프·논리연산자로 분리된 명령 세그먼트
  * @param {{runGit: (args: string) => string|null}} ctx 대상 디렉토리에서 git 을 실행하는 함수
@@ -147,6 +167,10 @@ export function detectGitRiskActions(segments, ctx) {
 
     for (const rule of DESTRUCTIVE) {
       if (rule.test(seg)) {
+        if (rule.verb === 'branch -D') {
+          if (defaultBranch === undefined) defaultBranch = resolveDefaultBranch(runGit);
+          if (branchesMergedIntoDefault(seg, defaultBranch, runGit)) break;
+        }
         ops.push({ category: 'worktree', scope: 'worktree-destructive', tool: 'git', verb: rule.verb, why: rule.why, alt: rule.alt });
         break;
       }
