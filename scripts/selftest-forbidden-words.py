@@ -269,6 +269,35 @@ with tempfile.TemporaryDirectory() as bare:
     failures += not ok
     hook_checks += 1
 
+# 입력 훅: 재발 용어를 매 턴 싣고, 위반 기록이 있으면 함께 통지한다 (#1249)
+def run_prompt_hook(plugin_root: str, pending: str | None) -> str:
+    with tempfile.TemporaryDirectory() as home:
+        os.makedirs(os.path.join(home, ".claude"))
+        if pending is not None:
+            open(os.path.join(home, ".claude", ".forbidden-violations-pending"), "w", encoding="utf-8").write(pending)
+        env = dict(os.environ, HOME=home, CLAUDE_PLUGIN_ROOT=plugin_root)
+        return subprocess.run(["bash", os.path.join(plugin_root, "hooks", "forbidden-words-prompt.sh")],
+                              input="{}", text=True, env=env, capture_output=True, timeout=30).stdout
+
+
+out = run_prompt_hook(ROOT, None)
+ok = "「창」 → 「윈도우」" in out and "검출된 금지 표현" not in out
+print(("OK  " if ok else "FAIL") + " 입력 훅: 위반이 없어도 재발 용어를 싣는다")
+failures += not ok
+hook_checks += 1
+out = run_prompt_hook(ROOT, "  - 패턴 `x` 매칭: x → 대체 `y`")
+ok = "「창」 → 「윈도우」" in out and "검출된 금지 표현" in out
+print(("OK  " if ok else "FAIL") + " 입력 훅: 위반이 있으면 재발 용어와 함께 통지한다")
+failures += not ok
+hook_checks += 1
+with tempfile.TemporaryDirectory() as bare:
+    shutil.copytree(os.path.join(ROOT, "hooks"), os.path.join(bare, "hooks"))
+    out = run_prompt_hook(bare, "  - 패턴 `x` 매칭: x → 대체 `y`")
+    ok = "검출된 금지 표현" in out
+    print(("OK  " if ok else "FAIL") + " 입력 훅: 목록이 없어도 위반 통지는 이어 간다")
+    failures += not ok
+    hook_checks += 1
+
 total = len(MUST_CATCH) + len(MUST_PASS) + hook_checks
 print(f"{total - failures}/{total} 통과")
 sys.exit(1 if failures else 0)

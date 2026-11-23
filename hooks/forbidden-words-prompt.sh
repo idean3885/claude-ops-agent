@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# UserPromptSubmit hook: 직전 응답에서 검출된 금지 표현 위반만 통지한다.
+# UserPromptSubmit hook: 재발 용어를 싣고, 직전 응답에서 검출된 금지 표현 위반을 통지한다.
 #
-# 룰 목록은 컨텍스트에 주입하지 않는다 (#564). 25룰이 매 세션 약 5천 토큰을 차지했고,
+# 룰 목록 전체는 컨텍스트에 주입하지 않는다 (#564). 25룰이 매 세션 약 5천 토큰을 차지했고,
 # 교정 대상인 글은 교정 스킬(lint)이 tells_count.py 로 같은 룰을 대조한다.
 # 대화 응답은 위반이 검출된 턴에만 이 훅이 교정을 요청한다.
 #
@@ -11,6 +11,12 @@
 set -euo pipefail
 
 PENDING_FILE="$HOME/.claude/.forbidden-violations-pending"
+
+# 재발 용어(표준 용어 목록의 「검출」 칸이 달린 항목)는 매 턴 짧게 싣는다 (#1249).
+# 답 검사는 답이 나간 뒤라 첫 발화를 막지 못한다. 쓰는 시점 바로 앞에 규칙을 둔다.
+# 전체 룰은 싣지 않는다 (#564). 실패해도 위반 통지는 이어 간다.
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/terms.py" remind \
+  "${CLAUDE_PLUGIN_ROOT}/config/style-rules/base/terms.md" 2>/dev/null || true
 
 [[ -f "$PENDING_FILE" ]] || exit 0
 

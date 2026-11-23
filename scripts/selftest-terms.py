@@ -219,10 +219,15 @@ expect("익힌 항목은 주입하지 않는다",
        bool(section) and not any(f"- {t}: " in section for t, _ in terms.parse_entries(source_text, "익힌 항목")))
 
 # 검출 칸: 응답 검사 훅이 읽는 자리라 깨지면 신호 없이 검출이 빠진다
-DETECT = VALID.replace("- 등재: 2026-10-21", "- 검출: `스키마\\s?정의` → 「테이블 정의」\n- 등재: 2026-10-21")
+DETECT = VALID.replace("- 등재: 2026-10-21", "- 검출: 「스키마」 `스키마\\s?정의` → 「테이블 정의」\n- 등재: 2026-10-21")
 expect("검출 칸이 맞으면 통과", terms.check(DETECT) == [])
 expect("검출 칸은 룰로 나온다",
-       terms.detection_rules(DETECT) == [{"title": "스키마 · 테이블 정의", "pattern": r"스키마\s?정의", "replacement": "테이블 정의"}])
+       terms.detection_rules(DETECT) == [{"title": "스키마 · 테이블 정의", "word": "스키마", "pattern": r"스키마\s?정의", "replacement": "테이블 정의"}])
+expect("검출 대상이 섞어 쓴 말 칸에 없으면 실패", any("대상" in p for p in terms.check(DETECT.replace("검출: 「스키마」", "검출: 「구조」"))))
+# 매 턴 주입 (#1249): 검출 대상 낱말만, 상한까지만
+expect("주입 줄은 검출 대상과 표준 용어만 싣는다", terms.remind_lines(DETECT) == ["- 「스키마」 → 「테이블 정의」 (스키마 · 테이블 정의)"])
+expect("검출 칸 없는 목록은 주입하지 않는다", terms.remind_lines(VALID) == [])
+expect("주입 줄 수는 상한을 넘지 않는다", terms.remind_lines(DETECT, limit=0) == [] and len(terms.remind_lines(DETECT, limit=1)) == 1)
 expect("검출 칸 형식 오류는 실패", any("「검출」은" in p for p in terms.check(DETECT.replace(" → 「테이블 정의」", ""))))
 expect("검출 정규식이 컴파일되지 않으면 실패", any("컴파일" in p for p in terms.check(DETECT.replace(r"스키마\s?정의", "스키마(정의"))))
 expect("검출 대체어가 제목의 표준 용어가 아니면 실패", any("대체어" in p for p in terms.check(DETECT.replace("→ 「테이블 정의」", "→ 「구조」"))))
