@@ -302,6 +302,20 @@ def test_weekdays_fixed_dates() -> None:
     check("평일 계산: 월 → 수 는 3일", mod.weekdays_since(ts(2026, 11, 23), ts(2026, 11, 25)) == 3)
 
 
+def test_span_overlap() -> None:
+    """끝 표지를 찍는 턴의 증가분은 끝 시각 뒤에 기록된다. 걸친 증가분은 세고, 구간 밖 증가분은 세지 않는다 (#1247)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("usage_log_span", LOG)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    spans = [("s", 100.0, 200.0)]
+    check("구간: 끝을 걸친 증가분은 센다", mod.in_spans({"session": "s", "prev_ts": 190.0, "ts": 230.0}, spans))
+    check("구간: 시작을 걸친 증가분은 센다", mod.in_spans({"session": "s", "prev_ts": 90.0, "ts": 120.0}, spans))
+    check("구간: 끝 뒤 증가분은 세지 않는다", not mod.in_spans({"session": "s", "prev_ts": 210.0, "ts": 230.0}, spans))
+    check("구간: 시작 앞 증가분은 세지 않는다", not mod.in_spans({"session": "s", "prev_ts": 50.0, "ts": 100.0}, spans))
+    check("구간: 다른 세션은 세지 않는다", not mod.in_spans({"session": "x", "prev_ts": 190.0, "ts": 230.0}, spans))
+
+
 def main() -> int:
     test_wrapper_passes_output()
     test_wrapper_survives_record_failure()
@@ -312,6 +326,7 @@ def main() -> int:
     test_estimate()
     test_weekly_forecast_and_review_lines()
     test_weekdays_fixed_dates()
+    test_span_overlap()
     test_mark()
     print(f"통과 {passed} · 실패 {len(failures)}")
     for f in failures:
