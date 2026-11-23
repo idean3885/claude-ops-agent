@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [9.77.0] - 2026-11-23
+
 ### Added
 * 실험 기록 레포를 머지 뒤 head 브랜치 자동 삭제로 만드는 lab-repo-create.sh (#1227)
 
