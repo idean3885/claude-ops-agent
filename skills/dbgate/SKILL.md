@@ -95,3 +95,4 @@ ln -sf ~/.claude/ops-agent/current/skills/dbgate/bin/dbgate-password ~/.local/bi
 | 접속 목록의 내용 | 접속 주소는 그 조직의 자산이다. |
 | `userCommand` · `passwordCommand` 가 부르는 저장소 | 비밀값 저장 방식은 환경마다 다르다. |
 | 키체인 항목의 값 | 사람이 `dbgate-password` 로 넣는다. |
+| 접속 자산 `~/.claude/ops-agent/dbgate/client.md` | 클라이언트 버전 함정 · 접속 항목의 기본 스키마 같은 환경 사실이다. 소비 환경이 자기 문서를 이 자리에 연결하면, DB 클라이언트를 실행하는 도구 호출 직전에 훅이 이 경로를 가리킨다 ([hooks-config](../../docs/hooks-config.md) 「DB 클라이언트 경계」). |

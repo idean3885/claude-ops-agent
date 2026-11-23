@@ -62,6 +62,7 @@ import { findIntrusions } from './han-intrusion.mjs';
 import { detectGitRiskActions, stripGitGlobalOptions } from './git-guard-rules.mjs';
 import { delegatedScopes, declaredScopes, DELEGATION_FILE_RE, DELEGATION_PHRASE } from './push-delegation.mjs';
 import { changesOf, scanBuildScriptChange } from './build-guard-rules.mjs';
+import { dbClientNotice } from './db-client-boundary.mjs';
 import { analyzeCommits, broadScopes } from './commit-scope.mjs';
 import { hasCommitInvocation, isStandaloneCommit } from './commit-shape.mjs';
 import { harnessShapeMismatch, bashAllowRulesFrom } from './harness-rule-shape.mjs';
@@ -166,6 +167,7 @@ const PR_READY_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\
 const PR_READY_GRAPHQL_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+api\s+graphql\b.*\bmarkPullRequestReadyForReview\b/;
 
 const BUILD_GUARD_DISABLE = process.env.OPS_AGENT_BUILD_GUARD_DISABLE === '1';
+const DB_CLIENT_NOTICE_DISABLE = process.env.OPS_AGENT_DB_CLIENT_NOTICE_DISABLE === '1';
 
 // 한시 권한 플래그 (레거시 OPS_AGENT_CLUSTER_GUARD_* 도 계속 인식)
 const GATE_DISABLE = process.env.OPS_AGENT_ACTION_GATE_DISABLE === '1' || process.env.OPS_AGENT_CLUSTER_GUARD_DISABLE === '1';
@@ -449,6 +451,12 @@ if (!DISABLE) {
         process.exit(0);
       }
     }
+    // DB 클라이언트 경계: 클라이언트 실행 · 그 실행을 담은 스크립트 작성 직전에 소비 환경의 접속 자산을 가리킨다 (#1197).
+    // 주입까지다. 막지 않고, 뒤 가드의 판정도 바꾸지 않는다 (docs/lessons.md 「도구 경계에서 로드한다」).
+    if (!DB_CLIENT_NOTICE_DISABLE) {
+      const dbNotice = dbClientNotice(hookInput.tool_name || '', hookInput.tool_input);
+      if (dbNotice) passNotice = (passNotice ? passNotice + '\n' : '') + dbNotice;
+    }
     if ((hookInput.tool_name || '') === 'Bash') {
       const command = (hookInput.tool_input && hookInput.tool_input.command) || '';
       const cwd = hookInput.cwd || process.cwd();
@@ -617,7 +625,7 @@ if (!DISABLE) {
           }
         }
         // 어댑터 생성은 통과시키되 로드맵 이슈에 담을 일인지 조치 한 줄을 붙인다 (#1035).
-        if (ISSUE_ADAPTER_CREATE_RE.test(command)) passNotice = ROADMAP_NOTICE;
+        if (ISSUE_ADAPTER_CREATE_RE.test(command)) passNotice = (passNotice ? passNotice + '\n' : '') + ROADMAP_NOTICE;
       }
 
       // 초안 PR 가드: PR 은 초안으로 만든다 (#876). 준비 완료 전환(gh pr ready)은 작성자가 정하고 어시스턴트 호출은 막는다 (#977).

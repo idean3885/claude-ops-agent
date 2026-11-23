@@ -190,6 +190,21 @@ hook 이 내보내는 검출은 두 종류입니다.
 | 자체 점검 | `node scripts/selftest-build-guard.mjs` |
 | 비활성 | `OPS_AGENT_BUILD_GUARD_DISABLE=1` |
 
+## DB 클라이언트 경계
+
+DB 클라이언트(`mysql` · `mariadb` · `mysqldump` · `mysqlsh`)를 실행하는 `Bash`, 그 실행을 담은 셸 스크립트(`.sh` · `.bash` · `.zsh` 또는 shebang)를 쓰는 `Write` · `Edit` · `MultiEdit` 직전에, 소비 환경의 접속 자산 경로를 조치 한 줄로 주입한다. 막지 않고 뒤 가드의 판정도 바꾸지 않는다. 인자 자리의 낱말(`grep mysql`) · 드라이버 이름(`mysql2`) · 문서 산문은 대상이 아니다.
+
+알려진 한계: shebang 판정은 본문 전체를 쓰는 `Write` 에서만 한다. 확장자 없는 shebang 스크립트를 `Edit` · `MultiEdit` 로 고치면 알리지 않는다. 클라이언트 경로 대입 꼴은 따옴표 안에 있어도 알린다. 주입만 하는 알림이라 누락 · 과잉의 비용이 작아 판정을 넓히지 않았다.
+
+자리가 비어 있으면 가리킬 곳이 없으니 알리지 않는다. 자산을 부르지 않고 쓰기 스크립트를 짜서 자산에 적힌 실패가 재발한 사례가 근거다 ([docs/lessons.md](lessons.md) 「도구 경계에서 로드한다」, #1197).
+
+| 항목 | 값 |
+|------|-----|
+| 판정 | `scripts/db-client-boundary.mjs` (순수 함수) |
+| 자리 | `~/.claude/ops-agent/dbgate/client.md` (`OPS_AGENT_DB_CLIENT_NOTES` 로 바꾼다). 연결은 소비 환경이 한다 ([dbgate](../skills/dbgate/SKILL.md) 「소비 환경이 채우는 것」). |
+| 자체 점검 | `node scripts/selftest-db-client-boundary.mjs` |
+| 비활성 | `OPS_AGENT_DB_CLIENT_NOTICE_DISABLE=1` |
+
 ## 최종 점검 통과 기록
 
 `pre-tool-use.mjs` 가 `gh pr merge` 를 잡으면 `scripts/final-check.sh` 가 남긴 통과 기록을 로컬에서 확인해, 없거나 head 가 어긋나면 막습니다. 점검 항목과 통과 기록 형식은 [action-gate.md](action-gate.md) 「최종 점검 통과 기록」에 있고, 비활성은 `OPS_AGENT_FINAL_CHECK_DISABLE=1` 입니다.
