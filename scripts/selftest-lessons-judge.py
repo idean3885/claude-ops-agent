@@ -326,6 +326,46 @@ def test_baseline_failure_allows_retry() -> None:
         check("기준선 실패: 다시 실행할 수 있다", "기준선 판정" in r.stdout, r.stdout)
 
 
+def test_asset_registered_before_correction() -> None:
+    """#1232: 표준 용어 목록은 교정 시각에 그 항목이 있었을 때만 재발로 센다. 등재 전 교정은 최초 사례다."""
+    def ts(day: str) -> float:
+        return datetime.datetime.strptime(day + " 12:00", "%Y-%m-%d %H:%M").timestamp()
+
+    def day(n: int) -> str:
+        """오늘에서 n 일 전. 기한 만료(7일)에 걸리지 않게 상대 날짜로 둔다"""
+        return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
+
+    def row(name: str, day: str, hint: str, term: str | None) -> dict:
+        c = {"answer": "A1", "cause": "level", "admit": "taste", "why": "용어", "asset_hint": hint}
+        if term is not None:
+            c["asset_term"] = term
+        return {"ts": iso(0), "transcript": name, "mtime": ts(day), "answers": 5, "status": "pending", "corrections": [c]}
+    with tempfile.TemporaryDirectory() as home:
+        terms = os.path.join(home, "terms.md")
+        with open(terms, "w", encoding="utf-8") as f:
+            f.write("# 표준 용어\n\n## 항목\n\n### 메트릭\n- 섞어 쓴 말: 지표\n- 등재: " + day(3) + "\n")
+        write_rows(home, [
+            row("before", day(4), "base/terms.md", "메트릭"),
+            row("sameday", day(3), "~/.claude/ops-agent/style-rules/base/terms.md", "메트릭"),
+            row("legacy", day(1), "base/terms.md", None),
+            row("unknown", day(1), "base/terms.md", "없는 항목"),
+        ])
+        r = run(home, "report", env={"OPS_AGENT_LESSONS_TERMS": terms})
+        check("등재 전 · 등재일 · 항목 미상 교정은 재발 자산 표에 없다", "terms.md" not in r.stdout.split("이번 승인 묶음")[0], r.stdout)
+        check("등재 전 교정 후보에 재발 표시가 없다", " · 재발" not in r.stdout, r.stdout)
+        write_rows(home, [
+            row("before", day(4), "base/terms.md", "메트릭"),
+            row("after1", day(2), "base/terms.md", "메트릭"),
+            row("after2", day(1), "~/.claude/ops-agent/style-rules/base/terms.md", "메트릭"),
+        ])
+        r = run(home, "report", env={"OPS_AGENT_LESSONS_TERMS": terms})
+        check("등재 뒤 교정 둘은 경로 표기가 달라도 같은 항목의 재발로 센다", "| terms.md 메트릭 | 2 | 예 |" in r.stdout, r.stdout)
+        lines = [l for l in r.stdout.splitlines() if l.startswith("- ")]
+        check("등재 뒤 교정만 재발 표시, 등재 전 교정은 표시 없음",
+              any(l.startswith("- after1") and "재발" in l for l in lines)
+              and any(l.startswith("- before") and "재발" not in l for l in lines), "\n".join(lines))
+
+
 def write_rows(home: str, rows: list[dict]) -> None:
     os.makedirs(os.path.dirname(lessons(home, "x")), exist_ok=True)
     with open(lessons(home, "judgments.jsonl"), "w", encoding="utf-8") as f:
@@ -724,6 +764,8 @@ def main() -> int:
     test_path_baseline_cap_and_state()
     test_path_baseline_scope()
     test_close_and_wrap()
+    test_candidate_batch()
+    test_asset_registered_before_correction()
     print(f"통과 {passed} · 실패 {len(failures)}")
     for f in failures:
         print(f"  실패: {f}")

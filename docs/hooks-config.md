@@ -255,6 +255,18 @@ DB 클라이언트(`mysql` · `mariadb` · `mysqldump` · `mysqlsh`)를 실행�
 | `pattern` | 정규식 | Bash 면 명령 전체, 그 밖의 도구면 입력을 JSON 으로 직렬화한 문자열에 대조한다. |
 | `body` | 문자열 (선택) | 본문이 든 입력 필드 이름. 있으면 그 줄 수를 `bodyLines` 로 남긴다. |
 
+## 세션당 PR 지표
+
+한 세션에서 잡은 이슈는 몇 개든 PR 하나로 묶는다 ([ADR-0039](adr/0039-session-bundle-one-commit-per-issue.md)). `pre-tool-use.mjs` 가 `gh pr create` 를 초안 PR 가드 뒤에서 만나면 `~/.claude/ops-agent/metrics/session-pr.jsonl` 에 한 줄 남깁니다 (#1236). 막지 않습니다. 2주 기록 뒤 안내 · 차단으로 올릴지 판정합니다.
+
+| 항목 | 값 |
+|------|-----|
+| 필드 | `ts` · `session` · `agent`(서브에이전트일 때) · `repo` · `nth`(그 세션 · 그 레포에서 몇 번째 생성인지). `nth` 2 이상이 위반이다. |
+| 레포 이름 | 워크트리는 `.git` 파일이 가리키는 본 레포 디렉토리 이름으로 센다. 브랜치마다 워크트리 이름이 달라 같은 레포가 갈리지 않게 한다. |
+| 알려진 한계 | 뒤 가드(한시 권한 · 대외비 등)에 막힌 생성도 센다. 작업 위치를 구하지 못한 명령(셸 변수로 옮긴 디렉토리)과 세션 번호 없는 호출은 세지 않는다. |
+| 보는 자리 | 세션 시작 「경로 요약」 줄 |
+| 자체 점검 | `node scripts/selftest-action-gate.mjs` 「세션당 PR 지표」 |
+
 ## 세션 시작 경로 요약
 
 SessionStart 가 시범 블록 다음에 한 줄을 냅니다 ([ADR-0043](adr/0043-doc-structure-change-routes-through-expert.md) 결정 5). 불렀어야 할 스킬 · 전문가를 거쳤는지를 기계 기록으로 보는 자리입니다.
@@ -268,8 +280,9 @@ SessionStart 가 시범 블록 다음에 한 줄을 냅니다 ([ADR-0043](adr/00
 | 공유 표면 쓰기 | `metrics/expert-route-*.jsonl` 의 `verdict`, `ts` 기준 최근 7일 |
 | 레슨 원인 「경로」 | `lessons/judgments.jsonl` 에서 세션마다 마지막 판정의 `cause: path` 교정 수, 세션 시각(처음 판정한 시각) 기준 최근 7일 |
 | 플로우 진입 누락 | `metrics/flow-entry.jsonl` 에서 커밋 · push 가 든 `flow: missed` 줄 수. PR 생성 누락은 차단되므로 넣지 않는다. |
+| 세션당 PR 초과 | `metrics/session-pr.jsonl` 에서 `nth` 가 2 이상인 줄 수, `ts` 기준 최근 7일 (아래 「세션당 PR 지표」) |
 
-원천 파일이 없는 항목은 빼고, 셋 다 없으면 줄을 내지 않습니다. 파일은 끝 5MB 만 읽고 깨진 줄은 건너뜁니다. 자체 점검은 `node scripts/selftest-skill-use.mjs` 에 있습니다.
+원천 파일이 없는 항목은 빼고, 모두 없으면 줄을 내지 않습니다. 파일은 끝 5MB 만 읽고 깨진 줄은 건너뜁니다. 자체 점검은 `node scripts/selftest-skill-use.mjs` 에 있습니다.
 
 ## 훅 실행 예산
 

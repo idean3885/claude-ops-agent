@@ -41,17 +41,19 @@ SAMPLE_GOAL = 50
 AGREEMENT_MIN = 0.8      # 사람 표본과의 일치도가 이 값 밑이면 기계 판정 지표를 쓰지 않는다 (ADR-0037)
 DAILY_MAX = 10           # 하루 판정 상한. 비용이 사용 한도를 갉아먹지 않게 한다
 INPUT_CAP = 150_000      # 판정 입력 글자 상한 (#991 실측: 14만 자 ≈ 0.41달러)
+TERMS_ASSET = "terms.md"  # 표준 용어 목록. 항목마다 등재일이 있어 교정 시각과 비교한다 (#1232)
 APPROVE_BATCH = 5        # 한 번에 올리고 닫는 등재 후보 수. 세션 마무리 3분 안에 끝나는 양이다 (ADR-0047, 단위는 #1209 부터 후보)
 EXPIRE_DAYS = 7          # 이보다 오래된 대기는 만료로 닫는다. 맥락이 사라진 세션은 판정 가치가 낮고, 진짜 교훈은 재발해 다시 올라온다 (ADR-0047)
 TAXONOMY = 2             # 원인 갈래 판. 1 = 내용 · 수준 (ADR-0037), 2 = 내용 · 수준 · 경로 (ADR-0043). 판이 다른 행은 경로를 비교하지 않는다
 CAUSES = ("content", "level", "path")
 
 PROMPT = """아래는 한 작업 세션의 대화다. A<번호> 는 어시스턴트 답, USER 는 사용자 발화다.
-사용자 발화가 직전 답을 바로잡는 경우(사실 · 판단 정정, 같은 것을 다시 물음, 분량 · 단계 · 형식 지적)만 교정으로 센다. 새 지시 · 승인 · 다음 질문은 교정이 아니다.
+사용자 발화가 직전 답을 바로잡는 경우(사실 · 판단 정정, 같은 것을 다시 물음, 분량 · 단계 · 형식 지적)만 교정으로 센다. 새 지시 · 승인 · 다음 질문은 교정이 아니다. 어시스턴트가 사용자의 말을 바로잡은 답(용어 교정 줄 등)은 어시스턴트의 실수가 아니므로 교정이 아니다.
 교정마다 원인을 content(질문에 맞게 답하지 못함), level(정해 둔 수준 · 분량 · 형식에 맞추지 못함), path(불렀어야 할 스킬 · 전문가 · 검증 단계를 부르지 않고 직접 해서 생긴 교정) 중 하나로 분류한다. 사용자 지적이 부르지 않은 스킬 · 전문가 · 단계를 가리키면 path 를 우선한다.
 admit: 그 교정에서 남길 것이 등재 조건에 드는지 분류한다. fact(다시 조사하려면 비용이 드는 환경 사실) · procedure(되돌릴 수 없는 작업의 절차) · taste(추측할 수 없는 사용자 취향) · none(그 밖. 판단 · 태도 · 그 자리의 실수).
 asset_hint: 그 실수를 막을 수 있던 규칙 · 원칙 · 자산이 대화 안에 언급되었거나 사용자가 「이미 정해 둔 것」이라고 했으면, 대화에 나온 파일 경로나 이름을 그대로 옮긴다(바꿔 부르지 않는다). 없으면 빈 문자열.
-JSON 한 줄만 출력: {"answers": <A 개수>, "corrections": [{"answer": "A12", "cause": "content|level|path", "admit": "fact|procedure|taste|none", "why": "<20자>", "asset_hint": ""}]}
+asset_term: asset_hint 가 표준 용어 목록(terms.md)이면 그 교정이 가리키는 표준 용어 항목 제목(### 다음 글자 그대로)을 적는다. 그 밖이면 빈 문자열.
+JSON 한 줄만 출력: {"answers": <A 개수>, "corrections": [{"answer": "A12", "cause": "content|level|path", "admit": "fact|procedure|taste|none", "why": "<20자>", "asset_hint": "", "asset_term": ""}]}
 
 """
 
@@ -171,6 +173,52 @@ def pending_count() -> int:
     return sum(1 for r in read_jsonl(lesson_path("judgments.jsonl")) if r.get("status") == "pending")
 
 
+def terms_dates() -> dict[str, str]:
+    """표준 용어 목록의 항목별 등재일. 항목 단위 날짜를 가진 자산은 이 목록뿐이다 (#1232)."""
+    path = os.environ.get("OPS_AGENT_LESSONS_TERMS") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "style-rules", "base", "terms.md")
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError:
+        return {}
+    dates: dict[str, str] = {}
+    title = ""
+    for line in lines:
+        if line.startswith("### "):
+            title = line[4:].strip()
+        elif title and line.startswith("- 등재: "):
+            dates[title] = line[len("- 등재: "):].strip()[:10]
+    return dates
+
+
+def asset_key(row: dict, c: dict, dates: dict[str, str]) -> str:
+    """재발로 셀 자산 이름. 빈 문자열이면 세지 않는다.
+    why: 대화에 경로가 나왔다는 것만으로 세면, 그 항목이 등재되기 전의 교정(등재의 최초 사례)까지 재발이 된다.
+    13건을 대조해 진짜 재발이 0건이었다 (#1231). 교정 시각에 그 항목이 있었음이 확인될 때만 센다.
+    날짜를 비교할 수 있는 자산은 표준 용어 목록뿐이라, 그 밖의 자산은 지금처럼 경로로 센다."""
+    hint = (c.get("asset_hint") or "").strip()
+    if TERMS_ASSET not in hint:
+        return hint
+    term = (c.get("asset_term") or "").strip()
+    registered = dates.get(term)
+    if not registered:
+        return ""
+    day = datetime.date.fromtimestamp(session_time(row)).isoformat()
+    # why: 교정 시각은 세션 날짜까지만 남는다. 등재한 날의 교정은 등재 전일 수 있어 세지 않는다
+    return f"{TERMS_ASSET} {term}" if day > registered else ""
+
+
+def asset_counts(rows: list[dict]) -> dict[str, int]:
+    dates = terms_dates()
+    counts: dict[str, int] = {}
+    for r in rows:
+        for c in r.get("corrections", []):
+            k = asset_key(r, c, dates)
+            if k:
+                counts[k] = counts.get(k, 0) + 1
+    return counts
+
+
 def open_candidates(row: dict) -> list[dict]:
     """대기 세션에서 아직 사람이 보지 않은 등재 후보. 판정 전 행(admit 없음)도 후보다."""
     return [c for c in row.get("corrections", []) if c.get("admit") != "none" and not c.get("reviewed")]
@@ -180,13 +228,10 @@ def batch_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
     """이번 승인 묶음. 세션이 아니라 등재 후보 APPROVE_BATCH 개를 고른다.
     why: 세션 단위면 교정이 많은 세션 하나가 후보 수십 개를 끌고 와 마무리 3분 안에 못 열고 만료된다 (#1209)
     순서: 같은 자산이 2회 이상 걸린 후보(재발)를 먼저, 그다음 오래된 세션부터"""
-    hints: dict[str, int] = {}
-    for c in (c for r in rows for c in r.get("corrections", [])):
-        h = (c.get("asset_hint") or "").strip()
-        if h:
-            hints[h] = hints.get(h, 0) + 1
+    hints = asset_counts(rows)
+    dates = terms_dates()
     pool = [(r, c) for r in rows if r.get("status") == "pending" for c in open_candidates(r)]
-    pool.sort(key=lambda rc: 0 if hints.get((rc[1].get("asset_hint") or "").strip(), 0) >= 2 else 1)
+    pool.sort(key=lambda rc: 0 if hints.get(asset_key(rc[0], rc[1], dates), 0) >= 2 else 1)
     return pool[:APPROVE_BATCH]
 
 
@@ -377,7 +422,7 @@ def judge_one(path: str, state: dict) -> None:
             log_line(f"skip {path}")
         return
     corrections = [
-        {k: c.get(k, "") for k in ("answer", "cause", "admit", "why", "asset_hint")}
+        {k: c.get(k, "") for k in ("answer", "cause", "admit", "why", "asset_hint", "asset_term")}
         for c in verdict["corrections"] if isinstance(c, dict)
     ]
     if path_baseline:
@@ -656,12 +701,9 @@ def cmd_report(args: list[str]) -> None:
     print(f"| 기한 만료 | {sum(1 for r in rows if r.get('status') == 'expired')}건 |")
     base = [r for r in rows if r.get("baseline")]
     print(f"| 기준선 | {len(base)}세션{'' if base else ' (없음: baseline 을 한 번 실행)'} |")
-    hints: dict[str, int] = {}
     # why: 자산 무시는 기간과 무관하게 같은 자산에서 2회면 후보다
-    for c in (c for r in rows for c in r.get("corrections", [])):
-        h = (c.get("asset_hint") or "").strip()
-        if h:
-            hints[h] = hints.get(h, 0) + 1
+    hints = asset_counts(rows)
+    dates = terms_dates()
     if hints:
         print("\n자산이 있었는데 틀린 답 (2회 이상은 도구 경계 로드 구조 수정 후보)\n")
         print("| 자산 | 횟수 | 후보 |\n|---|---|---|")
@@ -677,7 +719,7 @@ def cmd_report(args: list[str]) -> None:
         print(f"\n이번 승인 묶음 (후보 {len(waiting)}개, approve 가 이 후보만 닫는다)\n")
         for r, c in waiting:
             hint = (c.get("asset_hint") or "").strip()
-            recur = " · 재발" if hint and hints.get(hint, 0) >= 2 else ""
+            recur = " · 재발" if hints.get(asset_key(r, c, dates), 0) >= 2 else ""
             print(f"- {r['transcript']} {c.get('answer', '')} · 원인 {c.get('cause', '')} · 등재 조건 {c.get('admit') or '미판정'}"
                   f" · {c.get('why', '')}{' · 자산 ' + hint if hint else ''}{recur}")
 
