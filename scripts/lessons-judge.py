@@ -8,7 +8,7 @@
     lessons-judge.py report --sessions-from <jsonl> [--days N]  그 지표 파일의 세션들과 나머지의 정답률
     lessons-judge.py samples [--n 5]       사람이 판정할 표본
     lessons-judge.py sample-record <transcript> <answer> <correct|content|level|path>
-    lessons-judge.py approve               이번 승인 묶음을 검토 완료로 바꾼다
+    lessons-judge.py approve               이번 승인 묶음(등재 후보)을 검토 완료로 바꾼다
     lessons-judge.py wrap                  세션 마무리 훅. 올릴 대기가 있으면 승인 묶음 안내 한 줄 (ADR-0047)
     lessons-judge.py baseline [--sample 20] 기준선 1회: 설치 이전 지난 기록 표본을 판정한다 (다시 실행하지 않는다)
     lessons-judge.py baseline --path [--sample 20]  경로 원인 기준선 1회: 원인 둘 시절에 판정한 세션을 다시 판정한다 (ADR-0043)
@@ -41,7 +41,7 @@ SAMPLE_GOAL = 50
 AGREEMENT_MIN = 0.8      # 사람 표본과의 일치도가 이 값 밑이면 기계 판정 지표를 쓰지 않는다 (ADR-0037)
 DAILY_MAX = 10           # 하루 판정 상한. 비용이 사용 한도를 갉아먹지 않게 한다
 INPUT_CAP = 150_000      # 판정 입력 글자 상한 (#991 실측: 14만 자 ≈ 0.41달러)
-APPROVE_BATCH = 5        # 한 번에 올리고 닫는 승인 건수. 세션 마무리 3분 안에 끝나는 양이다 (ADR-0047)
+APPROVE_BATCH = 5        # 한 번에 올리고 닫는 등재 후보 수. 세션 마무리 3분 안에 끝나는 양이다 (ADR-0047, 단위는 #1209 부터 후보)
 EXPIRE_DAYS = 14         # 이보다 오래된 대기는 만료로 닫는다. 맥락이 사라진 세션은 판정 가치가 낮다 (ADR-0047)
 TAXONOMY = 2             # 원인 갈래 판. 1 = 내용 · 수준 (ADR-0037), 2 = 내용 · 수준 · 경로 (ADR-0043). 판이 다른 행은 경로를 비교하지 않는다
 CAUSES = ("content", "level", "path")
@@ -169,6 +169,30 @@ def count_answers(items: list[tuple[str, str]]) -> int:
 
 def pending_count() -> int:
     return sum(1 for r in read_jsonl(lesson_path("judgments.jsonl")) if r.get("status") == "pending")
+
+
+def open_candidates(row: dict) -> list[dict]:
+    """대기 세션에서 아직 사람이 보지 않은 등재 후보. 판정 전 행(admit 없음)도 후보다."""
+    return [c for c in row.get("corrections", []) if c.get("admit") != "none" and not c.get("reviewed")]
+
+
+def batch_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
+    """이번 승인 묶음. 세션이 아니라 등재 후보 APPROVE_BATCH 개를 고른다.
+    why: 세션 단위면 교정이 많은 세션 하나가 후보 수십 개를 끌고 와 마무리 3분 안에 못 열고 만료된다 (#1209)
+    순서: 같은 자산이 2회 이상 걸린 후보(재발)를 먼저, 그다음 오래된 세션부터"""
+    hints: dict[str, int] = {}
+    for c in (c for r in rows for c in r.get("corrections", [])):
+        h = (c.get("asset_hint") or "").strip()
+        if h:
+            hints[h] = hints.get(h, 0) + 1
+    pool = [(r, c) for r in rows if r.get("status") == "pending" for c in open_candidates(r)]
+    pool.sort(key=lambda rc: 0 if hints.get((rc[1].get("asset_hint") or "").strip(), 0) >= 2 else 1)
+    return pool[:APPROVE_BATCH]
+
+
+def pending_candidate_count() -> int:
+    rows = [r for r in read_jsonl(lesson_path("judgments.jsonl")) if r.get("status") == "pending"]
+    return sum(len(open_candidates(r)) for r in rows)
 
 
 def days_since(date_text: str) -> float:
@@ -368,6 +392,11 @@ def judge_one(path: str, state: dict) -> None:
     # why: 기각 · 만료로 닫힌 세션도 검토가 끝난 것이다. reviewed 만 보면 그 세션을 다시 판정할 때 옛 교정이 후보로 되살아난다
     closed = bool(prev) and prev.get("status") != "pending"
     seen = {c.get("answer") for c in prev.get("corrections", [])} if closed else set()
+    # why: 승인 묶음은 후보 단위로 닫는다. 대기 중에 다시 판정해도 이미 본 후보를 다시 올리지 않는다 (#1209)
+    reviewed_before = {c.get("answer") for c in prev.get("corrections", []) if c.get("reviewed")} if prev else set()
+    for c in corrections:
+        if c.get("answer") in reviewed_before:
+            c["reviewed"] = True
     status = "pending" if any(c.get("answer") not in seen for c in corrections) or not closed else prev.get("status", "reviewed")
     first_mtime = (prev.get("first_mtime") or prev.get("mtime")) if prev else mtime
     baseline = bool(os.environ.get("OPS_AGENT_LESSONS_BASELINE"))
@@ -399,7 +428,7 @@ def judge_one(path: str, state: dict) -> None:
 
 def has_candidate(corrections: list[dict], seen: set) -> bool:
     """사람에게 올릴 교정이 있는가. 판정 전 행(admit 없음)은 후보로 둔다. 확인 없이 닫지 않는다."""
-    return any(c.get("answer") not in seen and c.get("admit") != "none" for c in corrections)
+    return any(c.get("answer") not in seen and c.get("admit") != "none" and not c.get("reviewed") for c in corrections)
 
 
 def close_stale() -> None:
@@ -622,6 +651,7 @@ def cmd_report(args: list[str]) -> None:
     print(f"| 원인 수준 | {by_cause['level']} |")
     print(f"| 원인 경로 | {by_cause['path']} |")
     print(f"| 승인 대기 | {pending}건 |")
+    print(f"| 승인 대기 후보 | {sum(len(open_candidates(r)) for r in rows if r.get('status') == 'pending')}개 |")
     print(f"| 자동 기각 | {sum(1 for r in rows if r.get('status') == 'rejected')}건 |")
     print(f"| 기한 만료 | {sum(1 for r in rows if r.get('status') == 'expired')}건 |")
     base = [r for r in rows if r.get("baseline")]
@@ -642,12 +672,14 @@ def cmd_report(args: list[str]) -> None:
         ratio = agree / len(samples)
         verdict = "" if len(samples) < SAMPLE_GOAL else (" · 기준 충족" if ratio >= AGREEMENT_MIN else " · 기준 미달: 사람 표본 주기 점검으로 전환")
         print(f"\n표본 일치도: {agree}/{len(samples)} ({ratio * 100:.0f}%, 기준 {AGREEMENT_MIN * 100:.0f}%){verdict}")
-    waiting = [r for r in rows if r.get("status") == "pending"][:APPROVE_BATCH]
+    waiting = batch_candidates(rows)
     if waiting:
-        print(f"\n이번 승인 묶음 ({len(waiting)}건, approve 가 이 건만 닫는다)\n")
-        for r in waiting:
-            cands = sum(1 for c in r.get("corrections", []) if c.get("admit") != "none")
-            print(f"- {r['transcript']} · 답 {r.get('answers', 0)} · 교정 {len(r.get('corrections', []))} · 등재 후보 {cands}")
+        print(f"\n이번 승인 묶음 (후보 {len(waiting)}개, approve 가 이 후보만 닫는다)\n")
+        for r, c in waiting:
+            hint = (c.get("asset_hint") or "").strip()
+            recur = " · 재발" if hint and hints.get(hint, 0) >= 2 else ""
+            print(f"- {r['transcript']} {c.get('answer', '')} · 원인 {c.get('cause', '')} · 등재 조건 {c.get('admit') or '미판정'}"
+                  f" · {c.get('why', '')}{' · 자산 ' + hint if hint else ''}{recur}")
 
 
 def cmd_sessions_from(rows: list[dict], source: str, args: list[str]) -> None:
@@ -725,17 +757,18 @@ def cmd_sample_record(args: list[str]) -> None:
 
 
 def cmd_approve() -> None:
-    """report 가 보인 승인 묶음(오래된 대기 APPROVE_BATCH 건)만 닫는다. 보이지 않은 건은 남긴다."""
+    """report 가 보인 승인 묶음(등재 후보 APPROVE_BATCH 개)만 닫는다. 보이지 않은 후보는 남긴다.
+    세션은 남은 후보가 없을 때 검토 완료가 된다 (#1209)"""
     if not acquire_lock():
         raise SystemExit("판정이 진행 중이다. 잠시 뒤 다시 실행한다")
     try:
         path = lesson_path("judgments.jsonl")
         rows = latest_per_transcript(read_jsonl(path))
-        closed = 0
+        for _, c in batch_candidates(rows):
+            c["reviewed"] = True
         for r in rows:
-            if r.get("status") == "pending" and closed < APPROVE_BATCH:
+            if r.get("status") == "pending" and not open_candidates(r):
                 r["status"] = "reviewed"
-                closed += 1
         rewrite_jsonl(path, rows)
         state = load_state()
         state["last_approval"] = today()
@@ -748,8 +781,9 @@ def cmd_wrap() -> None:
     """세션 마무리 훅이 부른다. 올릴 대기가 있을 때만 승인 묶음 안내 한 줄을 낸다 (ADR-0047)."""
     close_stale()
     pending = pending_count()
+    cands = pending_candidate_count()
     if pending:
-        print(f"레슨 승인 대기 {pending}건: 판결 전에 /learn 으로 승인 묶음 {min(pending, APPROVE_BATCH)}건만 연다. "
+        print(f"레슨 승인 대기 {pending}건 · 후보 {cands}개: 판결 전에 /learn 으로 승인 묶음 후보 {min(cands, APPROVE_BATCH)}개만 연다. "
               f"3분 상한이고, 남은 건은 다음 마무리로 넘긴다. {EXPIRE_DAYS}일이 지난 대기는 만료로 닫힌다.")
 
 

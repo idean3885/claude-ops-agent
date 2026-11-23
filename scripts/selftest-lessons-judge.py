@@ -584,7 +584,7 @@ def test_close_and_wrap() -> None:
         check("판정 전 행(admit 없음)은 대기로 둔다", got["legacy"] == "pending", str(got))
         check("14일 지난 대기는 만료", got["old"] == "expired", str(got))
         check("검토 완료는 건드리지 않는다", got["done"] == "reviewed", str(got))
-        check("마무리 안내: 대기 수와 묶음 상한", "레슨 승인 대기 2건" in r.stdout and "2건만 연다" in r.stdout, r.stdout)
+        check("마무리 안내: 대기 수와 묶음 상한", "레슨 승인 대기 2건 · 후보 2개" in r.stdout and "후보 2개만 연다" in r.stdout, r.stdout)
     with tempfile.TemporaryDirectory() as home:
         write_rows(home, [{"ts": iso(1), "transcript": "zero", "answers": 5, "corrections": [], "status": "pending"}])
         r = run(home, "wrap")
@@ -593,7 +593,7 @@ def test_close_and_wrap() -> None:
         for i in range(7):
             write_judgment(home, iso(1), 10, 1, transcript=f"t{i}")
         r = run(home, "wrap")
-        check("마무리 안내: 묶음은 5건까지", "레슨 승인 대기 7건" in r.stdout and "5건만 연다" in r.stdout, r.stdout)
+        check("마무리 안내: 묶음은 후보 5개까지", "레슨 승인 대기 7건 · 후보 7개" in r.stdout and "후보 5개만 연다" in r.stdout, r.stdout)
     with tempfile.TemporaryDirectory() as home:
         os.makedirs(os.path.dirname(lessons(home, "x")), exist_ok=True)
         open(lessons(home, "judge.lock"), "w").write("1")
@@ -655,7 +655,52 @@ def test_close_and_wrap() -> None:
         write_rows(home, [{"ts": iso(1), "transcript": "m", "answers": 5, "status": "pending",
                            "corrections": [{"answer": "A1", "admit": "none"}, {"answer": "A2", "admit": "taste"}]}])
         r = run(home, "report")
-        check("승인 묶음 줄: 등재 후보 수", "· 등재 후보 1" in r.stdout, r.stdout)
+        check("승인 묶음: 등재 조건 없음은 올리지 않고 후보만 한 줄씩", "m A2 · 원인" in r.stdout and "m A1 ·" not in r.stdout and "후보 1개" in r.stdout, r.stdout)
+    test_candidate_batch()
+
+
+def test_candidate_batch() -> None:
+    """#1209: 승인 묶음은 세션이 아니라 등재 후보 5개다. 재발 후보가 먼저, 남은 후보는 세션에 남는다."""
+    def fake_with(home: str, name: str, corrections: list) -> str:
+        path = os.path.join(home, name)
+        v = {"answers": 2, "corrections": corrections}
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + json.dumps({"result": json.dumps(v), "total_cost_usd": 0.01}) + "'\n")
+        os.chmod(path, 0o755)
+        return path
+
+    def cands(n, prefix="A", hint=""):
+        return [{"answer": f"{prefix}{i}", "cause": "content", "admit": "fact", "why": "", "asset_hint": hint} for i in range(n)]
+    with tempfile.TemporaryDirectory() as home:
+        write_rows(home, [
+            {"ts": iso(2), "transcript": "big", "answers": 300, "status": "pending", "corrections": cands(18)},
+            {"ts": iso(1), "transcript": "small", "answers": 20, "status": "pending",
+             "corrections": cands(1, "B", "원천 먼저 열기") + cands(1, "C", "원천 먼저 열기")},
+        ])
+        r = run(home, "report")
+        lines = [l for l in r.stdout.splitlines() if l.startswith("- ")]
+        check("묶음은 후보 5개 (세션 둘, 후보 20개)", "이번 승인 묶음 (후보 5개" in r.stdout and len(lines) == 5, r.stdout)
+        check("재발 후보(같은 자산 2회)가 먼저", lines[0].startswith("- small B0") and lines[1].startswith("- small C0") and "재발" in lines[0], "\n".join(lines))
+        check("보고: 승인 대기 후보 수", "| 승인 대기 후보 | 20개 |" in r.stdout, r.stdout)
+        run(home, "approve")
+        got = {x["transcript"]: x for x in read_rows(home)}
+        check("approve: 후보가 다 닫힌 세션만 검토 완료", got["small"]["status"] == "reviewed", str(got["small"]))
+        check("approve: 후보가 남은 세션은 대기로 남는다", got["big"]["status"] == "pending"
+              and sum(1 for c in got["big"]["corrections"] if c.get("reviewed")) == 3, str(got["big"]))
+        r = run(home, "report")
+        check("다음 묶음은 남은 후보에서 5개", "| 승인 대기 후보 | 15개 |" in r.stdout and "- big A3 ·" in r.stdout and "- big A0 ·" not in r.stdout, r.stdout)
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 7 * 86400)
+        path = write_transcript(home, "proj", "s-partial", 3600)
+        write_rows(home, [{"ts": iso(0), "transcript": path, "answers": 4, "status": "pending",
+                           "corrections": [{"answer": "A1", "cause": "content", "admit": "fact", "reviewed": True},
+                                           {"answer": "A2", "cause": "content", "admit": "fact"}]}])
+        fake = fake_with(home, "fp", [{"answer": "A1", "cause": "content", "admit": "fact"},
+                                      {"answer": "A2", "cause": "content", "admit": "fact"}])
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        row = read_rows(home)[-1]
+        check("재판정: 대기 중에 이미 본 후보는 다시 올리지 않는다",
+              row["status"] == "pending" and [c.get("reviewed", False) for c in row["corrections"]] == [True, False], str(row))
 
 
 def main() -> int:
