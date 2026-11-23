@@ -17,7 +17,7 @@
  * 종료 코드: 기록 있음 0, 기록 없음 1, 사용법 오류 · 레포 경로 없음 · 훅 실행 실패 2
  */
 import { spawnSync } from 'child_process';
-import { mkdtempSync, writeFileSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'fs';
+import { mkdtempSync, writeFileSync, existsSync, readdirSync, readFileSync, rmSync, statSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -63,7 +63,12 @@ export function probe(command, repo, extraEnv = {}) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// 설치본은 링크 경로(~/.claude/ops-agent/current)로 불려 argv 와 import.meta.url 이 다르다.
+// 실제 경로로 비교하지 않으면 아무것도 하지 않고 0(기록 있음)으로 끝난다 (#1193)
+const isEntry = (() => {
+  try { return realpathSync(process.argv[1] || '') === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+})();
+if (isEntry) {
   const args = process.argv.slice(2);
   let repo = process.cwd();
   let json = false;
