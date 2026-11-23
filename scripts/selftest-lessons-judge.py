@@ -164,7 +164,7 @@ def test_report() -> None:
         r = run(home, "report")
         check("정답률 = 1 - 3/20 = 85.0%", "85.0%" in r.stdout, r.stdout)
         check("기간 밖 제외 (답 수 20)", "| 답 수 | 20 |" in r.stdout, r.stdout)
-        check("승인 대기 건수 (14일 지난 대기는 만료)", "| 승인 대기 | 1건 |" in r.stdout, r.stdout)
+        check("승인 대기 건수 (7일 지난 대기는 만료)", "| 승인 대기 | 1건 |" in r.stdout, r.stdout)
         check("만료 건수", "| 기한 만료 | 1건 |" in r.stdout, r.stdout)
         check("자동 기각 건수", "| 자동 기각 | 0건 |" in r.stdout, r.stdout)
         check("대리 지표 표시", "사람 표본 0/50" in r.stdout, r.stdout)
@@ -573,7 +573,8 @@ def test_close_and_wrap() -> None:
             {"ts": iso(1), "transcript": "none", "answers": 5, "corrections": [c("none"), c("none")], "status": "pending"},
             {"ts": iso(1), "transcript": "mixed", "answers": 5, "corrections": [c("none"), c("fact")], "status": "pending"},
             {"ts": iso(1), "transcript": "legacy", "answers": 5, "corrections": [c()], "status": "pending"},
-            {"ts": iso(15), "transcript": "old", "answers": 5, "corrections": [c("procedure")], "status": "pending"},
+            {"ts": iso(8), "transcript": "old", "answers": 5, "corrections": [c("procedure")], "status": "pending"},
+            {"ts": iso(6), "transcript": "recent", "answers": 5, "corrections": [c("procedure")], "status": "pending"},
             {"ts": iso(15), "transcript": "done", "answers": 5, "corrections": [c("fact")], "status": "reviewed"},
         ])
         r = run(home, "wrap")
@@ -582,9 +583,10 @@ def test_close_and_wrap() -> None:
         check("모두 등재 조건 없음은 기각", got["none"] == "rejected", str(got))
         check("등재 후보가 하나라도 있으면 대기", got["mixed"] == "pending", str(got))
         check("판정 전 행(admit 없음)은 대기로 둔다", got["legacy"] == "pending", str(got))
-        check("14일 지난 대기는 만료", got["old"] == "expired", str(got))
+        check("7일 지난 대기는 만료", got["old"] == "expired", str(got))
+        check("7일 안의 대기는 남는다", got["recent"] == "pending", str(got))
         check("검토 완료는 건드리지 않는다", got["done"] == "reviewed", str(got))
-        check("마무리 안내: 대기 수와 묶음 상한", "레슨 승인 대기 2건 · 후보 2개" in r.stdout and "후보 2개만 연다" in r.stdout, r.stdout)
+        check("마무리 안내: 대기 수와 묶음 상한", "레슨 승인 대기 3건 · 후보 3개" in r.stdout and "후보 3개만 연다" in r.stdout, r.stdout)
     with tempfile.TemporaryDirectory() as home:
         write_rows(home, [{"ts": iso(1), "transcript": "zero", "answers": 5, "corrections": [], "status": "pending"}])
         r = run(home, "wrap")
