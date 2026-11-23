@@ -435,6 +435,85 @@ def test_taxonomy_marks_and_split() -> None:
         check("판: 경로 기준선 파일의 경로 수가 기준선(전)이다", "| 원인 경로 | 80.0% (1세션 · 답 10) | 90.0% (1세션 · 답 10) |" in r.stdout, r.stdout)
 
 
+def test_block_user_messages() -> None:
+    """#1237: 블록 목록으로 저장된 사용자 발화(이미지 첨부 · 붙여 넣기)도 판정 입력에 넣는다.
+    도구 결과 · 메타 행(스킬 본문 · 이미지 경로 주석) · 태그로 시작하는 주입 글 · 중단 표시는 넣지 않는다."""
+    with tempfile.TemporaryDirectory() as home:
+        d = os.path.join(home, ".claude", "projects", "proj")
+        os.makedirs(d)
+        path = os.path.join(d, "s.jsonl")
+        rows = [
+            {"type": "user", "message": {"content": "문자열 질문"}},
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "답1"}]}},
+            {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t", "content": "도구출력"}]}},
+            {"type": "user", "message": {"content": [{"type": "text", "text": "[Request interrupted by user]"}]}},
+            {"type": "user", "message": {"content": [{"type": "text", "text": "블록 교정"},
+                                                     {"type": "image", "source": {"type": "base64", "data": "x"}}]}},
+            {"type": "user", "isMeta": True, "message": {"content": [{"type": "text", "text": "[Image: source: /tmp/a.png]"}]}},
+            {"type": "user", "message": {"content": [{"type": "text", "text": "<system-reminder>주입</system-reminder>"},
+                                                     {"type": "text", "text": "붙여 넣은 교정"}]}},
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "답2"}]}},
+        ]
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+        t = time.time() - 3 * 3600
+        os.utime(path, (t, t))
+        captured = os.path.join(home, "captured.txt")
+        fake = os.path.join(home, "fake-capture")
+        with open(fake, "w") as f:
+            f.write(f"#!/bin/sh\ncat > '{captured}'\nprintf '%s' '"
+                    + json.dumps({"result": json.dumps(FAKE_VERDICT), "total_cost_usd": 0.01}) + "'\n")
+        os.chmod(fake, 0o755)
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        text = open(captured, encoding="utf-8").read() if os.path.exists(captured) else ""
+        check("블록 발화: 문자열 발화는 그대로 들어간다", "USER: 문자열 질문" in text, text[-400:])
+        check("블록 발화: 첨부 발화의 텍스트가 직전 답 뒤 사용자 발화로 들어간다",
+              "A1: 답1\n\nUSER: 블록 교정\n\nUSER: 붙여 넣은 교정\n\nA2: 답2" in text, text[-400:])
+        check("블록 발화: 도구 결과 · 메타 행 · 주입 글 · 중단 표시는 넣지 않는다",
+              not any(s in text for s in ("도구출력", "[Image: source", "system-reminder", "Request interrupted")), text[-400:])
+        rows = read_rows(home) if os.path.exists(lessons(home, "judgments.jsonl")) else []
+        check("입력 판: 새 판정 행은 input 2", len(rows) == 1 and rows[0].get("input") == 2, str(rows))
+
+
+def test_input_version_split() -> None:
+    """#1237: 입력 판이 다른 행(판 표시 없음 = 1, 블록 발화를 빠뜨리던 시절)은 전후 비교에서 뺀다."""
+    old = datetime.datetime(2026, 1, 5).timestamp()
+    mid = datetime.datetime(2026, 1, 8).timestamp()
+    new = datetime.datetime(2026, 1, 20).timestamp()
+    with tempfile.TemporaryDirectory() as home:
+        write_rows(home, [
+            {"ts": iso(0), "transcript": "a", "mtime": old, "answers": 10, "taxonomy": 2, "corrections": [], "status": "reviewed"},
+            {"ts": iso(0), "transcript": "m", "mtime": mid, "answers": 10, "taxonomy": 2, "input": 2,
+             "corrections": [{"cause": "level"}] * 3, "status": "reviewed"},
+            {"ts": iso(0), "transcript": "b", "mtime": new, "answers": 10, "taxonomy": 2, "input": 2,
+             "corrections": [{"cause": "level"}], "status": "reviewed"},
+        ])
+        with open(lessons(home, "path-baseline.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": iso(0), "transcript": "z", "first_mtime": old, "answers": 10, "taxonomy": 2,
+                                "corrections": [{"cause": "path"}] * 5}) + "\n")
+        r = run(home, "report", "--split", "2026-01-10")
+        check("입력 판: 전체는 같은 입력 판 행끼리만 비교한다",
+              "| 전체 | 70.0% (1세션 · 답 10) | 90.0% (1세션 · 답 10) |" in r.stdout, r.stdout)
+        check("입력 판: 경로 기준선도 입력 판이 다르면 뺀다",
+              "| 원인 경로 | 100.0% (1세션 · 답 10) |" in r.stdout, r.stdout)
+        check("입력 판: 뺀 세션 수를 알린다", "입력 판이 달라 뺀 세션 2" in r.stdout, r.stdout)
+    with tempfile.TemporaryDirectory() as home:
+        write_rows(home, [
+            {"ts": iso(0), "transcript": "a", "session": "a", "mtime": old, "answers": 10, "corrections": [], "status": "reviewed"},
+            {"ts": iso(0), "transcript": "b", "session": "b", "mtime": new, "answers": 10, "input": 2,
+             "corrections": [{"cause": "level"}], "status": "reviewed"},
+            {"ts": iso(0), "transcript": "c", "session": "c", "mtime": new, "answers": 10, "input": 2,
+             "corrections": [], "status": "reviewed"},
+        ])
+        source = os.path.join(home, "hits.jsonl")
+        with open(source, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"session": "a"}) + "\n" + json.dumps({"session": "b"}) + "\n")
+        r = run(home, "report", "--sessions-from", source)
+        check("입력 판: 세션 집합 비교도 같은 입력 판 행끼리만 한다",
+              "| 세션 집합 | 90.0% (1세션 · 답 10) |" in r.stdout and "| 나머지 | 100.0% (1세션 · 답 10) |" in r.stdout
+              and "입력 판이 달라 뺀 세션 1" in r.stdout, r.stdout)
+
+
 def test_sample_record_path() -> None:
     with tempfile.TemporaryDirectory() as home:
         write_rows(home, [{"ts": iso(1), "transcript": "t", "answers": 2, "taxonomy": 2, "status": "reviewed",
@@ -758,6 +837,8 @@ def main() -> int:
     test_baseline_failure_allows_retry()
     test_path_cause()
     test_taxonomy_marks_and_split()
+    test_block_user_messages()
+    test_input_version_split()
     test_sample_record_path()
     test_sessions_from()
     test_path_baseline()
