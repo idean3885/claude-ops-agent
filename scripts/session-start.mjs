@@ -641,6 +641,12 @@ function buildRouteSummary() {
         && Array.isArray(row.actions) && row.actions.some(a => a === 'commit' || a === 'push')).length;
       parts.push(`플로우 진입 누락 ${missed}건(커밋 · push)`);
     }
+    // 한 세션 · 한 레포의 두 번째 PR 생성부터가 세션 묶음 규칙(ADR-0039) 위반이다 (#1236)
+    const sessionPr = join(opsAgentGlobal, 'metrics', 'session-pr.jsonl');
+    if (existsSync(sessionPr)) {
+      const extra = readJsonRows(sessionPr).filter(row => recent(row) && Number(row.nth) >= 2).length;
+      parts.push(`세션당 PR 초과 ${extra}건`);
+    }
     if (!parts.length) return '';
     return ['', `[경로 · 최근 ${ROUTE_DAYS}일] ${parts.join(' / ')}`].join('\n');
   } catch {

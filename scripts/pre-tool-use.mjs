@@ -680,6 +680,10 @@ if (!DISABLE) {
         }
       }
 
+      // 세션당 PR 수 지표 (#1236). 한 세션에서 잡은 이슈는 몇 개든 PR 하나로 묶는다 (ADR-0039).
+      // 막지 않고 세션 · 레포마다 몇 번째 생성인지 남긴다. 두 번째부터가 규칙 위반이고, 세션 시작 경로 요약이 센다.
+      recordSessionPr(hookInput, command);
+
       // 한시 권한: 되돌리기 어려운/외부 영향 행위(클러스터 mutation·PR 머지·릴리즈·force push
       // ·리소스 삭제)는 세션 명시 허용 없으면 차단한다. 권한을 추측해 실행하는 사고를 기계적으로 막는다.
       if (!GATE_DISABLE && remainingMs() <= 0) noteBudgetExceeded('한시 권한');
@@ -1574,6 +1578,50 @@ function draftCreateInSkipRepo(command, hookCwd) {
     return null;
   }
   return { repo: basename(root), form: segs.length === 1 ? 'standalone' : 'compound' };
+}
+
+// 워크트리는 디렉토리 이름이 브랜치마다 달라 같은 레포가 여러 이름으로 갈린다. `.git` 이 파일이면 가리키는 본 레포 이름을 쓴다.
+function repoIdentity(root) {
+  try {
+    const dotGit = join(root, '.git');
+    if (statSync(dotGit).isFile()) {
+      const m = readFileSync(dotGit, 'utf8').match(/^gitdir:\s*(.+?)\s*$/m);
+      const at = m ? m[1].lastIndexOf('/.git/') : -1;
+      if (at > 0) return basename(m[1].slice(0, at));
+    }
+  } catch { /* 읽지 못하면 디렉토리 이름으로 본다 */ }
+  return basename(root);
+}
+
+function recordSessionPr(hookInput, command) {
+  try {
+    if (!hookInput.session_id) return;
+    if (!gateSegments(command).some(seg => PR_CREATE_RE.test(seg))) return;
+    const { cwd, ok } = resolveCommandCwd(command, hookInput.cwd);
+    if (!ok) return;
+    const root = findRepoRoot(cwd);
+    if (!root) return;
+    const repo = repoIdentity(root);
+    const file = join(homedir(), '.claude', 'ops-agent', 'metrics', 'session-pr.jsonl');
+    mkdirSync(dirname(file), { recursive: true });
+    let before = 0;
+    if (existsSync(file)) {
+      for (const line of readFileSync(file, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const row = JSON.parse(line);
+          if (row.session === hookInput.session_id && row.repo === repo) before++;
+        } catch { /* 깨진 줄은 건너뛴다 */ }
+      }
+    }
+    appendFileSync(file, JSON.stringify({
+      ts: new Date().toISOString(),
+      session: hookInput.session_id,
+      ...(hookInput.agent_id ? { agent: hookInput.agent_id } : {}),
+      repo,
+      nth: before + 1,
+    }) + '\n');
+  } catch { /* 기록 실패는 판정에 영향을 주지 않는다 */ }
 }
 
 function recordDraftInSkipRepo(hookInput, hit) {

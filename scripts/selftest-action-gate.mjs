@@ -16,7 +16,7 @@ import { spawnSync } from 'child_process';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { basename, dirname, join } from 'path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const hook = join(here, 'pre-tool-use.mjs');
@@ -565,7 +565,8 @@ function issueCase(name, want, command, { env = {}, reasonHas = '', label = '이
   const res = spawnSync('node', [hook], {
     input: JSON.stringify({ tool_name: 'Bash', cwd, session_id: 'selftest', tool_input: { command } }),
     encoding: 'utf8',
-    env: { ...process.env, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg, ...env },
+    env: { ...process.env, HOME: issueHome, // 지표가 사용자 HOME 에 시험 줄을 남기지 않게 한다 (#1236)
+      OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg, ...env },
   });
   let got = 'pass';
   let reason = '';
@@ -716,6 +717,46 @@ for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, 
     console.log(`${ok ? '  OK' : '  XX'}  드래프트 지표: ${name} — 기록 ${rows.length}건${rows[0] ? `(${rows[0].form})` : ''} · 안내 ${ctx ? '있음' : '없음'}${denied ? ' · 차단됨' : ''}`);
     rmSync(home, { recursive: true, force: true });
   }
+}
+
+// 세션당 PR 수 지표 (#1236). 같은 세션 · 같은 레포의 두 번째 생성부터 nth >= 2 로 남는다.
+// 워크트리(.git 파일)는 디렉토리 이름이 달라도 본 레포 이름으로 센다. 막지 않는다.
+{
+  const home = mkdtempSync(join(tmpdir(), 'session-pr-home-'));
+  const main = mkdtempSync(join(tmpdir(), 'session-pr-main-'));
+  mkdirSync(join(main, '.git', 'worktrees', 'wt-a'), { recursive: true });
+  mkdirSync(join(main, '.ops-agent'));
+  writeFileSync(join(main, '.ops-agent', 'repo-type.json'), '{"type": "storage", "allow": ["skip-draft"]}');
+  const wt = mkdtempSync(join(tmpdir(), 'session-pr-wt-'));
+  writeFileSync(join(wt, '.git'), `gitdir: ${join(main, '.git', 'worktrees', 'wt-a')}\n`);
+  mkdirSync(join(wt, '.ops-agent'));
+  writeFileSync(join(wt, '.ops-agent', 'repo-type.json'), '{"type": "storage", "allow": ["skip-draft"]}');
+  const runPr = (cwd, session, command = 'gh pr create --title "x" --body "y"') => spawnSync('node', [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', cwd, session_id: session, tool_input: { command } }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, OPS_AGENT_ACTION_GATE_ALLOW: '1', OPS_AGENT_FINAL_CHECK_DISABLE: '1', OPS_AGENT_FLOW_ENTRY_DISABLE: '1', OPS_AGENT_CONFIDENTIAL_CONFIG_PATH: issueCfg },
+  });
+  const r1 = runPr(main, 's1');
+  runPr(wt, 's1');
+  runPr(main, 's2');
+  runPr(main, 's1', 'gh pr view 1');
+  const file = join(home, '.claude', 'ops-agent', 'metrics', 'session-pr.jsonl');
+  let rows = [];
+  try { rows = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { rows = []; }
+  let denied = false;
+  try { denied = JSON.parse((r1.stdout || '').trim()).hookSpecificOutput?.permissionDecision === 'deny'; } catch { /* 출력 없음 */ }
+  const repo = basename(main);
+  const SESSION_PR_CASES = [
+    ['첫 생성은 nth 1 이고 막지 않는다', !denied && rows[0]?.nth === 1 && rows[0]?.repo === repo],
+    ['같은 세션 · 워크트리의 생성은 같은 레포의 nth 2', rows[1]?.nth === 2 && rows[1]?.repo === repo && rows[1]?.session === 's1'],
+    ['다른 세션은 nth 1 부터', rows[2]?.nth === 1 && rows[2]?.session === 's2'],
+    ['PR 생성이 아닌 명령은 기록하지 않는다', rows.length === 3],
+  ];
+  for (const [name, ok] of SESSION_PR_CASES) {
+    if (!ok) failed++;
+    console.log(`${ok ? '  OK' : '  XX'}  세션당 PR 지표: ${name}${ok ? '' : ` — ${JSON.stringify(rows)}`}`);
+  }
+  for (const d of [home, main, wt]) rmSync(d, { recursive: true, force: true });
 }
 
 // 한자 섞임 가드 (#1107). 커밋 메시지 · PR 제목 · 본문 · 코멘트에 한글과 붙은 한자가 있으면 거부한다.
