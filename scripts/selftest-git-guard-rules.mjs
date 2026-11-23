@@ -2,7 +2,7 @@
 /**
  * selftest-git-guard-rules.mjs — git 위험 조작 판정 자체 점검.
  *
- * 브랜치 강제 삭제는 원격 기본 브랜치에 이미 들어 있으면 통과하고, 아니면 막는다 (#1204).
+ * 브랜치 강제 삭제는 끝 커밋이 원격 브랜치 어딘가에 이미 들어 있으면 통과하고, 아니면 막는다 (#1204 · #1208).
  * 판정이 실제 git 조회에 기대므로 임시 원격 · 복제본을 만들어 시험한다.
  *
  * 사용: node scripts/selftest-git-guard-rules.mjs
@@ -29,6 +29,9 @@ sh('git checkout -qb merged && git commit -q --allow-empty -m m && git checkout 
 sh('git merge -q --no-ff merged -m merge && git push -q origin main && git reset -q --hard HEAD~1', work);
 // 머지되지 않은 브랜치
 sh('git checkout -qb unmerged && git commit -q --allow-empty -m u && git checkout -q main', work);
+// 통합 브랜치(develop)로만 머지된 브랜치: 원격 기본 브랜치(main)에는 없다
+sh('git checkout -qb develop && git push -q origin develop && git checkout -qb feature && git commit -q --allow-empty -m f', work);
+sh('git checkout -q develop && git merge -q --no-ff feature -m mf && git push -q origin develop && git checkout -q main && git branch -D develop', work);
 sh('git remote set-head origin main', work);
 
 const runGit = args => {
@@ -42,6 +45,7 @@ const blocked = cmd => detectGitRiskActions([cmd], { runGit }).some(op => op.ver
 
 const CASES = [
   ['원격 기본 브랜치에 머지된 브랜치', 'git branch -D merged', false],
+  ['원격 통합 브랜치에만 머지된 브랜치', 'git branch -D feature', false],
   ['머지되지 않은 브랜치', 'git branch -D unmerged', true],
   ['머지된 것과 안 된 것을 함께', 'git branch -D merged unmerged', true],
   ['없는 브랜치', 'git branch -D nothing', true],
@@ -56,11 +60,11 @@ for (const [name, cmd, want] of CASES) {
   if (!ok) fail++;
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}: ${cmd} → ${got ? '차단' : '통과'}`);
 }
-// 원격 기본 브랜치를 모르고, 대신 쓰는 init.defaultBranch 이름의 원격 브랜치도 없으면 막는다
-sh('git remote set-head origin -d && git config init.defaultBranch nowhere', work);
-const unknown = blocked('git branch -D merged');
-if (!unknown) fail++;
-console.log(`${unknown ? 'OK  ' : 'FAIL'} 원격 기본 브랜치 미상: git branch -D merged → ${unknown ? '차단' : '통과'}`);
+// 원격 기본 브랜치 표시(origin/HEAD)가 없어도 원격 브랜치 포함 여부로 판정한다
+sh('git remote set-head origin -d', work);
+const noHead = blocked('git branch -D merged');
+if (noHead) fail++;
+console.log(`${noHead ? 'FAIL' : 'OK  '} 원격 기본 브랜치 표시 없음: git branch -D merged → ${noHead ? '차단' : '통과'}`);
 
 rmSync(root, { recursive: true, force: true });
 console.log(`${CASES.length + 1 - fail}/${CASES.length + 1} 통과`);
