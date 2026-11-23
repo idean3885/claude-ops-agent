@@ -109,8 +109,10 @@ esac
 `);
 writeFileSync(join(bin, 'git'), `#!/bin/bash
 echo "git $*" >> "$FAKE_LOG"
+[ "$1" = -C ] && shift 2
 case "$1" in
   rev-parse) echo "$FAKE_TOPLEVEL";;
+  check-ignore) [ "$FAKE_NOT_IGNORED" = 1 ] && exit 1; exit 0;;
   remote) [ -n "$FAKE_REMOTES" ] && printf '%b\\n' "$FAKE_REMOTES"; exit 0;;
   fetch) exit 0;;
   ls-remote) case "$FAKE_REMOTE_BRANCH" in 1) exit 0;; 128) exit 128;; *) exit 2;; esac;;
@@ -205,15 +207,26 @@ adapterCase('라벨 조회 실패는 「라벨 없음」으로 읽지 않고 종
 adapterCase('--start 는 담당자 · 시작 코멘트', [...CREATE, '--start'], 0, { logHas: ['gh issue edit 42 --add-assignee @me', 'gh issue comment 42 --body 작업 시작: '], logNot: ['git '], json: { start: 'started', number: '42', type: 'feat' } });
 adapterCase('생성 실패는 종료 2', [...CREATE, '--start'], 2, { env: { FAKE_GH_FAIL: 'create' }, json: { status: 'error' } });
 adapterCase('생성 뒤 시작 실패는 종료 3 + 번호', [...CREATE, '--start'], 3, { env: { FAKE_GH_FAIL: 'comment' }, json: { status: 'error', number: '42', start: 'failed', step: 'start' } });
-adapterCase('--worktree 는 이슈 연결 브랜치를 만들고 그 브랜치로 워크트리', [...CREATE, '--start', '--worktree'], 0, { logHas: ['gh issue develop 42 --name feat/42 --base main', 'git fetch origin', 'git worktree add ../proj-feat-42 -b feat/42 --track origin/feat/42'], json: { branch: 'feat/42', worktree: '../proj-feat-42', bundled: 'undefined' } });
+adapterCase('--worktree 는 이슈 연결 브랜치를 만들고 그 브랜치로 워크트리', [...CREATE, '--start', '--worktree'], 0, { logHas: ['gh issue develop 42 --name feat/42 --base main', 'git fetch origin', `git worktree add ${join(sandbox, 'proj')}/.claude/worktrees/feat-42 -b feat/42 --track origin/feat/42`], json: { branch: 'feat/42', worktree: `${join(sandbox, 'proj')}/.claude/worktrees/feat-42`, bundled: 'undefined' } });
+{
+  // 워크트리 경로가 무시되지 않으면 공용 git 디렉토리의 info/exclude 에 더한다 (#1211)
+  const excl = join(sandbox, 'proj', 'info', 'exclude');
+  rmSync(excl, { force: true });
+  adapterCase('--worktree 경로가 무시되지 않으면 info/exclude 에 더한다 (공용 git 디렉토리는 절대 경로로 구한다)', [...CREATE, '--start', '--worktree'], 0, { env: { FAKE_NOT_IGNORED: '1' }, logHas: ['rev-parse --path-format=absolute --git-common-dir'] });
+  const ok = existsSync(excl) && readFileSync(excl, 'utf8').includes('.claude/worktrees/');
+  report(ok, '어댑터', 'info/exclude 에 .claude/worktrees/ 가 들어간다');
+  rmSync(excl, { force: true });
+  adapterCase('--worktree 경로가 이미 무시되면 info/exclude 를 건드리지 않는다', [...CREATE, '--start', '--worktree'], 0);
+  report(!existsSync(excl), '어댑터', '이미 무시되면 info/exclude 를 만들지 않는다');
+}
 adapterCase('--checkout 은 이슈 연결 브랜치로 직접 체크아웃', [...CREATE, '--start', '--checkout', '--base', 'develop'], 0, { logHas: ['gh issue develop 42 --name feat/42 --base develop', 'git fetch origin', 'git checkout -b feat/42 --track origin/feat/42'], logNot: ['worktree add'], json: { branch: 'feat/42' } });
 adapterCase('--branch 가 기본 이름을 덮는다', [...CREATE, '--start', '--worktree', '--branch', 'feature/42'], 0, { logHas: ['--name feature/42 --base main', '-b feature/42 --track origin/feature/42'] });
 adapterCase('이슈 연결 브랜치 생성 실패는 종료 3 (생성 뒤)', [...CREATE, '--start', '--worktree'], 3, { env: { FAKE_GH_FAIL: 'develop' }, logNot: ['worktree add'], json: { start: 'failed' } });
 adapterCase('start: -R 이 이슈 연결 브랜치 생성에 전달된다', ['start', '42', '--type', 'docs', '-R', 'o/r', '--worktree'], 0, { logHas: ['gh issue develop 42 -R o/r --name docs/42'] });
 adapterCase('start: 원격에 있는 브랜치(세션 묶음)는 이슈 연결 브랜치를 만들지 않고 그 브랜치로 체크아웃', ['start', '43', '--type', 'docs', '--checkout', '--branch', 'fix/42'], 0, { env: { FAKE_REMOTE_BRANCH: '1' }, logHas: ['git ls-remote --exit-code origin refs/heads/fix/42', 'git fetch origin', 'git checkout fix/42'], logNot: ['issue develop', 'checkout -b'], json: { branch: 'fix/42', bundled: 'true' } });
-adapterCase('start: 원격에 있는 브랜치(세션 묶음)는 -b 없이 워크트리', ['start', '43', '--type', 'docs', '--worktree', '--branch', 'fix/42'], 0, { env: { FAKE_REMOTE_BRANCH: '1' }, logHas: ['git worktree add ../proj-docs-43 fix/42'], logNot: ['issue develop', ' -b '], json: { bundled: 'true' } });
+adapterCase('start: 원격에 있는 브랜치(세션 묶음)는 -b 없이 워크트리', ['start', '43', '--type', 'docs', '--worktree', '--branch', 'fix/42'], 0, { env: { FAKE_REMOTE_BRANCH: '1' }, logHas: [`git worktree add ${join(sandbox, 'proj')}/.claude/worktrees/docs-43 fix/42`], logNot: ['issue develop', ' -b '], json: { bundled: 'true' } });
 adapterCase('start: 원격에만 있는 묶음 브랜치는 origin 을 명시해 연다', ['start', '43', '--type', 'docs', '--checkout', '--branch', 'fix/42'], 0, { env: { FAKE_REMOTE_BRANCH: '1', FAKE_LOCAL_BRANCH: '0' }, logHas: ['git checkout -b fix/42 --track origin/fix/42'], logNot: ['issue develop'], json: { bundled: 'true' } });
-adapterCase('start: 원격에만 있는 묶음 브랜치는 워크트리도 origin 을 명시해 연다', ['start', '43', '--type', 'docs', '--worktree', '--branch', 'fix/42'], 0, { env: { FAKE_REMOTE_BRANCH: '1', FAKE_LOCAL_BRANCH: '0' }, logHas: ['git worktree add ../proj-docs-43 -b fix/42 --track origin/fix/42'], logNot: ['issue develop'], json: { bundled: 'true' } });
+adapterCase('start: 원격에만 있는 묶음 브랜치는 워크트리도 origin 을 명시해 연다', ['start', '43', '--type', 'docs', '--worktree', '--branch', 'fix/42'], 0, { env: { FAKE_REMOTE_BRANCH: '1', FAKE_LOCAL_BRANCH: '0' }, logHas: [`git worktree add ${join(sandbox, 'proj')}/.claude/worktrees/docs-43 -b fix/42 --track origin/fix/42`], logNot: ['issue develop'], json: { bundled: 'true' } });
 adapterCase('start: 자기 기본 브랜치를 다시 연 재시작은 묶음이 아니다', ['start', '43', '--type', 'docs', '--checkout'], 0, { env: { FAKE_REMOTE_BRANCH: '1' }, logHas: ['git checkout docs/43'], logNot: ['issue develop'], json: { branch: 'docs/43', bundled: 'undefined' } });
 adapterCase('start: 원격 브랜치 조회 오류는 이슈 연결 브랜치 생성 전에 멈춘다', ['start', '43', '--type', 'docs', '--checkout', '--branch', 'fix/42'], 2, { env: { FAKE_REMOTE_BRANCH: '128' }, logNot: ['issue develop', 'git checkout'], json: { status: 'error' } });
 adapterCase('브랜치 없는 시작은 이슈 연결 브랜치를 만들지 않는다', [...CREATE, '--start'], 0, { logNot: ['issue develop'] });

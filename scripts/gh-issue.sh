@@ -17,7 +17,7 @@
 #   --structure  본문 구조. 기본값은 fix → iss1, 그 외 → iss5 (extensions/issue.md 「필수 구조」 절)
 #   --start      생성 직후 start 로 담당자 · 시작 코멘트 · (코드 작업이면) 브랜치
 #   --no-start   지금 착수하지 않는 이슈(백로그 · 후속). 사유를 출력에 남긴다
-#   --worktree   `../{프로젝트}-{타입}-{번호}` 워크트리를 이슈에 연결된 브랜치로 연다 (가이드 기본값. 플래그를 생략하면 브랜치를 만들지 않는다)
+#   --worktree   레포 안 `.claude/worktrees/{타입}-{번호}` 워크트리를 이슈에 연결된 브랜치로 연다 (가이드 기본값. 플래그를 생략하면 브랜치를 만들지 않는다)
 #   --checkout   현재 작업 트리에서 이슈에 연결된 브랜치로 직접 체크아웃
 #                브랜치는 `gh issue develop` 이 `origin/{base}` 에서 원격에 만든다. 이슈에서 만든 브랜치라
 #                그 브랜치의 PR 이 이슈에 자동 연결되고, 기본 브랜치에 머지되면 이슈가 닫힌다 (#813)
@@ -155,8 +155,8 @@ cmd_start() {
   [ -z "$BRANCH" ] && BRANCH="$TYPE/$NUMBER"
   local out=(number="$NUMBER" type="$TYPE" started="$STARTED")
   if [ -n "$MODE" ]; then
-    local PROJECT
-    PROJECT="$(basename "$(git rev-parse --show-toplevel)")" || err_json 2 "git 레포가 아니다" number="$NUMBER"
+    local TOP
+    TOP="$(git rev-parse --show-toplevel)" || err_json 2 "git 레포가 아니다" number="$NUMBER"
     # 세션 묶음(ADR-0039): 한 PR 브랜치에 이슈를 더하면 브랜치가 이미 원격에 있다.
     # why: gh issue develop 은 있는 이름에서 실패하면서 git 설정에 이름 빈 브랜치 절을 남겨 레포의 git 명령을 모두 깨뜨린다 (#1078)
     # 전체 참조 이름으로 본다. 짧은 이름은 끝자리 일치라 backup/fix/42 가 fix/42 로 읽힌다.
@@ -178,7 +178,14 @@ cmd_start() {
     fi
     git fetch origin >/dev/null 2>&1 || err_json 2 "git fetch origin 실패" number="$NUMBER"
     if [ "$MODE" = worktree ]; then
-      local WT="../${PROJECT}-${TYPE}-${NUMBER}"
+      # why: 레포 옆(../)은 하네스 작업 디렉토리 밖이라 셸 위치가 호출마다 초기화된다.
+      # 레포를 작업 위치로 요구하는 단독 커밋 게이트 · 드래프트 생략 판정이 막혀 레포 안에 둔다 (#1211)
+      local WT="$TOP/.claude/worktrees/${TYPE}-${NUMBER}"
+      if ! git -C "$TOP" check-ignore -q "$WT" 2>/dev/null; then
+        # why: --git-common-dir 은 메인 체크아웃에서 상대 경로(.git)라, 하위 디렉토리에서 실행하면 셸 위치 기준으로 풀린다
+        local EXCL; EXCL="$(git -C "$TOP" rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+        mkdir -p "$(dirname "$EXCL")" && printf '.claude/worktrees/\n' >> "$EXCL"
+      fi
       if [ -n "$LOCAL" ]; then
         git worktree add "$WT" "$BRANCH" >/dev/null \
           || err_json 2 "git worktree add 실패: $WT" number="$NUMBER" branch="$BRANCH"
