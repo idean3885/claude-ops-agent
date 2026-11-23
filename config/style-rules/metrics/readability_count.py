@@ -8,7 +8,7 @@
   P2 문단 2-4문장 · P4 산문 사이 단문 문단 · P7 산문 5문단 연속
   V2 시각 요소 없이 15-20문장 · L1 목록 3-7항목 · L4 테이블 열 5 이하 · L9 불릿 안 머리말
   H1 단일 H1 · H2 레벨 건너뛰기 · C1 코드 언어 명시
-  PN7 서술 문장 종결 부호 · PN8 물결표 취소선 (정본은 `base/punctuation.md`)
+  PN7 서술 문장 종결 부호 · PN8 물결표 취소선 · PN9 의도한 취소선 (정본은 `base/punctuation.md`)
 
 미커버 (`부분`·`불가`): P1 P3 P5 P8 P10 P11 H4 L2 L3 C2 V1 V3 V4 CJ3
   기계가 의도를 읽어야 하는 항목이다. 구현하면 과검출로 신뢰가 떨어진다.
@@ -69,6 +69,8 @@ BR = re.compile(r"<br\s*/?>")
 # 블록 분류는 위 blocks() 와 따로 한다. 인라인 범위가 GitHub 파서와 같아야 과검출 · 놓침이 없다.
 CODE_SPAN = re.compile(r"`[^`]*`")
 TILDE = re.compile(r"(?<!~)~(?!~)")
+# PN9: 겹 물결표 취소선. 정정을 취소선으로 남기지 않는다 (#1190). PN8 의 홑 물결표와 뜻이 달라 따로 센다.
+DOUBLE_TILDE = re.compile(r"(?<!~)~~(?!~)")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 # CommonMark HTML 블록: 주석 · 블록 태그(6형)로 시작하는 줄, 또는 태그 하나만 있는 줄(7형). 인라인 태그로 시작하는 문단은 아니다.
 BLOCK_TAGS = (
@@ -116,6 +118,25 @@ def strikes(text):
                 continue
             prev = s[i - 1] if i > 0 else " "
             nxt = s[i + 1] if i + 1 < len(s) else " "
+            if not nxt.isspace() and (not _punct(nxt) or prev.isspace() or _punct(prev)):
+                opens.append(i)
+            if not prev.isspace() and (not _punct(prev) or nxt.isspace() or _punct(nxt)):
+                closes.append(i)
+        if any(c > o for o in opens for c in closes):
+            return True
+    return False
+
+
+def double_strikes(text):
+    """인라인 범위 하나에 겹 물결표 취소선(`~~…~~`)이 있는가. 여닫는 조건은 strikes() 와 같다."""
+    for s in _inline_units(text):
+        opens, closes = [], []
+        for m in DOUBLE_TILDE.finditer(s):
+            i, j = m.start(), m.end()
+            if (i - len(s[:i].rstrip("\\"))) % 2:
+                continue
+            prev = s[i - 1] if i > 0 else " "
+            nxt = s[j] if j < len(s) else " "
             if not nxt.isspace() and (not _punct(nxt) or prev.isspace() or _punct(prev)):
                 opens.append(i)
             if not prev.isspace() and (not _punct(prev) or nxt.isspace() or _punct(nxt)):
@@ -206,6 +227,16 @@ def pn8(text):
     return [(k + 1, "PN8", "물결표 두 개가 취소선으로 렌더된다. 역슬래시로 이스케이프한다") for k in sorted(hits)]
 
 
+def pn9(text):
+    """겹 물결표 취소선이 있는 인라인 범위에서, 겹 물결표가 있는 줄마다 (줄, 규칙, 안내)."""
+    lines = text.split("\n")
+    hits = set()
+    for start, unit, n in _units(lines, 0):
+        if double_strikes(unit):
+            hits.update(k for k in range(start, start + n) if DOUBLE_TILDE.search(CODE_SPAN.sub("", lines[k])))
+    return [(k + 1, "PN9", "취소선을 쓰지 않는다. 정정은 본문을 그 자리에서 고치고 내력은 수정 이력에 맡긴다") for k in sorted(hits)]
+
+
 def unterminated(text, cell=False):
     """`<br>` 로 나눈 조각 중 서술어로 끝나는데 종결 부호가 없는 개수."""
     parts = BR.split(UNQUOTE.sub("", text))
@@ -287,7 +318,7 @@ def l9(bs):
 def check(path):
     text = pathlib.Path(path).read_text()
     bs = blocks(text)
-    hits, prose_run, since_visual, h1, prev_level = pn8(text) + l9(bs), 0, 0, 0, 0
+    hits, prose_run, since_visual, h1, prev_level = pn8(text) + pn9(text) + l9(bs), 0, 0, 0, 0
 
     for idx, (kind, line, body, lang) in enumerate(bs):
         if kind == "heading":

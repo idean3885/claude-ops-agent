@@ -5,7 +5,7 @@
 > **분리 구조**: 다른 base 파일은 쓴 것을 판정한다. 이 파일은 쓰기 전에 판정한다.
 > - 문단·문장 단위 구조 → [`readability.md`](./readability.md) (P/H/L/C/V/CJ/BQ/LB/SC)
 > - 저자 톤 → [`tone.md`](./tone.md) (T1\~)
-> - 한국어 구두점 → [`punctuation.md`](./punctuation.md) (PN1\~PN8)
+> - 한국어 구두점 → [`punctuation.md`](./punctuation.md) (PN1\~PN9)
 > - AI 티 분류 → [`ai-tells.md`](./ai-tells.md) (A\~K)
 > - 문서 총량 → [`length.md`](./length.md) (LN1\~LN2)
 > - 에이전트가 읽는 문서 → [`authoring.md`](./authoring.md) (AU1\~AU8)
