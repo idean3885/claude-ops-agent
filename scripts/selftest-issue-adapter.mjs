@@ -68,6 +68,8 @@ const BODY_CASES = [
   ['ISS5 날짜가 앞에 온 점검 기록', 'iss5', ISS5_OK.replace('- 사실 2\n', '- 2026-11-17 알파 실측에서 3초 지연\n'), ['inspection-record']],
   ['ISS5 절 번호는 버전이 아니다', 'iss5', ISS5_OK.replace('- 사실 2\n', '- RFC 9110 15.5.1 절이 근거다\n'), []],
   ['ISS5 영문자에 붙인 버전', 'iss5', ISS5_OK.replace('- 사실 2\n', '- node22.1.0 을 쓴다\n'), ['version']],
+  ['ISS5 API 경로의 버전 마디는 버전이 아니다', 'iss5', ISS5_OK.replace('- 사실 2\n', '- `GET /admin/v1.0/storage-types` 가 한 값만 받는다\n'), []],
+  ['ISS5 경로 밖의 v 버전은 그대로 잡는다', 'iss5', ISS5_OK.replace('- 사실 2\n', '- `GET /admin/v1.0/items` 는 v1.0 을 쓴다\n'), ['version']],
   ['ISS1 정상 (레포 템플릿 접미)', 'iss1', '## 재현 절차 (ISS1, ISS4)\n1. x\n\n## 기대 동작 (ISS1)\ny\n\n## 실제 동작 (ISS1)\nz\n\n## 환경 (ISS1)\nw\n\n## 영향 범위 (ISS1)\nv\n', []],
   ['ISS1 절 누락', 'iss1', '## 재현 절차\n1. x\n\n## 기대 동작\ny\n', ['section', 'section', 'section']],
   ['ISS1 은 줄글 · 기존 기록을 보지 않는다', 'iss1', '## 재현 절차\n첫 문장이다. 둘째 문장이다.\n\n## 기대 동작\ny\n\n## 실제 동작\nz\n\n## 환경\nw\n\n## 영향 범위\nv\n', []],
