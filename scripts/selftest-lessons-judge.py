@@ -164,7 +164,9 @@ def test_report() -> None:
         r = run(home, "report")
         check("정답률 = 1 - 3/20 = 85.0%", "85.0%" in r.stdout, r.stdout)
         check("기간 밖 제외 (답 수 20)", "| 답 수 | 20 |" in r.stdout, r.stdout)
-        check("승인 대기 건수", "| 승인 대기 | 2건 |" in r.stdout, r.stdout)
+        check("승인 대기 건수 (14일 지난 대기는 만료)", "| 승인 대기 | 1건 |" in r.stdout, r.stdout)
+        check("만료 건수", "| 기한 만료 | 1건 |" in r.stdout, r.stdout)
+        check("자동 기각 건수", "| 자동 기각 | 0건 |" in r.stdout, r.stdout)
         check("대리 지표 표시", "사람 표본 0/50" in r.stdout, r.stdout)
         r = run(home, "approve")
         r = run(home, "report")
@@ -185,10 +187,10 @@ def test_review_fixes() -> None:
         check("같은 세션은 마지막 판정만 센다 (답 수 12)", "| 답 수 | 12 |" in r.stdout, r.stdout)
     with tempfile.TemporaryDirectory() as home:
         for i in range(12):
-            write_judgment(home, iso(1), 10, 0, transcript=f"t{i}")
+            write_judgment(home, iso(1), 10, 1, transcript=f"t{i}")
         run(home, "approve")
         r = run(home, "report")
-        check("승인은 묶음 10건만 닫는다 (대기 2건 남음)", "| 승인 대기 | 2건 |" in r.stdout, r.stdout)
+        check("승인은 묶음 5건만 닫는다 (대기 7건 남음)", "| 승인 대기 | 7건 |" in r.stdout, r.stdout)
     with tempfile.TemporaryDirectory() as home:
         write_judgment(home, iso(1), 10, 2, hint="원천 먼저 열기")
         r = run(home, "report")
@@ -556,6 +558,106 @@ def test_path_baseline_scope() -> None:
               "| 원인 경로 | 80.0% (1세션 · 답 10) | 90.0% (1세션 · 답 10) |" in r.stdout, r.stdout)
 
 
+def test_close_and_wrap() -> None:
+    """ADR-0047: 올릴 것이 없는 대기는 기각, 기한이 지나면 만료, 마무리는 대기가 있을 때만 안내한다."""
+    prompt = open(TARGET, encoding="utf-8").read()
+    check("등재 조건: 판정 프롬프트가 admit 넷을 받는다", '"admit": "fact|procedure|taste|none"' in prompt)
+    with tempfile.TemporaryDirectory() as home:
+        def c(admit=None):
+            d = {"answer": "A1", "cause": "content", "why": "", "asset_hint": ""}
+            if admit:
+                d["admit"] = admit
+            return d
+        write_rows(home, [
+            {"ts": iso(1), "transcript": "zero", "answers": 5, "corrections": [], "status": "pending"},
+            {"ts": iso(1), "transcript": "none", "answers": 5, "corrections": [c("none"), c("none")], "status": "pending"},
+            {"ts": iso(1), "transcript": "mixed", "answers": 5, "corrections": [c("none"), c("fact")], "status": "pending"},
+            {"ts": iso(1), "transcript": "legacy", "answers": 5, "corrections": [c()], "status": "pending"},
+            {"ts": iso(15), "transcript": "old", "answers": 5, "corrections": [c("procedure")], "status": "pending"},
+            {"ts": iso(15), "transcript": "done", "answers": 5, "corrections": [c("fact")], "status": "reviewed"},
+        ])
+        r = run(home, "wrap")
+        got = {x["transcript"]: x["status"] for x in read_rows(home)}
+        check("교정 0건 대기는 기각", got["zero"] == "rejected", str(got))
+        check("모두 등재 조건 없음은 기각", got["none"] == "rejected", str(got))
+        check("등재 후보가 하나라도 있으면 대기", got["mixed"] == "pending", str(got))
+        check("판정 전 행(admit 없음)은 대기로 둔다", got["legacy"] == "pending", str(got))
+        check("14일 지난 대기는 만료", got["old"] == "expired", str(got))
+        check("검토 완료는 건드리지 않는다", got["done"] == "reviewed", str(got))
+        check("마무리 안내: 대기 수와 묶음 상한", "레슨 승인 대기 2건" in r.stdout and "2건만 연다" in r.stdout, r.stdout)
+    with tempfile.TemporaryDirectory() as home:
+        write_rows(home, [{"ts": iso(1), "transcript": "zero", "answers": 5, "corrections": [], "status": "pending"}])
+        r = run(home, "wrap")
+        check("마무리 안내: 올릴 대기가 없으면 아무것도 내지 않는다", r.stdout.strip() == "", r.stdout)
+    with tempfile.TemporaryDirectory() as home:
+        for i in range(7):
+            write_judgment(home, iso(1), 10, 1, transcript=f"t{i}")
+        r = run(home, "wrap")
+        check("마무리 안내: 묶음은 5건까지", "레슨 승인 대기 7건" in r.stdout and "5건만 연다" in r.stdout, r.stdout)
+    with tempfile.TemporaryDirectory() as home:
+        os.makedirs(os.path.dirname(lessons(home, "x")), exist_ok=True)
+        open(lessons(home, "judge.lock"), "w").write("1")
+        write_rows(home, [{"ts": iso(1), "transcript": "zero", "answers": 5, "corrections": [], "status": "pending"}])
+        run(home, "wrap")
+        check("판정 중(잠금)에는 닫지 않는다", read_rows(home)[0]["status"] == "pending")
+    # 판정 경로: 새 교정이 모두 등재 조건 없음이면 대기에 넣지 않는다
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 7 * 86400)
+        path = write_transcript(home, "proj", "s-none", 3600)
+        fake = os.path.join(home, "fake-none")
+        verdict = {"answers": 2, "corrections": [{"answer": "A2", "cause": "level", "admit": "none", "why": "분량", "asset_hint": ""}]}
+        with open(fake, "w") as f:
+            f.write("#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + json.dumps({"result": json.dumps(verdict), "total_cost_usd": 0.01}) + "'\n")
+        os.chmod(fake, 0o755)
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        rows = read_rows(home)
+        check("판정: 등재 조건 없음만 나온 세션은 기각으로 쌓인다", rows and rows[-1]["status"] == "rejected" and rows[-1]["corrections"][0]["admit"] == "none", str(rows))
+        fake2 = make_fake_claude(home)
+        path2 = write_transcript(home, "proj", "s-legacy", 3600)
+        run(home, "worker", path2, env={"OPS_AGENT_LESSONS_CLAUDE": fake2})
+        rows = {r["transcript"]: r for r in read_rows(home)}
+        check("판정: admit 을 내지 않은 판정은 대기로 둔다", rows[path2]["status"] == "pending", str(rows[path2]))
+
+    def fake_with(home: str, name: str, corrections: list) -> str:
+        path = os.path.join(home, name)
+        v = {"answers": 2, "corrections": corrections}
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + json.dumps({"result": json.dumps(v), "total_cost_usd": 0.01}) + "'\n")
+        os.chmod(path, 0o755)
+        return path
+    # 판정 경로: 교정 0건은 기각, 검토 완료한 교정은 다시 후보로 세지 않는다
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 7 * 86400)
+        path = write_transcript(home, "proj", "s-zero", 3600)
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake_with(home, "f0", [])})
+        check("판정: 교정 0건 세션은 기각으로 쌓인다", read_rows(home)[-1]["status"] == "rejected", str(read_rows(home)))
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 7 * 86400)
+        path = write_transcript(home, "proj", "s-seen", 3600)
+        write_rows(home, [{"ts": iso(0), "transcript": path, "answers": 2, "status": "reviewed",
+                           "corrections": [{"answer": "A1", "cause": "content", "admit": "fact"}]}])
+        fake = fake_with(home, "f1", [{"answer": "A1", "cause": "content", "admit": "fact"},
+                                      {"answer": "A3", "cause": "level", "admit": "none"}])
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        check("판정: 새 교정이 모두 없음이면 검토한 옛 후보가 있어도 기각", read_rows(home)[-1]["status"] == "rejected", str(read_rows(home)))
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        check("판정: 기각된 세션을 다시 판정해도 옛 교정을 후보로 되살리지 않는다", read_rows(home)[-1]["status"] == "rejected", str(read_rows(home)))
+        r = run(home, "report")
+        check("보고: 자동 기각 건수를 센다", "| 자동 기각 | 1건 |" in r.stdout, r.stdout)
+    # 세션 시작도 대기를 닫는다
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 7 * 86400)
+        write_rows(home, [{"ts": iso(1), "transcript": "zero", "answers": 5, "corrections": [], "status": "pending"}])
+        run(home, "spawn", stdin="{}", env={"OPS_AGENT_LESSONS_DISABLE": "0"})
+        check("세션 시작: 올릴 것이 없는 대기를 닫는다", read_rows(home)[0]["status"] == "rejected", str(read_rows(home)))
+    # 승인 묶음 줄이 등재 후보 수를 보인다
+    with tempfile.TemporaryDirectory() as home:
+        write_rows(home, [{"ts": iso(1), "transcript": "m", "answers": 5, "status": "pending",
+                           "corrections": [{"answer": "A1", "admit": "none"}, {"answer": "A2", "admit": "taste"}]}])
+        r = run(home, "report")
+        check("승인 묶음 줄: 등재 후보 수", "· 등재 후보 1" in r.stdout, r.stdout)
+
+
 def main() -> int:
     test_selection_and_worker()
     test_guards()
@@ -574,6 +676,7 @@ def main() -> int:
     test_path_baseline()
     test_path_baseline_cap_and_state()
     test_path_baseline_scope()
+    test_close_and_wrap()
     print(f"통과 {passed} · 실패 {len(failures)}")
     for f in failures:
         print(f"  실패: {f}")
