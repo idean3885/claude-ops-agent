@@ -251,9 +251,10 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-forbidden-words.py
   ```
-- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재되고, 정답률 집계가 무너지면 익히지 않은 항목이 제거 후보로 나온다.
+- [ ] **`scripts/terms.py` · `config/style-rules/base/terms.md` 를 고쳤으면 자체 점검을 실행한다.** 예문 검사가 무너지면 문장 시험 없는 항목이 등재되고, 정답률 집계가 무너지면 익히지 않은 항목이 제거 후보로 나온다. 「검출」 칸은 응답 검사 훅이 읽으므로 금지 표현 점검도 함께 돌린다.
   ```bash
   python3 scripts/selftest-terms.py
+  python3 scripts/selftest-forbidden-words.py
   ```
 - [ ] **`hooks/session-wrap-prompt.sh` 를 고쳤으면 자체 점검을 실행한다.** 발동 조건이 넓어지면 마무리 신호가 아닌 턴에 종결 절차가 끼어들고, 좁아지면 마무리 신호를 놓쳐도 신호가 없다.
   ```bash

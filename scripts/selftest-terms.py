@@ -218,5 +218,18 @@ expect("머리줄은 인덱스가 다른 세트를 싣는다고 알린다", "「
 expect("익힌 항목은 주입하지 않는다",
        bool(section) and not any(f"- {t}: " in section for t, _ in terms.parse_entries(source_text, "익힌 항목")))
 
+# 검출 칸: 응답 검사 훅이 읽는 자리라 깨지면 신호 없이 검출이 빠진다
+DETECT = VALID.replace("- 등재: 2026-10-21", "- 검출: `스키마\\s?정의` → 「테이블 정의」\n- 등재: 2026-10-21")
+expect("검출 칸이 맞으면 통과", terms.check(DETECT) == [])
+expect("검출 칸은 룰로 나온다",
+       terms.detection_rules(DETECT) == [{"title": "스키마 · 테이블 정의", "pattern": r"스키마\s?정의", "replacement": "테이블 정의"}])
+expect("검출 칸 형식 오류는 실패", any("「검출」은" in p for p in terms.check(DETECT.replace(" → 「테이블 정의」", ""))))
+expect("검출 정규식이 컴파일되지 않으면 실패", any("컴파일" in p for p in terms.check(DETECT.replace(r"스키마\s?정의", "스키마(정의"))))
+expect("검출 대체어가 제목의 표준 용어가 아니면 실패", any("대체어" in p for p in terms.check(DETECT.replace("→ 「테이블 정의」", "→ 「구조」"))))
+expect("깨진 검출 칸은 룰로 나오지 않는다", terms.detection_rules(DETECT.replace(r"스키마\s?정의", "스키마(정의")) == [])
+LEARNED_DETECT = HEAD.replace("## 항목\n\n", "## 항목\n\n## 익힌 항목\n\n") + DETECT[len(HEAD):].replace("- 등재: 2026-10-21", "- 등재: 2026-10-21\n- 익힘: 2026-11-01")
+expect("익힌 항목의 검출 칸도 룰로 나온다 (다시 섞이면 되돌릴 신호)", len(terms.detection_rules(LEARNED_DETECT)) == 1)
+expect("검출 칸 없는 항목은 룰이 없다", terms.detection_rules(VALID) == [])
+
 print(f"\n{'전부 통과' if not failures else f'{failures}건 실패'}")
 sys.exit(1 if failures else 0)

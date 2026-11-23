@@ -23,6 +23,7 @@
 | 위치 | 역할 |
 |------|------|
 | `config/style-rules/forbidden-words.json` | 룰 전체 (표현 가드 패턴). 기계에 두는 개인 룰 파일은 읽지 않는다 (ADR-0026). |
+| `config/style-rules/base/terms.md` 의 「검출」 칸 | 표준 용어 항목에 단 정규식. 같은 Stop hook 이 직전 응답에서 찾아 표준 용어로 교정을 요청한다. 칸 해석은 `scripts/terms.py` 가 맡는다 (#1245) |
 
 룰 추가는 JSON 에 객체 하나만 더하면 즉시 반영됩니다(Python 정규식).
 

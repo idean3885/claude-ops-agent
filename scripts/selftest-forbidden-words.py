@@ -4,9 +4,10 @@
 패턴을 고치면 오탐을 줄이면서 정탐까지 함께 빠질 수 있다. 응답 검사는 걸린 것만 알리므로
 빠진 정탐은 신호가 없다. 잡혀야 하는 문장과 통과해야 하는 문장을 고정해 그 붕괴를 잡는다.
 
-    python3 scripts/selftest-forbidden-words.py [룰 파일]
+    python3 scripts/selftest-forbidden-words.py [룰 파일] [표준 용어 목록]
 
-룰 파일을 주면 그 파일을 시험한다. 고치기 전 룰로 실패하는지 볼 때 쓴다.
+룰 파일 · 목록을 주면 그 파일을 시험한다. 고치기 전 룰로 실패하는지 볼 때 쓴다.
+표준 용어 목록의 「검출」 칸도 같은 훅이 읽으므로 여기서 함께 시험한다.
 """
 
 from __future__ import annotations
@@ -24,6 +25,11 @@ conf = json.load(open(RULES, encoding="utf-8"))
 # 응답 검사 훅(hooks/forbidden-words-stop.sh)과 같은 방식으로 어미 묶음을 펼친다
 endings = conf.get("_endingClass") or "(?:다|는|고|서|면|지|기|은|을|었|았)"
 patterns = [re.compile(r["pattern"].replace("%E%", endings)) for r in conf["rules"]]
+# 표준 용어 검출 칸: 훅과 같은 해석기(scripts/terms.py)로 읽는다
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import terms  # noqa: E402
+TERMS = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "config", "style-rules", "base", "terms.md")
+patterns += [re.compile(r["pattern"]) for r in terms.detection_rules(open(TERMS, encoding="utf-8").read())]
 
 
 def caught(sentence: str) -> bool:
@@ -111,6 +117,14 @@ MUST_CATCH = [
     "결코 실패하지 않는다.",
     "절대 다운되지 않는다.",
     "절대로 바뀌지 않는다.",
+    "5시간 창 기준으로 집계한다.",
+    "주간 창이 끝나면 초기화된다.",
+    "1시간 창으로 나눠 읽는다.",
+    "집계 창을 늘린다.",
+    "5시간 창이 리셋된다.",
+    "10분창마다 집계한다.",
+    "일간 창, 주간 창 둘 다 본다.",
+    "시간 창의 끝에서 자른다.",
 ]
 
 MUST_PASS = [
@@ -185,6 +199,18 @@ MUST_PASS = [
     "절대경로로 지정한다.",
     "절대적인 기준은 없다.",
     "항상성을 유지한다.",
+    "창고에 쌓인다.",
+    "창의적인 답을 낸다.",
+    "창업 지원 사업이다.",
+    "출력창에 찍힌다.",
+    "창이 뜨면 닫는다.",
+    "브라우저 창을 연다.",
+    "창문을 닫는다.",
+    "API 진입 창구를 둔다.",
+    "집계 창구를 연다.",
+    "주간 창업 행사가 있다.",
+    "시간 창의성을 기른다.",
+    "1시간 윈도우로 나눈다.",
 ]
 
 failures = 0

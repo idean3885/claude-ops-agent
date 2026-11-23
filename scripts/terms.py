@@ -30,6 +30,8 @@ SYSTEM_BLOCK = re.compile(r"<(system-reminder|local-command-[a-z]+|command-[a-z]
 CORRECTION_TARGET = re.compile(r"→\s*「([^」]+)」")
 # 다른 세트 칸: 「세트 이름」(쓰는 곳) 갈리는 지점. 세트 이름 안에 「 · 」가 들어 있어 「」로 감싼다
 OTHER_SET = re.compile(r"「([^」]+)」\(([^)]+)\)")
+# 검출 칸: `정규식` → 「표준 용어」. 응답 검사 훅(hooks/forbidden-words-stop.sh)이 직전 답에서 찾는다
+DETECTION = re.compile(r"^`([^`]+)`\s*→\s*「([^」]+)」$")
 
 
 def parse_entries(text: str, section: str = "항목") -> list[tuple[str, dict[str, str]]]:
@@ -107,7 +109,43 @@ def check(text: str) -> list[str]:
             problems.append(f"{title}: 「익힘」 이 있으면 「## 익힌 항목」으로 옮긴다")
         if learned and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", learned):
             problems.append(f"{title}: 익힘 날짜 형식은 YYYY-MM-DD")
-    return problems + check_other_sets(learning + learned_entries)
+    return problems + check_other_sets(learning + learned_entries) + check_detections(learning + learned_entries)
+
+
+def check_detections(entries: list[tuple[str, dict[str, str]]]) -> list[str]:
+    """검출 칸은 선택이다. 있으면 형식 · 정규식 · 대체어를 본다. 깨진 칸은 훅이 건너뛰어 신호 없이 검출이 빠진다."""
+    problems = []
+    for title, fields in entries:
+        value = fields.get("검출")
+        if value is None:
+            continue
+        match = DETECTION.match(value)
+        if not match:
+            problems.append(f"{title}: 「검출」은 `정규식` → 「표준 용어」 형식이다")
+            continue
+        try:
+            re.compile(match.group(1))
+        except re.error as error:
+            problems.append(f"{title}: 「검출」 정규식이 컴파일되지 않는다 ({error})")
+        if match.group(2) not in [t.strip() for t in title.split(" · ")]:
+            problems.append(f"{title}: 「검출」 대체어 「{match.group(2)}」 가 제목의 표준 용어가 아니다")
+    return problems
+
+
+def detection_rules(text: str) -> list[dict[str, str]]:
+    """검출 칸이 있는 항목을 응답 검사 룰로 낸다. 익힌 항목도 싣는다. 다시 섞이면 되돌릴 신호이기 때문이다. 깨진 칸은 건너뛴다(check 가 잡는다)."""
+    rules = []
+    for section in ENTRY_SECTIONS:
+        for title, fields in parse_entries(text, section):
+            match = DETECTION.match(fields.get("검출", ""))
+            if not match:
+                continue
+            try:
+                re.compile(match.group(1))
+            except re.error:
+                continue
+            rules.append({"title": title, "pattern": match.group(1), "replacement": match.group(2)})
+    return rules
 
 
 def other_set_names(value: str) -> list[str]:
