@@ -231,6 +231,44 @@ for s in MUST_PASS:
     print(("OK  " if ok else "FAIL") + " 통과: " + s)
     failures += not ok
 
-total = len(MUST_CATCH) + len(MUST_PASS)
+# 실제 응답 검사 훅을 실행한다. 정규식만 따로 대조하면 훅이 검출 칸을 읽지 않아도 통과한다 (#1247)
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+
+
+def run_hook(plugin_root: str, text: str) -> str:
+    with tempfile.TemporaryDirectory() as home:
+        transcript = os.path.join(home, "t.jsonl")
+        with open(transcript, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}},
+                               ensure_ascii=False) + "\n")
+        os.makedirs(os.path.join(home, ".claude"))
+        env = dict(os.environ, HOME=home, CLAUDE_PLUGIN_ROOT=plugin_root)
+        subprocess.run(["bash", os.path.join(plugin_root, "hooks", "forbidden-words-stop.sh")],
+                       input=json.dumps({"transcript_path": transcript}), text=True, env=env,
+                       capture_output=True, timeout=30)
+        pending = os.path.join(home, ".claude", ".forbidden-violations-pending")
+        return open(pending, encoding="utf-8").read() if os.path.exists(pending) else ""
+
+
+hook_checks = 0
+out = run_hook(ROOT, "5시간 창이 끝나면 다시 본다.")
+ok = "표준 용어 「범위 · 윈도우」" in out
+print(("OK  " if ok else "FAIL") + " 훅: 표준 용어 검출 칸을 읽는다")
+failures += not ok
+hook_checks += 1
+with tempfile.TemporaryDirectory() as bare:
+    # 표준 용어 목록 · 해석기가 없는 설치본: 금지 표현 검사만 하고 멈추지 않는다
+    os.makedirs(os.path.join(bare, "config", "style-rules"))
+    shutil.copy(os.path.join(ROOT, "config", "style-rules", "forbidden-words.json"), os.path.join(bare, "config", "style-rules"))
+    shutil.copytree(os.path.join(ROOT, "hooks"), os.path.join(bare, "hooks"))
+    out = run_hook(bare, "5시간 창이 끝나면 그 값을 뺐다.")
+    ok = "뺐" in out and "표준 용어" not in out
+    print(("OK  " if ok else "FAIL") + " 훅: 목록이 없으면 금지 표현 검사만 한다")
+    failures += not ok
+    hook_checks += 1
+
+total = len(MUST_CATCH) + len(MUST_PASS) + hook_checks
 print(f"{total - failures}/{total} 통과")
 sys.exit(1 if failures else 0)

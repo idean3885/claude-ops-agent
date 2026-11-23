@@ -217,7 +217,12 @@ def judge_runs(rows: list[dict]) -> list[dict]:
 
 
 def in_spans(step: dict, spans: list[tuple[str, float, float]]) -> bool:
-    return any(s == step["session"] and start < step["ts"] <= end for s, start, end in spans)
+    """증가분 (앞 줄 시각, 이 줄 시각] 이 구간 (시작, 끝] 과 겹치면 센다. 상태줄 기록은 값이 바뀐 뒤에 남아,
+    끝 표지를 찍는 턴의 증가분은 끝 시각 뒤에 기록되기 때문이다 (#1247)."""
+    begin = step.get("prev_ts")
+    if begin is None:
+        begin = step["ts"]
+    return any(s == step["session"] and begin < end and step["ts"] > start for s, start, end in spans)
 
 
 def windows(rows: list[dict], steps: list[dict], runs: list[dict], spans: list, name: str) -> list[dict]:
