@@ -267,6 +267,10 @@ main ────────────────●─────
   ```bash
   bash scripts/selftest-worktree-cleanup.sh
   ```
+- [ ] **`scripts/lab-repo-create.sh` 를 고쳤으면 자체 점검을 실행한다.** 머지 뒤 head 브랜치 자동 삭제가 빠져도 레포는 만들어져, 머지된 브랜치가 쌓이기 전까지 신호가 없다.
+  ```bash
+  bash scripts/selftest-lab-repo-create.sh
+  ```
 - [ ] **`scripts/devtools-allow.py` 를 고쳤으면 자체 점검을 실행한다.** 등록을 지웠다 다시 넣으므로, 다시 넣기가 실패했을 때 복원이 무너지면 DevTools MCP 등록이 사라진다.
   ```bash
   python3 scripts/selftest-devtools-allow.py
