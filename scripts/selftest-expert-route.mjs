@@ -14,7 +14,7 @@
 import { probe as probeTool } from './expert-route-probe.mjs';
 const probe = probeTool;
 import { spawnSync, execFileSync } from 'child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync, readdirSync, statSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -1046,6 +1046,22 @@ commitCase('기록 자리 바꾸기의 범위', ({ home, transcript, r }) => {
       !existsSync(metricsDir(home)) && !existsSync(join(home, '.claude', 'ops-agent', '.cache', 'expert-route')));
   } finally {
     rmSync(home, { recursive: true, force: true });
+  }
+}
+
+// ─── 판별 도구를 링크 경로로 실행 (#1193) ───
+{
+  const dir = mkdtempSync(join(tmpdir(), 'probe-link-'));
+  try {
+    const repo = join(dir, 'repo');
+    execFileSync('git', ['init', '-q', repo]);
+    const link = join(dir, 'current');
+    symlinkSync(dirname(fileURLToPath(import.meta.url)), link);
+    const r = spawnSync('node', [join(link, 'expert-route-probe.mjs'), '--repo', repo, '--', 'git status'], { encoding: 'utf8' });
+    check('판별 도구를 링크 경로로 실행해도 동작한다: 기록 없는 명령은 「기록 없음」 · 종료 코드 1',
+      r.status === 1 && r.stdout.includes('기록 없음'), `status=${r.status} stdout=${JSON.stringify(r.stdout)}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
