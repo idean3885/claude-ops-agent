@@ -166,6 +166,8 @@ flowchart LR
 | `scripts/selftest-worktree-cleanup.sh` | 워크트리 정리의 안전장치(dirty 거부 · 정규 clone 보존 · bare clone 삭제) 자체 점검, 실제 git | [worktree.md](worktree.md) |
 | `scripts/devtools-allow.py` | DevTools MCP 허용 URL 추가(`scheme://호스트[:포트][/경로]` 형식 밖이거나 호스트가 고정되지 않은 패턴, node 의 URLPattern 이 못 만들거나 다르게 해석하는 패턴은 거부) · 격리 맞춤(고정 프로필 · 격리 끄기 인자를 걷음) · http 패턴이면 https 자동 전환을 끄는 인자 추가 · 끝이 `/` 인 패턴(셸이 `*` 를 지운 것) 거부 · 대화창에 친 한 줄은 사용자 입력 훅이 실행 · `--check` 로 격리가 아닌 등록 · https 자동 전환을 다 끄지 않은 http 등록 점검 · 패턴을 더하면 그 패턴만 걷는 복구 명령 출력 · `--remove` 로 작업 뒤 복구(마지막 패턴은 걷지 않음) (공식 CLI 로 같은 범위에 다시 등록, 실행 · 다시 연결은 사용자) | [working-principles.md](working-principles.md) |
 | `scripts/selftest-devtools-allow.py` | devtools-allow.py 자체 점검 (가짜 설정 · 가짜 CLI). node 의 URLPattern 필요(스크립트 판정과 대조 · node 없음 경로 점검) | [working-principles.md](working-principles.md) |
+| `scripts/usage-log.py` | 모델 사용량을 쓰는 작업의 비용 수집 · 역산. `install` · `uninstall` 로 상태줄 래퍼(`scripts/usage-statusline.sh`)를 켜고 끄며, `estimate` 가 윈도우별 한도 대비 % · 토큰 · 달러와 레슨런 몫을 낸다. | [hooks-config.md](hooks-config.md#사용량-지표) |
+| `scripts/selftest-usage-log.py` | 상태줄 래퍼 출력 보존 · 기록 실패 무시 · 변경 없을 때 · 설치 멱등 · 역산 자체 점검 | [hooks-config.md](hooks-config.md#사용량-지표) |
 | `scripts/terms.py` | 표준 용어 목록 검사(문장 시험 예문) · 세션 교정 줄 수집 · 정답률 집계(제거 후보) | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-terms.py` | terms.py 자체 점검 | [terms.md](../config/style-rules/base/terms.md) |
 | `scripts/selftest-transcribe-cleanup.py` | transcribe 교정(대응표 치환 · 원문 보존 · 덮어쓰기 거부) 자체 점검 | [transcribe](../skills/transcribe/SKILL.md) |

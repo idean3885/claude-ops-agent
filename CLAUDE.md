@@ -296,6 +296,11 @@ main ────────────────●─────
   ```bash
   python3 scripts/selftest-lessons-judge.py
   ```
+- [ ] **`scripts/usage-log.py` · `scripts/usage-statusline.sh` 를 고쳤으면 자체 점검을 실행한다.** 래퍼는 상태줄이 갱신될 때마다 돌아 출력이 깨지면 작업 화면이 깨지고, 기록 · 역산이 무너지면 판정 비용의 한도 몫이 신호 없이 틀린다.
+  ```bash
+  python3 scripts/selftest-usage-log.py
+  python3 scripts/selftest-lessons-judge.py
+  ```
 - [ ] CLAUDE.md 템플릿 부분과 프로젝트 부분 구분 유지
 - [ ] 적용 사례 레포에서 스킬이 정상 동작하는지 확인
 

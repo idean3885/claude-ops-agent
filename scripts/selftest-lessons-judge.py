@@ -824,6 +824,34 @@ def test_candidate_batch() -> None:
               row["status"] == "pending" and [c.get("reviewed", False) for c in row["corrections"]] == [True, False], str(row))
 
 
+def test_usage_cost_fields() -> None:
+    """판정 행에 토큰을 남기고, 다시 판정해도 옛 실행 비용을 잃지 않는다. 판정 대상이 없어도 사용량 역산이 돈다 (#1242)."""
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        path = write_transcript(home, "proj", "old", 3 * 3600)
+        fake = os.path.join(home, "fake-claude")
+        usage = {"input_tokens": 12, "output_tokens": 3, "cache_read_input_tokens": 40, "server_tool_use": {"x": 1}}
+        with open(fake, "w") as f:
+            f.write("#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + json.dumps({"result": json.dumps(FAKE_VERDICT), "total_cost_usd": 0.01, "usage": usage}) + "'\n")
+        os.chmod(fake, 0o755)
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        row = read_rows(home)[-1]
+        check("판정 행에 토큰", row.get("usage") == {"input_tokens": 12, "output_tokens": 3, "cache_read_input_tokens": 40}, str(row))
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": fake})
+        rows = read_rows(home)
+        check("다시 판정해도 실행마다 비용이 이어진다",
+              len(rows) == 1 and [r["cost_usd"] for r in rows[0].get("judge_runs", [])] == [0.01, 0.01], str(rows))
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        metrics = os.path.join(home, ".claude", "ops-agent", "metrics")
+        os.makedirs(metrics)
+        with open(os.path.join(metrics, "usage-statusline.jsonl"), "w") as f:
+            f.write(json.dumps({"ts": iso(0), "session": "s", "cost_usd": 1.0,
+                                "rate_limits": {"five_hour": {"used_percentage": 1, "resets_at": 1}}}) + "\n")
+        run(home, "spawn", stdin="{}")
+        check("판정 대상이 없어도 사용량 역산이 돈다", wait_for(os.path.join(metrics, "usage-estimate.md")))
+
+
 def main() -> int:
     test_selection_and_worker()
     test_guards()
@@ -847,6 +875,7 @@ def main() -> int:
     test_close_and_wrap()
     test_candidate_batch()
     test_asset_registered_before_correction()
+    test_usage_cost_fields()
     print(f"통과 {passed} · 실패 {len(failures)}")
     for f in failures:
         print(f"  실패: {f}")

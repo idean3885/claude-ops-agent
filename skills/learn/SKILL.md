@@ -20,14 +20,14 @@ trigger: ["learn", "레슨런", "레슨 정리", "교훈", "자산화"]
 
 사람이 챙기지 않는다. 세션 시작 훅이 분리 프로세스로 지난 세션의 교정 · 원인(내용 · 수준 · 경로) · 막을 수 있던 자산을 추려 `~/.claude/ops-agent/lessons/judgments.jsonl` 에 쌓는다. 작업 시간 밖에서 하는 것은 여기까지다. 판정은 교정마다 등재 조건(`admit`)도 내고, 올릴 것이 없는 대기(교정 0건 · 모두 「없음」)는 자동 기각, 7일이 지난 대기는 만료로 닫힌다. 자산과의 대조 · 게이트 · 등재는 세션 마무리 훅이 안내하면 /learn 으로 승인 묶음을 열 때 한다. 자동 등재는 없다 ([ADR-0047](../../docs/adr/0047-lesson-approval-opens-at-session-wrap-with-caps.md)). 설치 시점 이전 세션은 판정하지 않고, 하루 판정은 10건까지다. 예외는 기준선 1회(`baseline`)뿐이다: 설치 이전 지난 14일 세션에서 표본 20개를 하루 상한과 따로 판정하고, 기준선 행이 쌓이면 다시 실행하지 않는다 (판정이 모두 실패했으면 다시 실행할 수 있다). 설치 뒤 14일이 지나면 그 표본이 없어진다. 경로 원인의 기준선은 따로 한 번(`baseline --path`) 만든다: 원인 둘 시절에 판정한 세션 중 기록이 남은 것을 다시 판정하고, 승인 대기 · 기준선 표시는 그대로 둔다 ([ADR-0043](../../docs/adr/0043-doc-structure-change-routes-through-expert.md)).
 
-/learn 을 부르면 절차 전에 다음을 한다.
+/learn 을 부르면 절차 전에 `python3 ~/.claude/ops-agent/current/scripts/usage-log.py mark learn start` 로 처리 구간의 시작을 남기고 다음을 한다. 구간의 비용 증가분이 레슨런 처리 비용으로 집계된다 ([hooks-config 「사용량 지표」](../../docs/hooks-config.md#사용량-지표)).
 
 1. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py report` 로 정답률 · 원인 · 승인 대기를 보인다. 기준선이 아직 없으면 `baseline` 을 한 번 실행해 지난 기록 표본으로 만든다. 경로 기준선이 없으면(`report --split` 의 원인 경로 행이 「비교 불가」) `baseline --path` 를 한 번 실행한다.
 2. 한 번에 올리는 승인 항목은 report 의 「이번 승인 묶음」 등재 후보 5개까지이고, 3분 안에 끝낸다. 묶음은 세션이 아니라 후보 단위다. 같은 자산이 재발한 후보가 먼저 오고, 한 세션의 남은 후보는 그 세션에 남아 다음 마무리로 넘어간다 (#1209). `admit` 이 「없음」인 교정은 묶음에 오지 않는다.
 3. `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py samples` 로 표본 5건을 사용자에게 판정받고, 답마다 `sample-record <트랜스크립트> <답> <correct|content|level|path>` 로 남긴다. 기계 판정과 사람 판정의 일치도를 보는 표본이다.
 4. report 의 「자산이 있었는데 틀린 답」 표에서 후보(같은 자산 2회 이상)마다, 그 자산에 도구 경계 로드 자리를 줄지 사용자에게 승인받는다 (lessons.md 「도구 경계에서 로드한다」).
 5. 아래 절차(대조 · 게이트 · 등재)로 간다.
-6. 끝나면 `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py approve` 로 이번 묶음의 후보만 닫는다. 보이지 않은 후보는 닫지 않고, 세션은 남은 후보가 없을 때 검토 완료가 된다.
+6. 끝나면 `python3 ~/.claude/ops-agent/current/scripts/lessons-judge.py approve` 로 이번 묶음의 후보만 닫는다. 보이지 않은 후보는 닫지 않고, 세션은 남은 후보가 없을 때 검토 완료가 된다. 이어서 `python3 ~/.claude/ops-agent/current/scripts/usage-log.py mark learn end` 로 처리 구간을 닫는다.
 
 ## 절차
 
