@@ -87,11 +87,6 @@
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/push-delegation-prompt.mjs\"",
-            "timeout": 3
-          },
-          {
-            "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/action-gate-prompt.mjs\"",
             "timeout": 30
           }

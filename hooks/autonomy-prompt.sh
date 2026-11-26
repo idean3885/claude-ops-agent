@@ -18,11 +18,6 @@ except Exception:
 
 [[ -n "$PROMPT" ]] || exit 0
 
-# 대화창 위임 문장(#1046)은 권한을 여는 호출이지 작업 위임 지시가 아니다 (#1048).
-# 메시지 전체가 그 문장이면 알리지 않는다. 문장 정의는 scripts/push-delegation.mjs 의 DELEGATION_PHRASE.
-TRIMMED=$(printf '%s' "$PROMPT" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '\n')
-[[ "$TRIMMED" == "푸시 권한 위임" ]] && exit 0
-
 # 위임 문장: 「자율」 또는 「위임」 과 진행 동사가 함께 오거나, 게이트 개방 선언이 온다.
 MATCHED=""
 if printf '%s' "$PROMPT" | grep -qE '(자율|알아서|일괄).{0,12}(진행|처리|위임)|위임'; then

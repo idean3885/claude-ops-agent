@@ -268,7 +268,7 @@ DB 쓰기를 한 줄 명령으로 건네는 절차는 [db-query](../skills/db-qu
 | `repo-release` | `gh release create/edit/delete` |
 | `repo-delete` | `gh repo delete/archive` |
 | `git-force` | force push · 원격 브랜치 삭제 |
-| `git-default-push` | 기본 브랜치 직접 push |
+| `git-default-push` | 기본 브랜치 직접 push. 저장소 유형 레포는 일반 push 를 판정하지 않는다. 강제 push 는 `git-force` 로 계속 막힌다 ([ADR-0049](adr/0049-default-branch-push-gate-follows-rollback.md)). |
 | `worktree-destructive` | `git reset --hard` · `clean`(`-n` · `--dry-run` 제외) · `branch -D` · `restore` |
 | `all` | 전부 |
 
@@ -318,41 +318,6 @@ node scripts/selftest-action-gate.mjs
 
 개방 안내는 마커를 만들지 않도록 함수만 불러 씁니다(`OPS_AGENT_GATE_LIB=1`). 점검이 사용자가 연 게이트를 덮어쓰면 안 됩니다.
 
-### 대화창 위임
-
-사람이 선언한 레포에서 대화창에 **「푸시 권한 위임」만** 입력하면, 그 세션 동안 그 레포의 `git-default-push` 갈래가 열립니다 (#1046). 기본 브랜치 직접 반영을 정상 흐름으로 정한 레포에서 수정마다 터미널을 따로 열던 왕복을 없앱니다.
-
-```
-사람: 레포 선언 .ops-agent/repo-type.json 에 "allow": ["git-default-push"] (한 번, `!` 로 직접)
-사람: 대화창에 「푸시 권한 위임」 (메시지 전체가 이 문장)
-사용자 입력 훅: 사람이 친 입력을 확인 → 세션 번호 · 레포 · 갈래를 기록
-도구 실행 전 훅: 같은 세션 · 같은 레포의 기본 브랜치 push 만 통과
-닫힘: 세션이 바뀌거나 8시간 뒤, 또는 선언을 지울 때
-```
-
-「자연어 승인은 개방이 아니다」와 부딪히지 않는 이유: 판정 근거가 사용자 입력 훅이 받은 사람의 입력입니다. 어시스턴트는 그 입력란에 글을 넣지 못하고, 위임 기록 파일(`~/.claude/ops-agent/.cache/<세션>.push-delegation.json`)도 쓰지 못합니다(편집 차단).
-
-| 조건 | 판정 | 이유 |
-|------|------|------|
-| 문장 | 메시지 전체가 정확히 「푸시 권한 위임」(앞뒤 공백 제외) | 문장 중간 · 붙여 넣은 글 속 문장으로 열리지 않게 한다. 훅은 붙여 넣은 글도 펼친 채로 받는다 |
-| 레포 | 선언과 문장 둘 다 | 선언은 「어느 레포가 가능한가」, 문장은 「지금 연다」를 맡는다. 문장만으로 열면 직접 push 가 금지인 레포에서도 열린다 |
-| 갈래 | `git-default-push` 하나 | 선언에 `all` · `git-force` 를 적어도 무시한다. force push · 원격 브랜치 삭제 · reset 은 실수 방지로 계속 막는다 |
-| 범위 | 세션 번호 × 레포 루트 | 다른 세션 · 같은 세션의 다른 레포로 번지지 않는다 |
-| 닫힘 | 세션 종료 또는 8시간 중 먼저, 선언 철회 즉시 | 세션은 이어 쓰기로 며칠 갈 수 있어 「열어 두고 잊힘」을 막는다 |
-| 동거 검사 | 그대로 | 위임으로 열려도 한 블록에 조회와 push 를 묶으면 막는다 |
-
-차용한 격리 기술:
-
-| 기술 | 가져온 것 | 버린 것 |
-|------|-----------|---------|
-| [Chrome DevTools 붙여넣기 보호](https://developer.chrome.com/blog/self-xss) | 정해진 문장을 직접 입력해야 열린다 | 한 번 열면 영구 · 프로필 전체 |
-| [sudo](https://www.sudo.ws/docs/man/sudoers.man/) | 범위를 하나(터미널 → 세션)에 묶고 시간으로 닫는다 | 5분(작업 한 번을 덮지 못함) |
-| [GitHub sudo mode](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/sudo-mode) | 열리는 작업을 목록으로 고정한다 | 쓸 때마다 연장(열어 두고 잊히는 길) |
-
-남는 위험: 어시스턴트가 「이 문장을 입력해 주세요」라고 요청할 수 있습니다. Chrome 문장이 막으려는 것도 남이 시켜서 치게 하는 일입니다. 터미널 개방도 어시스턴트가 명령을 건네고 사람이 실행하므로 노출은 같고, 범위를 갈래 하나 · 세션 하나로 묶어 피해를 줄입니다. 치기 쉬워 습관적으로 칠 수 있으므로 문장은 무게 있는 낱말(「위임」)로 둡니다.
-
-판정 · 기록: `scripts/push-delegation.mjs`, 입력 훅 `scripts/push-delegation-prompt.mjs`. 자체 점검 `node scripts/selftest-push-delegation.mjs` 가 실제 훅 두 개와 실제 git 레포로 29건(여는 조건 · 범위 · 닫힘 · 기록 편집 차단 · 자율 위임 알림 제외)을 봅니다. 위임 문장은 권한을 여는 호출이라 「위임」에 반응하는 자율 위임 알림 훅이 이 문장 단독 메시지는 건너뜁니다 (#1048).
-
 ### 대화창 개방
 
 `!` 셸 실행은 터미널 CLI 의 대화형 기능입니다. Agent SDK 위에서 도는 데스크톱 대화창은 `!` 줄을 실행하지 않고 메시지로 넘기므로, 3단계 명령을 입력해도 마커가 생기지 않습니다 (#1060).
@@ -378,7 +343,7 @@ node scripts/selftest-action-gate.mjs
 | 끝이 `/` 인 패턴 | 스크립트가 거부한다(종료 1). 셸이 끝의 `*` 를 지운 것일 수 있어 작은따옴표로 감싼 `…/*` 를 다시 건네게 안내한다. 사람에게 건네는 명령 예시도 패턴을 작은따옴표로 감싼다. |
 | http 패턴이 허용 목록에 있음 | 등록 인자에 `--chromeArg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable` 도 맞춘다. Chrome 이 http 주소를 https 로 먼저 시도해 허용 목록에서 막히는 것을 막는다. 근거는 `scripts/devtools-allow.py` 주석의 Chromium 소스 URL. |
 
-사용자 입력 훅은 사람이 친 글만 받으므로 「마커 생성만이 개방 신호」를 그대로 지킵니다. 「푸시 권한 위임」(#1046)과 같은 흐름입니다. 자체 점검 `node scripts/selftest-action-gate-prompt.mjs` 가 실제 훅 두 개와 실제 개방 스크립트로 93건(허용 목록 줄 판정 · 실행 · 끝이 `/` 인 패턴 거부 포함, 판정 · 마커 · 터미널과 같은 모양 · 실행 형태 · 끝 경계 · 리다이렉션별 개방 차단 · 자체 점검 · status · off · 본문 파일 통과 · 훅 등록 · 차단 안내)을 봅니다.
+사용자 입력 훅은 사람이 친 글만 받으므로 「마커 생성만이 개방 신호」를 그대로 지킵니다. 자체 점검 `node scripts/selftest-action-gate-prompt.mjs` 가 실제 훅 두 개와 실제 개방 스크립트로 93건(허용 목록 줄 판정 · 실행 · 끝이 `/` 인 패턴 거부 포함, 판정 · 마커 · 터미널과 같은 모양 · 실행 형태 · 끝 경계 · 리다이렉션별 개방 차단 · 자체 점검 · status · off · 본문 파일 통과 · 훅 등록 · 차단 안내)을 봅니다.
 
 ### 한계
 
@@ -463,11 +428,12 @@ bash "$CLAUDE_PLUGIN_ROOT/scripts/final-check.sh" <PR번호> --notes <파일>
 
 | 항목 | 내용 |
 |------|------|
-| 선언 자리 | 레포 루트의 `.ops-agent/repo-type.json` = `{"type": "work" \| "principle" \| "storage"}`. 루트는 `.git` 이 있는 상위 디렉토리입니다. 선택 키 `"allow": ["git-default-push"]` 는 [대화창 위임](#대화창-위임)을, `"allow": ["skip-draft"]` 는 드래프트 PR 생략을 허용합니다. |
+| 선언 자리 | 레포 루트의 `.ops-agent/repo-type.json` = `{"type": "work" \| "principle" \| "storage"}`. 루트는 `.git` 이 있는 상위 디렉토리입니다. 선택 키 `"allow": ["skip-draft"]` 는 드래프트 PR 생략을 허용합니다. 그 밖의 값은 무시합니다. |
 | 드래프트 생략 | 드래프트 PR 은 모든 레포의 기본값입니다. `skip-draft` 를 선언한 레포만 드래프트 없는 생성과 준비 완료 전환이 통과합니다. 통과는 허용 목록으로 정합니다: 훅 cwd 가 선언 레포이고, 명령 하나가 단독으로 `gh pr create`(알려진 옵션만) 또는 `gh pr ready <번호>` 이고, 이스케이프 · `$` · 백틱이 없을 때뿐입니다. 그 밖(앞뒤 명령 · 환경 변수 접두 · 다른 레포 지정 · GraphQL 전환)은 기본값(드래프트 필수)을 따릅니다 ([ADR-0044](adr/0044-draft-pr-default-deny-with-repo-opt-out.md)). 선언 레포에서 드래프트 플래그를 단 생성은 막지 않고 `~/.claude/ops-agent/metrics/draft-in-skip-repo.jsonl` 에 단독 · 묶음 형태와 함께 기록하고, 단독 생성 방법을 안내합니다 (#1178). |
 | 기본값 | 파일이 없거나 파싱에 실패하거나 모르는 값이면 `work` 로 봅니다. 잘못 분류해도 피해가 작은 쪽입니다. |
 | 편집 차단 | 어시스턴트가 이 파일을 쓰지 못합니다. 유형을 AI 가 선언하면 자기 자율의 범위를 스스로 정하게 됩니다. |
 | 병합 거부 | `work` · `principle` 레포의 `gh pr merge` 는 `repo-merge` 갈래가 열려 있어도 차단합니다. |
+| 기본 브랜치 push | `storage` 레포의 기본 브랜치 일반 push 는 한시 권한 대상이 아닙니다. 롤백한 뒤 지울 수 없는 사이드 이펙트가 남지 않습니다. 강제 push 는 `git-force` 갈래로 계속 막힙니다 ([ADR-0049](adr/0049-default-branch-push-gate-follows-rollback.md)). `work` · `principle` 과 선언 없는 레포는 그대로 막습니다. |
 
 ### 편집 차단
 
