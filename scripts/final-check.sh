@@ -20,6 +20,7 @@
 #      (체크 상태 SUCCESS 는 리뷰 여부와 무관하다. 리뷰의 commit_id 로 판정한다)
 #   d. 레포의 `.ops-agent/final-check.sh` 가 있고 종료 코드가 0 이 아님 (레포가 선언한 체크리스트)
 #   e. PR 이 **추가한 줄**의 PN7(서술 문장 종결 부호) · PN8(물결표 취소선) · PN9(의도한 취소선) 검출. 기존 줄의 검출과 다른 규칙 검출은 출력만 하고 실패로 세지 않는다
+#      녹음 정리본(같은 자리에 같은 이름의 `.speakers.txt` 가 있는 `.md`, transcribe 스킬 산출물)은 고치지 않는 기록이라 검출에서 제외한다 (#1287)
 #   f. 노트의 세 절 중 없거나 비어 있는 것
 #   g. merge-base 이후 커밋이 여럿인데 제목에 이슈 번호가 없는 커밋이 있거나, 한 이슈의 커밋이 둘 이상 (이슈마다 커밋 하나로 합친다, ADR-0039). 커밋 하나는 통과
 #   h. 노트의 ## 주장 검증 에 주장 검증 회차 기록이 없거나, 형식이 다른 회차 줄(그 절 또는 제목에 「주장」과 「검증」이 든 다른 절의,
@@ -266,13 +267,19 @@ if [ -f "$COUNTER" ]; then
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
   files=()
+  # 녹음 정리본은 고치지 않는 받아쓰기 기록이라 항목 e 에서 제외한다 (#1287). HEAD 트리 한 번으로 판별한다.
+  pr_names=$(gh pr diff "$PR" --name-only 2>/dev/null)
+  transcripts=$(gh api "repos/$REPO/git/trees/$HEAD_SHA?recursive=1" -q '.tree[].path' 2>/dev/null \
+    | bash "$SCRIPT_DIR/final-check-transcripts.sh" $pr_names)
+  [ -n "$transcripts" ] && printf '참고 (실패 아님): 녹음 정리본은 항목 e 에서 제외한다:\n%s\n' "$transcripts"
   while IFS= read -r f; do
     case "$f" in *.md) ;; *) continue ;; esac
+    grep -qxF -- "$f" <<<"$transcripts" && continue
     mkdir -p "$tmp/$(dirname "$f")"
     if gh api "repos/$REPO/contents/$f?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' >"$tmp/$f" 2>/dev/null; then
       files+=("$f")
     fi
-  done < <(gh pr diff "$PR" --name-only 2>/dev/null)
+  done <<<"$pr_names"
   if [ "${#files[@]}" -gt 0 ]; then
     hits=$(cd "$tmp" && python3 "$COUNTER" "${files[@]}" 2>&1 || true)
     # PR 이 추가한 줄(+ 줄의 새 파일 기준 줄 번호)을 `파일:줄` 로 모은다. 기존 줄의 PN7 · PN8 · PN9 는 이 PR 의 몫이 아니다.
