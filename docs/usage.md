@@ -51,7 +51,6 @@ claude plugin update ops-agent@ops-agent
 | UserPromptSubmit | 자율 위임 문구(자율 진행 · 위임 · 게이트 오픈)를 받은 턴에 계획 · 권한 선취 절차(GATE 3 0단계) 주입 | 알림 (발동은 `metrics/autonomy-prompt.jsonl`, 세션 식별자 포함) |
 | UserPromptSubmit | 세션 마무리 신호(세션 마무리 · 마무리합니다)를 받은 턴에 종결 절차(대상 수집 · 잔여 처리 · 판결) 주입 | 알림 (발동은 `metrics/session-wrap-prompt.jsonl`, 세션 식별자 포함) |
 | UserPromptSubmit | 메시지 전체가 게이트 개방 명령 한 줄이면 `!` 를 실행하지 않는 대화창에서도 그 명령을 실행한다 ([대화창 개방](action-gate.md#대화창-개방)). | 개방 마커 (`.cache/action-gate-allow.json`) |
-| UserPromptSubmit | 메시지 전체가 「푸시 권한 위임」이면 선언한 레포의 기본 브랜치 push 를 그 세션 동안 연다 ([대화창 위임](action-gate.md#대화창-위임)) | 개방 기록 (`.cache/<세션>.push-delegation.json`) |
 | Stop → 다음 턴 | 직전 응답의 표현 규칙 위반 | 교정 요청 |
 
 구조 검출은 문단 길이·산문 연속·시각 요소 주기·목록 항목 수·테이블 열 수·헤딩 레벨·코드 언어를 집계합니다. 정규식은 어휘만 보므로 산문이 몇 문단 쌓였는지는 따로 세야 알 수 있습니다.

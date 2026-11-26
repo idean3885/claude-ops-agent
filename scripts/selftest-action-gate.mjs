@@ -358,6 +358,24 @@ T('병합 거부', 'storage 는 갈래 닫힘이면 기존 갈래 메시지', 'd
 T('병합 거부', 'storage -R 지정은 work 취급', 'deny', '{"type": "storage"}', 'Bash', { command: 'gh pr merge 7 -R o/r --merge' }, { marker: 'all', reasonHas: TYPE_MERGE_MSG });
 T('병합 거부', 'storage --repo 지정은 work 취급', 'deny', '{"type": "storage"}', 'Bash', { command: 'gh pr merge 7 --repo o/r --merge' }, { marker: 'all', reasonHas: TYPE_MERGE_MSG });
 T('병합 거부', 'work 가 아닌 명령은 영향 없음', 'pass', '{"type": "work"}', 'Bash', { command: 'git status' }, { marker: 'all' });
+// S3b: 기본 브랜치 push (ADR-0049, #1268). 저장소 유형의 일반 push 는 롤백 가능해 개방 없이 통과한다.
+// 강제 push 는 원본이 사라져 git-force 로 계속 막히고, 그 밖의 유형 · 선언 없음은 그대로 막힌다.
+// 기본 브랜치는 레포 로컬 설정(init.defaultBranch)으로 고정해 사용자 전역 설정에 기대지 않는다.
+function pushCase(name, want, decl, command) {
+  const ctx = typeRepo(decl);
+  spawnSync('git', ['-C', ctx.repo, 'config', 'init.defaultBranch', 'main']);
+  const { got } = runHook(ctx, 'Bash', { command }, null);
+  rmSync(ctx.home, { recursive: true, force: true });
+  const ok = got === want;
+  if (!ok) failed++;
+  typeCaseCount++;
+  console.log(`${ok ? '  OK' : '  XX'}  기본 브랜치 push: ${name} — want ${want}, got ${got}`);
+}
+pushCase('storage 일반 push 는 개방 없이 통과', 'pass', '{"type": "storage"}', 'git push origin main');
+pushCase('work 일반 push 는 닫힘', 'deny', '{"type": "work"}', 'git push origin main');
+pushCase('선언 없음 일반 push 는 닫힘', 'deny', null, 'git push origin main');
+pushCase('storage 강제 push 는 닫힘', 'deny', '{"type": "storage"}', 'git push --force origin main');
+pushCase('storage +refspec 강제 push 는 닫힘', 'deny', '{"type": "storage"}', 'git push origin +HEAD:main');
 // S4: 개방 스크립트 경고. 개방은 막지 않는다.
 function allowCase(name, decl, scopes, wantWarn) {
   const ctx = typeRepo(decl);

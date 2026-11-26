@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# hooks/autonomy-prompt.sh 발동 조건 · 지표 셀프테스트 (#649 · #1048 · #1154).
+# hooks/autonomy-prompt.sh 발동 조건 · 지표 셀프테스트 (#649 · #1154).
 #
-# 자율 위임 문장에서만 계획 · 권한 선취 절차를 주입하고, 대화창 위임 문장(「푸시 권한 위임」) 하나뿐인 메시지는 조용해야 한다.
+# 자율 위임 문장에서만 계획 · 권한 선취 절차를 주입한다.
 # 지표 줄에는 세션 식별자를 남겨 그 세션의 결과(정답률)와 잇는다.
 #   bash scripts/selftest-autonomy-prompt.sh
 set -uo pipefail
@@ -30,8 +30,6 @@ expect fire  "알아서 진행해 주세요"
 expect fire  "체크리스트 테스트 전권 위임합니다"
 expect fire  "게이트 오픈합니다"
 expect quiet "이 함수 이름을 고쳐 주세요"
-expect quiet "푸시 권한 위임"
-expect quiet "  푸시 권한 위임  "
 
 rm -f "$METRICS"
 run_hook "알아서 진행해 주세요" "sid-1" >/dev/null
