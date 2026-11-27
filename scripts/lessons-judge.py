@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """레슨런 판정을 작업 시간 밖에서 돌리고 정답률을 쌓는다.
 
-    lessons-judge.py spawn                 SessionStart 훅. 판정은 분리 프로세스에 맡기고 바로 끝낸다
-    lessons-judge.py worker <paths...>     트랜스크립트를 판정해 judgments.jsonl 에 쌓는다
+    lessons-judge.py spawn                 SessionStart 훅. 수집 · 판정은 분리 프로세스에 맡기고 바로 끝낸다
+    lessons-judge.py worker <paths...>     새로 끝난 세션을 모두 수집한 뒤, 트랜스크립트를 판정해 judgments.jsonl 에 쌓는다 (ADR-0050)
     lessons-judge.py report [--days N]     정답률 · 원인 · 승인 대기
     lessons-judge.py report --split <시작일>          시범 시작일 전 · 뒤 정답률을 원인별로 비교
     lessons-judge.py report --sessions-from <jsonl> [--days N]  그 지표 파일의 세션들과 나머지의 정답률
@@ -43,12 +43,17 @@ DAILY_MAX = 10           # 하루 판정 상한. 비용이 사용 한도를 갉�
 INPUT_CAP = 150_000      # 판정 입력 글자 상한 (#991 실측: 14만 자 ≈ 0.41달러)
 TERMS_ASSET = "terms.md"  # 표준 용어 목록. 항목마다 등재일이 있어 교정 시각과 비교한다 (#1232)
 APPROVE_BATCH = 5        # 한 번에 올리고 닫는 등재 후보 수. 세션 마무리 3분 안에 끝나는 양이다 (ADR-0047, 단위는 #1209 부터 후보)
-EXPIRE_DAYS = 7          # 이보다 오래된 대기는 만료로 닫는다. 맥락이 사라진 세션은 판정 가치가 낮고, 진짜 교훈은 재발해 다시 올라온다 (ADR-0047)
+EXPIRE_DAYS = 7          # 판정한 뒤 이 기간이 지난 대기는 만료로 닫는다. 진짜 교훈은 재발해 다시 올라온다 (ADR-0047, 기점은 ADR-0050)
 TAXONOMY = 2             # 원인 갈래 판. 1 = 내용 · 수준 (ADR-0037), 2 = 내용 · 수준 · 경로 (ADR-0043). 판이 다른 행은 경로를 비교하지 않는다
 INPUT = 2                # 판정 입력 판. 1 = 문자열 사용자 발화만, 2 = 블록 목록 사용자 발화 포함 (#1237). 판이 다른 행은 전후 비교에 섞지 않는다
 INTERRUPT_MARK = "[Request interrupted"  # 하네스가 넣는 중단 표시. 사용자가 쓴 글이 아니다
 CAUSES = ("content", "level", "path")
 USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+COLLECT_PREFIX = "lessons-collect-"  # 수집 기록 월 파일 이름 앞부분. 지표 폴더의 월 단위 관례(expert-route-YYYY-MM)를 따른다 (ADR-0050)
+# why: 판정 입력에 설정 출처 · MCP · 도구 · 스킬이 실리면 판정마다 고정 비용이 든다. 판정은 대화 글만 읽으면 된다 (ADR-0050)
+JUDGE_SYSTEM = "주어진 대화를 지시대로 판정해 JSON 한 줄만 출력한다."
+JUDGE_ISOLATION = ["--setting-sources", "", "--strict-mcp-config", "--tools", "",
+                   "--disable-slash-commands", "--system-prompt", JUDGE_SYSTEM]
 
 PROMPT = """아래는 한 작업 세션의 대화다. A<번호> 는 어시스턴트 답, USER 는 사용자 발화다.
 사용자 발화가 직전 답을 바로잡는 경우(사실 · 판단 정정, 같은 것을 다시 물음, 분량 · 단계 · 형식 지적)만 교정으로 센다. 새 지시 · 승인 · 다음 질문은 교정이 아니다. 어시스턴트가 사용자의 말을 바로잡은 답(용어 교정 줄 등)은 어시스턴트의 실수가 아니므로 교정이 아니다.
@@ -80,6 +85,10 @@ def work_dir() -> str:
 
 def lesson_path(name: str) -> str:
     return os.path.join(lessons_dir(), name)
+
+
+def metrics_dir() -> str:
+    return os.path.join(home_dir(), "ops-agent", "metrics")
 
 
 def load_state() -> dict:
@@ -287,11 +296,13 @@ def is_judge_transcript(path: str) -> bool:
     return False
 
 
-def select_targets(state: dict, session_id: str, now: float, baseline: bool = False) -> list[str]:
+def ended_sessions(session_id: str, now: float) -> list[tuple[float, str]]:
+    """끝난 메인 세션 트랜스크립트 (수정 시각, 경로). 수집과 판정이 같은 규칙으로 고른다.
+    서브에이전트 기록은 세션 디렉토리 아래에 있어 이 패턴에 걸리지 않는다."""
     pattern = os.path.join(home_dir(), "projects", "*", "*.jsonl")
     # why: 판정용 자식 세션도 기록을 남긴다. 그 기록을 다시 판정하면 판정이 판정을 낳는다
     judge_dir = project_dir_name(lesson_path("work"))
-    picked = []
+    found = []
     for path in glob.glob(pattern):
         if os.path.basename(os.path.dirname(path)) == judge_dir:
             continue
@@ -303,6 +314,16 @@ def select_targets(state: dict, session_id: str, now: float, baseline: bool = Fa
             continue
         if now - mtime < QUIET_SECONDS:
             continue
+        found.append((mtime, path))
+    return found
+
+
+def select_targets(state: dict, session_id: str, now: float, baseline: bool = False) -> list[str]:
+    """판정할 트랜스크립트. 남아 있는 트랜스크립트에서만 고른다.
+    why: 수집 기록만 남은 세션은 판정하지 않고 건너뛴다. 답 본문이 없어 교정을 어느 답에 붙일지 정할 수 없고,
+    발화만으로 판정하면 입력 판이 하나 더 생겨 정답률 비교가 갈라진다 (ADR-0050)"""
+    picked = []
+    for mtime, path in ended_sessions(session_id, now):
         if now - mtime > WINDOW_DAYS * 86400:
             continue
         if not baseline and mtime < state["since"]:
@@ -313,7 +334,8 @@ def select_targets(state: dict, session_id: str, now: float, baseline: bool = Fa
             state["judged"][path] = mtime
             continue
         picked.append((mtime, path))
-    picked.sort()
+    # why: 하루 상한 안에서 판정은 표본이다. 최근 세션부터 보면 지금의 정답률을 보고, 오래된 세션이 상한을 다 쓰지 않는다 (ADR-0050)
+    picked.sort(reverse=True)
     if baseline:
         return [p for _, p in picked if _ < state["since"]]
     return [p for _, p in picked[:BATCH]]
@@ -366,16 +388,19 @@ def cmd_spawn() -> None:
     now = time.time()
     close_stale()
     targets = select_targets(state, session_id, now)
-    if targets and not lock_active():
+    # why: 수집은 판정 대상이 없어도 돈다. 판정 상한 · 대상 유무가 수집을 막으면 세션 기록이 빠진다 (ADR-0050)
+    if not lock_active():
+        # why: worker 의 수집은 모델을 부르지 않아 금방 끝난다. 띄운 뒤 저장하면 worker 가 남긴 수집 표시를 덮는다
+        state["last_scan"] = now
+        save_state(state)
         log = open(lesson_path("judge.log"), "a", encoding="utf-8")
         env = dict(os.environ)
         env["OPS_AGENT_LESSONS_JUDGE"] = "1"
+        env["OPS_AGENT_LESSONS_SESSION"] = session_id
         subprocess.Popen(
             [sys.executable, os.path.abspath(__file__), "worker", *targets],
             start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=env,
         )
-        state["last_scan"] = now
-        save_state(state)
     else:
         start_estimate()
     pending = pending_count()
@@ -411,7 +436,7 @@ def parse_verdict(stdout: str) -> tuple[dict, float, dict]:
 def judge(text: str) -> tuple[dict, float, dict]:
     claude = os.environ.get("OPS_AGENT_LESSONS_CLAUDE") or "claude"
     proc = subprocess.run(
-        [claude, "-p", "--model", "sonnet", "--output-format", "json"],
+        [claude, "-p", "--model", "sonnet", "--output-format", "json", *JUDGE_ISOLATION],
         input=PROMPT + text, capture_output=True, text=True, timeout=JUDGE_TIMEOUT,
         cwd=work_dir(),
     )
@@ -518,13 +543,15 @@ def close_stale() -> None:
         rows = read_jsonl(path)
         cutoff = time.time() - EXPIRE_DAYS * 86400
         changed = False
+        # why: 세션 시각으로 세면 판정 상한에 밀려 늦게 판정한 세션이 판정 즉시 만료된다. 판정 시각부터 센다 (ADR-0050)
         for r in rows:
             if r.get("status") != "pending":
                 continue
             if not has_candidate(r.get("corrections", []), set()):
                 r["status"] = "rejected"
                 changed = True
-            elif session_time(r) < cutoff:
+            # why: 판정 행은 늘 ts 를 남긴다. ts 없는 행은 손으로 고친 행이라 기점을 지어내지 않고 만료에서 뺀다
+            elif r.get("ts") and parse_ts(r["ts"]).timestamp() < cutoff:
                 r["status"] = "expired"
                 changed = True
         if changed:
@@ -623,12 +650,49 @@ def cmd_path_baseline(n: int) -> None:
     print(f"경로 기준선 판정 {len(picks)}세션을 뒤에서 시작했다. 끝나면 report --split <시작일> 의 원인 경로 행으로 비교한다")
 
 
+def collect(state: dict, session_id: str, now: float) -> int:
+    """지난 수집 뒤 새로 끝난 메인 세션을 상한 없이 한 줄씩 남긴다. 모델을 부르지 않는다 (ADR-0050).
+    답 본문은 담지 않는다. 판정 재료는 트랜스크립트가 남아 있는 동안 판정이 읽는다."""
+    collected = state.setdefault("collected", {})
+    out = os.path.join(metrics_dir(), f"{COLLECT_PREFIX}{now_iso()[:7]}.jsonl")
+    count = 0
+    for mtime, path in sorted(ended_sessions(session_id, now)):
+        # why: 이어 쓴 세션은 수정 시각이 바뀌어 다시 한 줄을 쓴다. 이어 쓴 뒤의 발화도 빠짐없이 모은다.
+        # 수집 세션 수는 보고가 트랜스크립트로 중복을 뺀다 (판정의 judged[path] == mtime 과 같은 비교)
+        if collected.get(path) == mtime or mtime < state["since"]:
+            continue
+        if is_judge_transcript(path):
+            collected[path] = mtime
+            continue
+        items = extract(path)
+        os.makedirs(metrics_dir(), exist_ok=True)
+        append_jsonl(out, {
+            "ts": now_iso(),
+            "session": os.path.splitext(os.path.basename(path))[0],
+            "project": os.path.basename(os.path.dirname(path)),
+            "transcript": path,
+            "mtime": mtime,
+            "answers": count_answers(items),
+            "users": [text for label, text in items if label == "USER"],
+        })
+        collected[path] = mtime
+        count += 1
+    return count
+
+
 def cmd_worker(paths: list[str]) -> None:
     if not acquire_lock():
         return
     try:
+        backfill = os.environ.get("OPS_AGENT_LESSONS_BASELINE") or os.environ.get("OPS_AGENT_LESSONS_PATH_BASELINE")
+        if not backfill:
+            state = load_state()
+            try:
+                collect(state, os.environ.get("OPS_AGENT_LESSONS_SESSION") or "", time.time())
+            except Exception as e:  # noqa: BLE001 수집 실패가 판정을 막지 않는다. 남긴 표시까지는 저장한다
+                log_line(f"수집 오류: {e}")
+            save_state(state)
         for path in paths:
-            backfill = os.environ.get("OPS_AGENT_LESSONS_BASELINE") or os.environ.get("OPS_AGENT_LESSONS_PATH_BASELINE")
             if not backfill and judged_today() >= DAILY_MAX:
                 log_line(f"하루 상한 {DAILY_MAX}건 도달, 나머지는 다음 실행으로")
                 break
@@ -747,6 +811,7 @@ def cmd_report(args: list[str]) -> None:
     print(f"## 레슨런 판정 보고 (최근 {days}일)\n")
     print(f"대리 지표 (사람 표본 {len(samples)}/{SAMPLE_GOAL}): 기계 판정 집계다. 표본 일치도와 섞지 않는다.\n")
     print("| 항목 | 값 |\n|---|---|")
+    print(f"| 수집 세션 수 | {collected_count(cutoff)} |")
     print(f"| 세션 수 | {len(recent)} |")
     print(f"| 답 수 | {answers} |")
     print(f"| 교정 수 | {len(corrections)} |")
@@ -781,6 +846,16 @@ def cmd_report(args: list[str]) -> None:
             recur = " · 재발" if hints.get(asset_key(r, c, dates), 0) >= 2 else ""
             print(f"- {r['transcript']} {c.get('answer', '')} · 원인 {c.get('cause', '')} · 등재 조건 {c.get('admit') or '미판정'}"
                   f" · {c.get('why', '')}{' · 자산 ' + hint if hint else ''}{recur}")
+
+
+def collected_count(cutoff: float) -> int:
+    """기간 안에 끝난 수집 세션 수. 정답률 분모는 판정한 세션 기준 그대로다 (ADR-0050)."""
+    seen = set()
+    for path in glob.glob(os.path.join(metrics_dir(), f"{COLLECT_PREFIX}*.jsonl")):
+        for r in read_jsonl(path):
+            if float(r.get("mtime") or 0) >= cutoff:
+                seen.add(r.get("transcript"))
+    return len(seen)
 
 
 def cmd_sessions_from(rows: list[dict], source: str, args: list[str]) -> None:
@@ -888,7 +963,7 @@ def cmd_wrap() -> None:
     cands = pending_candidate_count()
     if pending:
         print(f"레슨 승인 대기 {pending}건 · 후보 {cands}개: 판결 전에 /learn 으로 승인 묶음 후보 {min(cands, APPROVE_BATCH)}개만 연다. "
-              f"3분 상한이고, 남은 건은 다음 마무리로 넘긴다. {EXPIRE_DAYS}일이 지난 대기는 만료로 닫힌다.")
+              f"3분 상한이고, 남은 건은 다음 마무리로 넘긴다. 판정 뒤 {EXPIRE_DAYS}일이 지난 대기는 만료로 닫힌다.")
 
 
 def main(argv: list[str]) -> int:
