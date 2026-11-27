@@ -852,6 +852,205 @@ def test_usage_cost_fields() -> None:
         check("판정 대상이 없어도 사용량 역산이 돈다", wait_for(os.path.join(metrics, "usage-estimate.md")))
 
 
+def collect_rows(home: str) -> list[dict]:
+    import glob
+    rows = []
+    for path in sorted(glob.glob(os.path.join(home, ".claude", "ops-agent", "metrics", "lessons-collect-*.jsonl"))):
+        rows += [json.loads(l) for l in open(path, encoding="utf-8")]
+    return rows
+
+
+def wait_unlocked(home: str, seconds: float = 20) -> None:
+    end = time.time() + seconds
+    time.sleep(0.3)
+    while time.time() < end and os.path.exists(lessons(home, "judge.lock")):
+        time.sleep(0.1)
+
+
+def test_collect_all_sessions() -> None:
+    """ADR-0050 결정 1: 수집은 판정 상한 · 묶음 크기와 무관하게 새로 끝난 메인 세션을 한 번씩 모두 쓴다."""
+    import re
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        n = 15  # 판정 묶음(5) · 하루 상한(10)보다 많다
+        for i in range(n):
+            write_transcript(home, "proj", f"s{i:02d}", 3600 + i * 60)
+        write_transcript(home, "proj", "fresh", 10)
+        write_transcript(home, "proj", "current", 3 * 3600)
+        work = os.path.join(home, ".claude", "ops-agent", "lessons", "work")
+        write_transcript(home, re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(work)), "judge-child", 3 * 3600)
+        write_transcript(home, os.path.join("proj", "s00", "subagents"), "agent-x", 3 * 3600)
+        bad = os.path.join(home, "bad-claude")
+        with open(bad, "w") as f:
+            f.write("#!/bin/sh\ncat >/dev/null\nexit 1\n")
+        os.chmod(bad, 0o755)
+        run(home, "spawn", stdin=json.dumps({"session_id": "current"}), env={"OPS_AGENT_LESSONS_CLAUDE": bad})
+        wait_unlocked(home)
+        rows = collect_rows(home)
+        sessions = sorted(r.get("session") for r in rows)
+        check("수집: 상한 없이 새로 끝난 메인 세션을 모두 쓴다", sessions == [f"s{i:02d}" for i in range(n)], str(sessions))
+        check("수집: 한 줄에 답 수 · 사용자 발화, 답 본문은 없다",
+              bool(rows) and rows[0].get("answers") == 2 and rows[0].get("users") == ["질문", "너무 길다"]
+              and "답1" not in json.dumps(rows[0], ensure_ascii=False), str(rows[:1]))
+        run(home, "spawn", stdin=json.dumps({"session_id": "other"}), env={"OPS_AGENT_LESSONS_CLAUDE": bad})
+        wait_unlocked(home)
+        again = [r.get("session") for r in collect_rows(home)]
+        check("수집: 수정 시각이 같은 세션은 다시 쓰지 않는다", len(again) == len(set(again)), str(again))
+        resumed = os.path.join(home, ".claude", "projects", "proj", "s00.jsonl")
+        with open(resumed, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "user", "message": {"content": "이어서"}}, ensure_ascii=False) + "\n")
+        t = time.time() - 2 * 3600
+        os.utime(resumed, (t, t))
+        run(home, "spawn", stdin=json.dumps({"session_id": "other"}), env={"OPS_AGENT_LESSONS_CLAUDE": bad})
+        wait_unlocked(home)
+        lines = [r for r in collect_rows(home) if r.get("session") == "s00"]
+        check("수집: 이어 쓴 세션(수정 시각 바뀜)은 한 줄을 더 쓴다",
+              len(lines) == 2 and lines[-1].get("users", [])[-1:] == ["이어서"], str(lines))
+        r = run(home, "report")
+        check("보고: 수집 세션 수 행 (트랜스크립트로 중복 제거)", f"| 수집 세션 수 | {len(set(again))} |" in r.stdout, r.stdout)
+
+
+def test_collect_without_model() -> None:
+    """ADR-0050 결정 1: 수집은 모델을 부르지 않는다. 부르면 표시 파일이 생기는 실패 스텁으로 확인한다."""
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        for i in range(3):
+            write_transcript(home, "proj", f"s{i}", 3600)
+        mark = os.path.join(home, "called")
+        stub = os.path.join(home, "stub-claude")
+        with open(stub, "w") as f:
+            f.write(f"#!/bin/sh\ncat >/dev/null\ntouch '{mark}'\nexit 1\n")
+        os.chmod(stub, 0o755)
+        run(home, "worker", env={"OPS_AGENT_LESSONS_CLAUDE": stub})
+        check("수집: 판정 대상 없이도 세션을 쓴다", len(collect_rows(home)) == 3, str(collect_rows(home)))
+        check("수집: 모델을 부르지 않는다", not os.path.exists(mark))
+
+
+def test_expire_from_judged_time() -> None:
+    """ADR-0050 결정 3: 7일 지난 세션을 오늘 판정해도 바로 만료되지 않고, 판정 7일 뒤 만료된다."""
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 10 * 86400)
+        path = write_transcript(home, "proj", "late", 8 * 86400)
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": make_fake_claude(home)})
+        run(home, "wrap")
+        rows = read_rows(home)
+        check("만료: 8일 전 세션을 오늘 판정하면 대기로 남는다", bool(rows) and rows[-1]["status"] == "pending", str(rows))
+        if not rows:
+            return
+        rows[-1]["ts"] = iso(7.5)
+        rows[-1]["status"] = "pending"
+        write_rows(home, rows)
+        run(home, "wrap")
+        check("만료: 판정 7일 뒤 만료된다", read_rows(home)[-1]["status"] == "expired", str(read_rows(home)))
+
+
+
+def test_collect_fields_and_scope() -> None:
+    """ADR-0050 결정 1: 판정 대상이 없어도 spawn 이 수집하고, 한 줄 필드 · 월 파일 이름 · 발화 상한 · 설치 시점을 지킨다."""
+    import re
+    user_cap = int(re.search(r"^USER_CAP = (\d+)", open(TARGET, encoding="utf-8").read(), re.M).group(1))
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 2 * 3600)
+        before = write_transcript(home, "proj", "before-since", 3 * 3600)
+        path = os.path.join(home, ".claude", "projects", "proj", "long.jsonl")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "user", "message": {"content": "가" * (user_cap + 500)}}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "답"}]}}, ensure_ascii=False) + "\n")
+        t = time.time() - 3600
+        os.utime(path, (t, t))
+        mtime = os.path.getmtime(path)
+        # 판정 대상이 없게 둔다: 이 세션은 이미 판정한 것으로 표시
+        st = read_state(home)
+        st["judged"] = {path: mtime}
+        with open(lessons(home, "state.json"), "w", encoding="utf-8") as f:
+            json.dump(st, f)
+        month = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m")
+        out = os.path.join(home, ".claude", "ops-agent", "metrics", f"lessons-collect-{month}.jsonl")
+        run(home, "spawn", stdin=json.dumps({"session_id": "current"}))
+        wait_unlocked(home)
+        check("수집: 판정 대상이 없어도 spawn 이 수집한다", os.path.exists(out), str(collect_rows(home)))
+        rows = [json.loads(l) for l in open(out, encoding="utf-8")] if os.path.exists(out) else []
+        row = next((r for r in rows if r.get("session") == "long"), {})
+        check("수집: 파일 이름은 lessons-collect-<수집 시각 월>.jsonl", bool(row), str(collect_rows(home)))
+        check("수집: project · transcript · mtime 필드",
+              row.get("project") == "proj" and row.get("transcript") == path and row.get("mtime") == mtime, str(row))
+        check("수집: 사용자 발화는 USER_CAP 으로 자른다", [len(u) for u in row.get("users", [])] == [user_cap], str([len(u) for u in row.get("users", [])]))
+        check("수집: 설치 시점 이전 세션은 수집하지 않는다",
+              all(r.get("transcript") != before for r in collect_rows(home)), str(collect_rows(home)))
+
+
+def test_collected_only_not_judged() -> None:
+    """ADR-0050 결정 2: 수집 기록만 남고 트랜스크립트가 지워진 세션은 판정하지 않는다."""
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        gone = os.path.join(home, ".claude", "projects", "proj", "gone.jsonl")
+        metrics = os.path.join(home, ".claude", "ops-agent", "metrics")
+        os.makedirs(metrics)
+        month = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m")
+        with open(os.path.join(metrics, f"lessons-collect-{month}.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": iso(0), "session": "gone", "project": "proj", "transcript": gone,
+                                "mtime": time.time() - 3600, "answers": 2, "users": ["질문", "너무 길다"]}, ensure_ascii=False) + "\n")
+        mark = os.path.join(home, "called")
+        stub = os.path.join(home, "stub-claude")
+        with open(stub, "w") as f:
+            f.write(f"#!/bin/sh\ncat >/dev/null\ntouch '{mark}'\nexit 1\n")
+        os.chmod(stub, 0o755)
+        run(home, "spawn", stdin=json.dumps({"session_id": "current"}), env={"OPS_AGENT_LESSONS_CLAUDE": stub})
+        wait_unlocked(home)
+        log = open(lessons(home, "judge.log"), encoding="utf-8").read() if os.path.exists(lessons(home, "judge.log")) else ""
+        check("판정: 트랜스크립트 없는 수집 세션은 판정 대상이 아니다",
+              not os.path.exists(mark) and "gone.jsonl" not in log and not os.path.exists(lessons(home, "judgments.jsonl")), log)
+
+
+def test_close_stale_without_ts() -> None:
+    """주장 검증 권장: ts 없는 대기 행이 있어도 닫기가 죽지 않고 다른 행을 계속 닫는다."""
+    with tempfile.TemporaryDirectory() as home:
+        c = {"answer": "A1", "cause": "content", "admit": "fact", "why": "", "asset_hint": ""}
+        write_rows(home, [
+            {"transcript": "no-ts", "answers": 5, "corrections": [c], "status": "pending"},
+            {"ts": iso(8), "transcript": "old", "answers": 5, "corrections": [c], "status": "pending"},
+        ])
+        r = run(home, "wrap")
+        got = {x["transcript"]: x["status"] for x in read_rows(home)}
+        check("만료: ts 없는 행에서 죽지 않는다", r.returncode == 0 and got.get("old") == "expired", r.stderr[-300:] + str(got))
+        check("만료: ts 없는 행은 만료에서 뺀다", got.get("no-ts") == "pending", str(got))
+
+
+def test_judge_isolation_args() -> None:
+    """ADR-0050 결정 4: 판정 호출은 설정 출처 · MCP · 도구 · 스킬 없이, 짧은 시스템 프롬프트로 돈다."""
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        path = write_transcript(home, "proj", "s", 3600)
+        args_file = os.path.join(home, "args")
+        stub = os.path.join(home, "args-claude")
+        with open(stub, "w") as f:
+            f.write("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' \"$@\" > '" + args_file + "'\nprintf '%s' '"
+                    + json.dumps({"result": json.dumps(FAKE_VERDICT), "total_cost_usd": 0.01}) + "'\n")
+        os.chmod(stub, 0o755)
+        run(home, "worker", path, env={"OPS_AGENT_LESSONS_CLAUDE": stub})
+        args = open(args_file, encoding="utf-8").read().split("\n")[:-1] if os.path.exists(args_file) else []
+
+        def after(flag: str) -> str | None:
+            return args[args.index(flag) + 1] if flag in args and args.index(flag) + 1 < len(args) else None
+        check("판정 호출: 설정 출처 비움", after("--setting-sources") == "", str(args))
+        check("판정 호출: 도구 비움", after("--tools") == "", str(args))
+        check("판정 호출: MCP · 스킬 제외", "--strict-mcp-config" in args and "--disable-slash-commands" in args, str(args))
+        check("판정 호출: 짧은 시스템 프롬프트", bool(after("--system-prompt")) and "JSON" in after("--system-prompt"), str(args))
+        check("판정 호출: --bare 는 쓰지 않는다 (OAuth 를 읽지 않는다)", "--bare" not in args, str(args))
+
+
+def test_judge_recent_first() -> None:
+    """ADR-0050 결정 2: 판정은 최근 세션부터 고른다."""
+    with tempfile.TemporaryDirectory() as home:
+        seed_state(home, 86400)
+        for i in range(7):
+            write_transcript(home, "proj", f"age{i}", 3600 * (i + 1))
+        run(home, "spawn", stdin=json.dumps({"session_id": "current"}), env={"OPS_AGENT_LESSONS_CLAUDE": make_fake_claude(home)})
+        wait_unlocked(home)
+        got = sorted(r["session"] for r in read_rows(home)) if os.path.exists(lessons(home, "judgments.jsonl")) else []
+        check("판정 순서: 최근 세션 5개", got == [f"age{i}" for i in range(5)], str(got))
+
+
 def main() -> int:
     test_selection_and_worker()
     test_guards()
@@ -876,6 +1075,14 @@ def main() -> int:
     test_candidate_batch()
     test_asset_registered_before_correction()
     test_usage_cost_fields()
+    test_collect_all_sessions()
+    test_collect_without_model()
+    test_expire_from_judged_time()
+    test_judge_isolation_args()
+    test_judge_recent_first()
+    test_collect_fields_and_scope()
+    test_collected_only_not_judged()
+    test_close_stale_without_ts()
     print(f"통과 {passed} · 실패 {len(failures)}")
     for f in failures:
         print(f"  실패: {f}")
