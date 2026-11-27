@@ -702,7 +702,7 @@ const PR_DRAFT_CASES = [
 ];
 for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, command, { ...opts, label: PR_DRAFT_DENY, env: { OPS_AGENT_FLOW_ENTRY_DISABLE: '1', ...(opts?.env || {}) } });
 
-// 드래프트 생략 선언 레포의 드래프트 생성은 통과하되 기록 · 안내한다 (#1178). 임시 HOME 의 지표 파일로 본다.
+// 드래프트 생략 선언 레포의 드래프트 생성은 막고 기록한다 (#1178 · #1295). 임시 HOME 의 지표 파일로 본다.
 {
   const DRAFT_METRIC_CASES = [
     // [이름, cwd, 명령, 기록 기대, form 기대]
@@ -721,18 +721,18 @@ for (const [name, want, command, opts] of PR_DRAFT_CASES) issueCase(name, want, 
     const file = join(home, '.claude', 'ops-agent', 'metrics', 'draft-in-skip-repo.jsonl');
     let rows = [];
     try { rows = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { rows = []; }
-    let ctx = '';
+    let reason = '';
     let denied = false;
     try {
       const hs = JSON.parse((res.stdout || '').trim()).hookSpecificOutput || {};
-      ctx = hs.additionalContext || '';
+      reason = hs.permissionDecisionReason || '';
       denied = hs.permissionDecision === 'deny';
     } catch { /* 출력 없음 */ }
     const recOk = wantRec ? rows.length === 1 && rows[0].form === wantForm : rows.length === 0;
-    const noticeOk = wantRec ? ctx.includes('드래프트 생략(skip-draft)을 선언') : !ctx.includes('드래프트 생략(skip-draft)을 선언');
-    const ok = !denied && recOk && noticeOk;
+    const denyOk = wantRec ? denied && reason.includes('드래프트 생략(skip-draft)을 선언') : !reason.includes('드래프트 생략(skip-draft)을 선언');
+    const ok = recOk && denyOk;
     if (!ok) failed++;
-    console.log(`${ok ? '  OK' : '  XX'}  드래프트 지표: ${name} — 기록 ${rows.length}건${rows[0] ? `(${rows[0].form})` : ''} · 안내 ${ctx ? '있음' : '없음'}${denied ? ' · 차단됨' : ''}`);
+    console.log(`${ok ? '  OK' : '  XX'}  드래프트 지표: ${name} — 기록 ${rows.length}건${rows[0] ? `(${rows[0].form})` : ''}${denied ? ' · 차단됨' : ' · 통과'}`);
     rmSync(home, { recursive: true, force: true });
   }
 }
