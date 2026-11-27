@@ -156,9 +156,9 @@ const PR_DRAFT_GUARD_DISABLE = process.env.OPS_AGENT_PR_DRAFT_GUARD_DISABLE === 
 const PR_DRAFT_GUARD_DRYRUN = process.env.OPS_AGENT_PR_DRAFT_GUARD_DRYRUN === '1';
 // 최상위 생성 명령. `env` 접두와 `create` 앞의 -R/--repo 도 같은 생성이다. 판정은 detectNonDraftPrCreate.
 const PR_CREATE_RE = /^(?:env\s+(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*)?(?:\S*\/)?gh\s+pr\s+(?:(?:-R|--repo)(?:=\S+|\s+\S+)\s+)*create\b/;
-const DRAFT_IN_SKIP_NOTICE = '[ops-agent 초안 PR 가드 · 안내] 이 레포는 드래프트 생략(skip-draft)을 선언했습니다. '
-  + 'PR 은 레포를 작업 위치로 두고 다른 명령과 묶지 않은 단독 `gh pr create`(드래프트 플래그 없이)로 만듭니다. '
-  + '묶은 명령은 대상 레포를 알 수 없어 드래프트가 필수가 됩니다 (ADR-0044). 이 생성은 지표에 기록했습니다 (#1178).';
+const DRAFT_IN_SKIP_DENY = '이 레포는 드래프트 생략(skip-draft)을 선언했습니다. 드래프트로 만들지 않습니다. '
+  + '레포를 작업 위치로 두고 다른 명령과 묶지 않은 단독 `gh pr create`(드래프트 플래그 없이)로 다시 만듭니다. '
+  + '묶은 명령은 대상 레포를 알 수 없어 드래프트가 필수가 됩니다 (ADR-0044, #1295). 이 시도는 지표에 기록했습니다 (#1178).';
 
 // 준비 완료 전환(#977). 전환은 리뷰어에게 알림이 가는 행동이라 작성자가 웹에서 한다. 리뷰 준비와 머지 준비는 초안 상태로 진행한다.
 // `--undo`(초안으로 되돌림)는 대상이 아니다. GraphQL 전환 mutation 도 같은 전환이다. 판정은 detectPrReady.
@@ -662,12 +662,22 @@ if (!DISABLE) {
             process.exit(0);
           }
         }
-        // 드래프트 생략 선언 레포에서 드래프트로 만든 생성은 막지 않고 기록 · 안내한다 (#1178).
-        // 선언의 효과(전환 단계 제거)가 사라진 사례를 세어야 선언 · 안내를 고칠지 판단할 수 있다.
+        // 드래프트 생략 선언 레포에서 드래프트로 만드는 생성은 막는다 (#1295). 기록은 그대로 남긴다 (#1178).
+        // 선언 레포는 리뷰어가 없어 드래프트로 얻는 것이 없고, 통과시키면 사람이 웹에서 준비 완료로 바꿔야 한다.
         const draftInSkip = draftCreateInSkipRepo(command, hookInput.cwd);
         if (draftInSkip) {
           recordDraftInSkipRepo(hookInput, draftInSkip);
-          passNotice = (passNotice ? passNotice + '\n' : '') + DRAFT_IN_SKIP_NOTICE;
+          const header = PR_DRAFT_GUARD_DRYRUN ? '[ops-agent 초안 PR 가드 · 드라이런]' : '[ops-agent 초안 PR 가드 · 차단]';
+          const msg = `${header} ${DRAFT_IN_SKIP_DENY}\n\n  gh pr create --base <타겟> --title "<제목>" --body-file <본문파일>\n`
+            + `드라이런: OPS_AGENT_PR_DRAFT_GUARD_DRYRUN=1 · 비활성: 사람이 세션 환경에서 OPS_AGENT_PR_DRAFT_GUARD_DISABLE=1 (명령 앞 대입은 차단)`;
+          if (PR_DRAFT_GUARD_DRYRUN) {
+            process.stderr.write(msg + '\n');
+          } else {
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: msg },
+            }));
+            process.exit(0);
+          }
         }
       }
 
